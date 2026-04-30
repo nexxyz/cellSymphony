@@ -1,4 +1,5 @@
-use std::sync::Mutex;
+use std::sync::mpsc::{self, Sender};
+use std::thread;
 
 use realtime_engine::synth::{render_note_preview, NoteTrigger};
 use rodio::{buffer::SamplesBuffer, OutputStream, OutputStreamHandle, Sink};
@@ -22,6 +23,13 @@ enum MusicalEventPayload {
 struct AudioRuntime {
     _stream: OutputStream,
     handle: OutputStreamHandle,
+}
+
+#[derive(Clone, Copy)]
+struct QueuedNote {
+    note: u8,
+    velocity: u8,
+    duration_ms: u32,
 }
 
 impl AudioRuntime {
@@ -51,7 +59,7 @@ impl AudioRuntime {
 }
 
 struct AppState {
-    audio: Mutex<AudioRuntime>,
+    trigger_tx: Sender<QueuedNote>,
 }
 
 #[tauri::command]
@@ -65,11 +73,14 @@ fn trigger_musical_event(event: MusicalEventPayload, state: tauri::State<AppStat
         } => {
             let _ = channel;
             let duration = durationMs.unwrap_or(120).clamp(10, 5000);
-            let audio = state
-                .audio
-                .lock()
-                .map_err(|_| String::from("audio runtime lock poisoned"))?;
-            audio.trigger_note(note.min(127), velocity.clamp(1, 127), duration)
+            state
+                .trigger_tx
+                .send(QueuedNote {
+                    note: note.min(127),
+                    velocity: velocity.clamp(1, 127),
+                    duration_ms: duration,
+                })
+                .map_err(|e| format!("audio queue send failed: {e}"))
         }
         MusicalEventPayload::Unsupported => Ok(()),
     }
@@ -77,12 +88,26 @@ fn trigger_musical_event(event: MusicalEventPayload, state: tauri::State<AppStat
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let audio = AudioRuntime::new().expect("failed to initialize audio runtime");
+    let (trigger_tx, trigger_rx) = mpsc::channel::<QueuedNote>();
+
+    thread::spawn(move || {
+        let audio = match AudioRuntime::new() {
+            Ok(audio) => audio,
+            Err(error) => {
+                eprintln!("{error}");
+                return;
+            }
+        };
+
+        while let Ok(note) = trigger_rx.recv() {
+            if let Err(error) = audio.trigger_note(note.note, note.velocity, note.duration_ms) {
+                eprintln!("audio trigger failed: {error}");
+            }
+        }
+    });
 
     tauri::Builder::default()
-        .manage(AppState {
-            audio: Mutex::new(audio),
-        })
+        .manage(AppState { trigger_tx })
         .invoke_handler(tauri::generate_handler![trigger_musical_event])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
