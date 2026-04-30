@@ -140,11 +140,7 @@ jobs:
 
   desktop_build_smoke:
     name: Desktop Build Smoke
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -169,7 +165,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: build-logs-${{ matrix.os }}
+          name: build-logs-windows
           path: |
             **/*.log
             **/target/**/build

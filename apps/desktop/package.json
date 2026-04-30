@@ -11,15 +11,19 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node -e \"process.exit(0)\"",
     "test:coverage": "node -e \"process.exit(0)\"",
-    "tauri:build:ci": "vite build"
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:build:ci": "tauri build --debug"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.0.0",
     "@cellsymphony/behaviors-life": "workspace:*",
     "@cellsymphony/platform-core": "workspace:*",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.0.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.2",

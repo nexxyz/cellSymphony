@@ -6,15 +6,10 @@ export interface NativeAudioBridge {
 
 class TauriNativeAudioBridge implements NativeAudioBridge {
   async trigger(event: MusicalEvent): Promise<void> {
-    const invoker = (window as unknown as { __TAURI__?: { core?: { invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } } }).__TAURI__;
-    const invoke = invoker?.core?.invoke;
-    if (invoke) {
-      await invoke("trigger_musical_event", { event });
-      return;
-    }
-    if (event.type === "note_on") {
-      console.log(`[native-audio-stub] note_on ch=${event.channel} note=${event.note} vel=${event.velocity} dur=${event.durationMs ?? 0}`);
-    }
+    const isTauri = "__TAURI_INTERNALS__" in window;
+    if (!isTauri) return;
+    const { invoke } = await import("@tauri-apps/api/core");
+    await invoke("trigger_musical_event", { event });
   }
 }
 
