@@ -1,10 +1,17 @@
 use std::f32::consts::PI;
 
 #[derive(Clone, Copy, Debug)]
+pub enum Waveform {
+    Sine,
+    Pulse { duty: f32 },
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct NoteTrigger {
     pub midi_note: u8,
     pub velocity: u8,
     pub duration_ms: u32,
+    pub waveform: Waveform,
 }
 
 pub fn render_note_preview(trigger: NoteTrigger, sample_rate: u32) -> Vec<f32> {
@@ -16,7 +23,17 @@ pub fn render_note_preview(trigger: NoteTrigger, sample_rate: u32) -> Vec<f32> {
     let mut out = Vec::with_capacity(samples);
     for i in 0..samples {
         let t = i as f32 / sample_rate as f32;
-        let wave = (2.0 * PI * freq * t).sin();
+        let phase = (freq * t).fract();
+        let wave = match trigger.waveform {
+            Waveform::Sine => (2.0 * PI * freq * t).sin(),
+            Waveform::Pulse { duty } => {
+                if phase < duty.clamp(0.05, 0.95) {
+                    1.0
+                } else {
+                    -1.0
+                }
+            }
+        };
         let env = if i + release >= samples {
             let remain = (samples - i) as f32 / release as f32;
             remain.clamp(0.0, 1.0)
@@ -34,7 +51,7 @@ fn midi_note_to_hz(note: u8) -> f32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{render_note_preview, NoteTrigger};
+    use super::{render_note_preview, NoteTrigger, Waveform};
 
     #[test]
     fn generates_samples() {
@@ -43,6 +60,7 @@ mod tests {
                 midi_note: 60,
                 velocity: 100,
                 duration_ms: 100,
+                waveform: Waveform::Sine,
             },
             48_000,
         );

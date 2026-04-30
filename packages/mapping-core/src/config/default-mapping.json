@@ -1,6 +1,7 @@
 {
   "baseMidiNote": 24,
   "maxMidiNote": 72,
+  "rangeMode": "wrap",
   "scale": [0, 3, 5, 7, 10],
   "rowStepDegrees": 3,
   "columnStepDegrees": 3,
