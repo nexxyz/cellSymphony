@@ -1,20 +1,22 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
-import type { DeviceInput, DisplayFrame, TransportFrame } from "@cellsymphony/device-contracts";
+import { PAGES, type DeviceInput, type DisplayFrame, type LedCell, type LedMatrixFrame, type PageId, type SimulatorFrame, type TransportFrame } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 
 export type PlatformState<TState> = {
-  page: string;
+  pageIndex: number;
   editing: boolean;
   transport: TransportFrame;
   behaviorState: TState;
+  activeBehavior: string;
 };
 
 export function createInitialState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
   return {
-    page: "Transport",
+    pageIndex: 0,
     editing: false,
     transport: { playing: false, bpm: 120, tick: 0 },
-    behaviorState: behavior.init({})
+    behaviorState: behavior.init({}),
+    activeBehavior: behavior.id
   };
 }
 
@@ -24,21 +26,31 @@ export function routeInput<TState>(
   behavior: BehaviorEngine<TState, unknown>
 ): { state: PlatformState<TState>; events: MusicalEvent[] } {
   const events: MusicalEvent[] = [];
-  const next = { ...state };
+  let nextState = { ...state };
 
-  if (input.type === "button_a") {
-    next.editing = false;
-  }
-  if (input.type === "button_s") {
-    next.transport = { ...next.transport, playing: !next.transport.playing };
+  switch (input.type) {
+    case "button_a":
+      nextState.editing = false;
+      break;
+    case "button_s":
+      nextState.transport = { ...nextState.transport, playing: !nextState.transport.playing };
+      break;
+    case "encoder_press":
+      nextState.editing = !nextState.editing;
+      break;
+    case "encoder_turn":
+      nextState = applyEncoder(nextState, input.delta);
+      break;
+    default:
+      break;
   }
 
-  next.behaviorState = behavior.onInput(next.behaviorState, input, {
-    bpm: next.transport.bpm,
-    emit: (e) => events.push(e)
+  nextState.behaviorState = behavior.onInput(nextState.behaviorState, input, {
+    bpm: nextState.transport.bpm,
+    emit: (event) => events.push(event)
   });
 
-  return { state: next, events };
+  return { state: nextState, events };
 }
 
 export function tick<TState>(
@@ -46,24 +58,65 @@ export function tick<TState>(
   behavior: BehaviorEngine<TState, unknown>
 ): { state: PlatformState<TState>; events: MusicalEvent[] } {
   const events: MusicalEvent[] = [];
-  const nextState = behavior.onTick(state.behaviorState, {
-    bpm: state.transport.bpm,
-    emit: (e) => events.push(e)
-  });
+  let next = { ...state };
+  if (next.transport.playing) {
+    next.behaviorState = behavior.onTick(next.behaviorState, {
+      bpm: next.transport.bpm,
+      emit: (event) => events.push(event)
+    });
+    next.transport = { ...next.transport, tick: next.transport.tick + 1 };
+  }
+  return { state: next, events };
+}
+
+export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>): SimulatorFrame {
+  const model = behavior.renderModel(state.behaviorState);
+  const page = pageFromIndex(state.pageIndex);
+
   return {
-    state: {
-      ...state,
-      behaviorState: nextState,
-      transport: { ...state.transport, tick: state.transport.tick + 1 }
+    display: {
+      page,
+      title: "Cell Symphony",
+      editing: state.editing,
+      lines: [model.statusLine, `${state.transport.playing ? "Running" : "Stopped"} ${state.transport.bpm} BPM`]
     },
-    events
+    leds: {
+      width: 16,
+      height: 16,
+      cells: cellsToLeds(model.cells)
+    },
+    transport: state.transport,
+    activeBehavior: model.name
   };
 }
 
-export function toDisplayFrame(page: string, line1: string): DisplayFrame {
+function applyEncoder<TState>(state: PlatformState<TState>, delta: -1 | 1): PlatformState<TState> {
+  if (state.editing) {
+    const bpm = clamp(state.transport.bpm + delta, 40, 240);
+    return { ...state, transport: { ...state.transport, bpm } };
+  }
+  const max = PAGES.length - 1;
+  const nextPageIndex = clamp(state.pageIndex + delta, 0, max);
+  return { ...state, pageIndex: nextPageIndex };
+}
+
+function cellsToLeds(cells: boolean[]): LedCell[] {
+  return cells.map((alive) => (alive ? { r: 0, g: 255, b: 120 } : { r: 15, g: 15, b: 22 }));
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function pageFromIndex(index: number): PageId {
+  return PAGES[clamp(index, 0, PAGES.length - 1)];
+}
+
+export function toDisplayFrame(page: PageId, line1: string, editing: boolean): DisplayFrame {
   return {
     page,
     title: "Cell Symphony",
+    editing,
     lines: [line1, "A:Back S:Play/Stop"]
   };
 }

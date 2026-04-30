@@ -4,12 +4,26 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "node -e \"console.log('desktop build scaffold')\"",
+    "dev": "vite",
+    "build": "vite build",
     "lint": "node -e \"process.exit(0)\"",
     "format:check": "node -e \"process.exit(0)\"",
-    "typecheck": "node -e \"process.exit(0)\"",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node -e \"process.exit(0)\"",
     "test:coverage": "node -e \"process.exit(0)\"",
-    "tauri:build:ci": "node -e \"console.log('tauri ci scaffold build')\""
+    "tauri:build:ci": "vite build"
+  },
+  "dependencies": {
+    "@cellsymphony/behaviors-life": "workspace:*",
+    "@cellsymphony/platform-core": "workspace:*",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.8"
   }
 }
