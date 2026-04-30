@@ -47,14 +47,19 @@ export function mapTransitionsToMusicalEvents(
 function toPentatonicNote(x: number, y: number, gridHeight: number, config: MappingConfig): number {
   const rowFromBottom = Math.max(0, gridHeight - 1 - y);
   const degree = rowFromBottom * config.rowStepDegrees + x * config.columnStepDegrees;
+
+  const note = degreeToPentatonicNote(degree, config);
+  if (config.rangeMode === "wrap") {
+    return wrapDegreeIntoRange(degree, config);
+  }
+  return clamp(note, config.baseMidiNote, config.maxMidiNote);
+}
+
+function degreeToPentatonicNote(degree: number, config: MappingConfig): number {
   const scaleLen = config.scale.length;
   const scaleIndex = mod(degree, scaleLen);
   const octave = Math.floor(degree / scaleLen);
-  const note = config.baseMidiNote + octave * 12 + config.scale[scaleIndex];
-  if (config.rangeMode === "wrap") {
-    return wrapNoteIntoRange(note, config.baseMidiNote, config.maxMidiNote);
-  }
-  return clamp(note, config.baseMidiNote, config.maxMidiNote);
+  return config.baseMidiNote + octave * 12 + config.scale[scaleIndex];
 }
 
 function validateConfig(config: MappingConfig): MappingConfig {
@@ -92,13 +97,25 @@ function mod(value: number, base: number): number {
   return ((value % base) + base) % base;
 }
 
-function wrapNoteIntoRange(note: number, min: number, max: number): number {
-  const span = max - min + 1;
-  if (span <= 0) {
-    return clamp(note, 0, 127);
+function wrapDegreeIntoRange(degree: number, config: MappingConfig): number {
+  const maxDegree = maxPentatonicDegreeInRange(config);
+  if (maxDegree <= 0) {
+    return clamp(config.baseMidiNote, config.baseMidiNote, config.maxMidiNote);
   }
-  if (note >= min && note <= max) {
-    return note;
+
+  const wrappedDegree = mod(degree, maxDegree + 1);
+  const wrappedNote = degreeToPentatonicNote(wrappedDegree, config);
+  return clamp(wrappedNote, config.baseMidiNote, config.maxMidiNote);
+}
+
+function maxPentatonicDegreeInRange(config: MappingConfig): number {
+  let degree = 0;
+  while (degree < 2048) {
+    const note = degreeToPentatonicNote(degree, config);
+    if (note > config.maxMidiNote) {
+      return Math.max(0, degree - 1);
+    }
+    degree += 1;
   }
-  return min + mod(note - min, span);
+  return 0;
 }
