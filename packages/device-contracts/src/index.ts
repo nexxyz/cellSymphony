@@ -5,10 +5,14 @@ export type DeviceInput =
   | { type: "button_s" }
   | { type: "grid_press"; x: number; y: number };
 
+export const PAGES = ["Transport", "Rule", "Mapping", "Sound", "Samples", "Project"] as const;
+export type PageId = (typeof PAGES)[number];
+
 export type DisplayFrame = {
-  page: string;
+  page: PageId;
   title: string;
   lines: string[];
+  editing: boolean;
 };
 
 export type LedCell = { r: number; g: number; b: number };
@@ -27,4 +31,11 @@ export type TransportFrame = {
 export type EngineFrame = {
   activeBehavior: string;
   cpuHintPercent: number;
+};
+
+export type SimulatorFrame = {
+  display: DisplayFrame;
+  leds: LedMatrixFrame;
+  transport: TransportFrame;
+  activeBehavior: string;
 };

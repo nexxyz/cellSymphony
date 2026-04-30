@@ -9,6 +9,7 @@ export type BehaviorContext = {
 export type BehaviorRenderModel = {
   name: string;
   statusLine: string;
+  cells: boolean[];
 };
 
 export interface BehaviorEngine<State, Config> {
