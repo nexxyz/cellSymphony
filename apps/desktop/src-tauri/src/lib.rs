@@ -13,8 +13,8 @@ enum MusicalEventPayload {
         channel: u8,
         note: u8,
         velocity: u8,
-        #[serde(default)]
-        durationMs: Option<u32>,
+        #[serde(default, rename = "durationMs")]
+        duration_ms: Option<u32>,
     },
     #[serde(other)]
     Unsupported,
@@ -69,10 +69,10 @@ fn trigger_musical_event(event: MusicalEventPayload, state: tauri::State<AppStat
             channel,
             note,
             velocity,
-            durationMs,
+            duration_ms,
         } => {
             let _ = channel;
-            let duration = durationMs.unwrap_or(120).clamp(10, 5000);
+            let duration = duration_ms.unwrap_or(120).clamp(10, 5000);
             state
                 .trigger_tx
                 .send(QueuedNote {

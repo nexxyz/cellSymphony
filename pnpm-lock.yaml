@@ -13,6 +13,12 @@ importers:
       '@cellsymphony/behaviors-life':
         specifier: workspace:*
         version: link:../../packages/behaviors-life
+      '@cellsymphony/device-contracts':
+        specifier: workspace:*
+        version: link:../../packages/device-contracts
+      '@cellsymphony/musical-events':
+        specifier: workspace:*
+        version: link:../../packages/musical-events
       '@cellsymphony/platform-core':
         specifier: workspace:*
         version: link:../../packages/platform-core

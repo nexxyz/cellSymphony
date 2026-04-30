@@ -5,13 +5,13 @@
   "description": "Cellular algorithm music instrument desktop-first platform",
   "packageManager": "pnpm@9.12.0",
   "scripts": {
-    "build": "pnpm -r build",
-    "lint": "pnpm -r lint",
-    "format:check": "pnpm -r format:check",
-    "typecheck": "pnpm -r typecheck",
-    "test": "pnpm -r test",
-    "test:coverage": "pnpm -r test:coverage",
-    "tauri:build:ci": "pnpm --filter @cellsymphony/desktop tauri:build:ci",
-    "test:fixtures": "pnpm --filter @cellsymphony/platform-core test:fixtures"
+    "build": "corepack pnpm -r build",
+    "lint": "corepack pnpm -r lint",
+    "format:check": "corepack pnpm -r format:check",
+    "typecheck": "corepack pnpm -r typecheck",
+    "test": "corepack pnpm -r test",
+    "test:coverage": "corepack pnpm -r test:coverage",
+    "tauri:build:ci": "corepack pnpm --filter @cellsymphony/desktop tauri:build:ci",
+    "test:fixtures": "corepack pnpm --filter @cellsymphony/platform-core test:fixtures"
   }
 }

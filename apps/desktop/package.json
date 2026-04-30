@@ -16,6 +16,8 @@
     "tauri:build:ci": "tauri build --debug"
   },
   "dependencies": {
+    "@cellsymphony/device-contracts": "workspace:*",
+    "@cellsymphony/musical-events": "workspace:*",
     "@tauri-apps/api": "^2.0.0",
     "@cellsymphony/behaviors-life": "workspace:*",
     "@cellsymphony/platform-core": "workspace:*",
