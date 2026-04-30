@@ -34,7 +34,8 @@ struct QueuedNote {
 
 impl AudioRuntime {
     fn new() -> Result<Self, String> {
-        let (stream, handle) = OutputStream::try_default().map_err(|e| format!("audio init failed: {e}"))?;
+        let (stream, handle) =
+            OutputStream::try_default().map_err(|e| format!("audio init failed: {e}"))?;
         Ok(Self {
             _stream: stream,
             handle,
@@ -63,7 +64,10 @@ struct AppState {
 }
 
 #[tauri::command]
-fn trigger_musical_event(event: MusicalEventPayload, state: tauri::State<AppState>) -> Result<(), String> {
+fn trigger_musical_event(
+    event: MusicalEventPayload,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
     match event {
         MusicalEventPayload::NoteOn {
             channel,
