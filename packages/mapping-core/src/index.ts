@@ -8,9 +8,12 @@ export type TriggerTarget = {
   durationMs: number;
 };
 
+export type RangeMode = "clamp" | "wrap";
+
 export type MappingConfig = {
   baseMidiNote: number;
   maxMidiNote: number;
+  rangeMode: RangeMode;
   scale: number[];
   rowStepDegrees: number;
   columnStepDegrees: number;
@@ -48,6 +51,9 @@ function toPentatonicNote(x: number, y: number, gridHeight: number, config: Mapp
   const scaleIndex = mod(degree, scaleLen);
   const octave = Math.floor(degree / scaleLen);
   const note = config.baseMidiNote + octave * 12 + config.scale[scaleIndex];
+  if (config.rangeMode === "wrap") {
+    return wrapNoteIntoRange(note, config.baseMidiNote, config.maxMidiNote);
+  }
   return clamp(note, config.baseMidiNote, config.maxMidiNote);
 }
 
@@ -61,6 +67,7 @@ function validateConfig(config: MappingConfig): MappingConfig {
     ...config,
     baseMidiNote,
     maxMidiNote,
+    rangeMode: config.rangeMode === "clamp" ? "clamp" : "wrap",
     scale: config.scale.map((step) => clamp(Math.floor(step), 0, 11)),
     rowStepDegrees: Math.max(0, Math.floor(config.rowStepDegrees)),
     columnStepDegrees: Math.max(0, Math.floor(config.columnStepDegrees)),
@@ -83,4 +90,15 @@ function clamp(value: number, min: number, max: number): number {
 
 function mod(value: number, base: number): number {
   return ((value % base) + base) % base;
+}
+
+function wrapNoteIntoRange(note: number, min: number, max: number): number {
+  const span = max - min + 1;
+  if (span <= 0) {
+    return clamp(note, 0, 127);
+  }
+  if (note >= min && note <= max) {
+    return note;
+  }
+  return min + mod(note - min, span);
 }

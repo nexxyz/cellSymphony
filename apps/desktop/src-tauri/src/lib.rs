@@ -1,7 +1,7 @@
 use std::sync::mpsc::{self, Sender};
 use std::thread;
 
-use realtime_engine::synth::{render_note_preview, NoteTrigger};
+use realtime_engine::synth::{render_note_preview, NoteTrigger, Waveform};
 use rodio::{buffer::SamplesBuffer, OutputStream, OutputStreamHandle, Sink};
 use serde::Deserialize;
 
@@ -27,6 +27,7 @@ struct AudioRuntime {
 
 #[derive(Clone, Copy)]
 struct QueuedNote {
+    channel: u8,
     note: u8,
     velocity: u8,
     duration_ms: u32,
@@ -42,12 +43,23 @@ impl AudioRuntime {
         })
     }
 
-    fn trigger_note(&self, note: u8, velocity: u8, duration_ms: u32) -> Result<(), String> {
+    fn trigger_note(
+        &self,
+        channel: u8,
+        note: u8,
+        velocity: u8,
+        duration_ms: u32,
+    ) -> Result<(), String> {
+        let waveform = match channel {
+            1 => Waveform::Pulse { duty: 0.5 },
+            _ => Waveform::Sine,
+        };
         let data = render_note_preview(
             NoteTrigger {
                 midi_note: note,
                 velocity,
                 duration_ms,
+                waveform,
             },
             48_000,
         );
@@ -80,6 +92,7 @@ fn trigger_musical_event(
             state
                 .trigger_tx
                 .send(QueuedNote {
+                    channel: channel.clamp(0, 15),
                     note: note.min(127),
                     velocity: velocity.clamp(1, 127),
                     duration_ms: duration,
@@ -104,7 +117,9 @@ pub fn run() {
         };
 
         while let Ok(note) = trigger_rx.recv() {
-            if let Err(error) = audio.trigger_note(note.note, note.velocity, note.duration_ms) {
+            if let Err(error) =
+                audio.trigger_note(note.channel, note.note, note.velocity, note.duration_ms)
+            {
                 eprintln!("audio trigger failed: {error}");
             }
         }
