@@ -1,5 +1,5 @@
 {
-  "name": "@cellsymphony/platform-core",
+  "name": "@cellsymphony/mapping-core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,14 +11,10 @@
     "format:check": "node -e \"process.exit(0)\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node -e \"process.exit(0)\"",
-    "test:coverage": "node -e \"process.exit(0)\"",
-    "test:fixtures": "node scripts/test-fixtures.mjs"
+    "test:coverage": "node -e \"process.exit(0)\""
   },
   "dependencies": {
-    "@cellsymphony/behavior-api": "workspace:*",
-    "@cellsymphony/device-contracts": "workspace:*",
     "@cellsymphony/interpretation-core": "workspace:*",
-    "@cellsymphony/mapping-core": "workspace:*",
     "@cellsymphony/musical-events": "workspace:*"
   },
   "devDependencies": {

@@ -1,5 +1,7 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import { PAGES, type DeviceInput, type DisplayFrame, type LedCell, type LedMatrixFrame, type PageId, type SimulatorFrame, type TransportFrame } from "@cellsymphony/device-contracts";
+import { extractBirthDeathTransitions, type GridSnapshot } from "@cellsymphony/interpretation-core";
+import { loadDefaultMappingConfig, mapTransitionsToMusicalEvents, type MappingConfig } from "@cellsymphony/mapping-core";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 
 export type PlatformState<TState> = {
@@ -8,6 +10,7 @@ export type PlatformState<TState> = {
   transport: TransportFrame;
   behaviorState: TState;
   activeBehavior: string;
+  mappingConfig: MappingConfig;
 };
 
 export function createInitialState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
@@ -16,7 +19,8 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
     editing: false,
     transport: { playing: false, bpm: 120, tick: 0 },
     behaviorState: behavior.init({}),
-    activeBehavior: behavior.id
+    activeBehavior: behavior.id,
+    mappingConfig: loadDefaultMappingConfig()
   };
 }
 
@@ -60,13 +64,25 @@ export function tick<TState>(
   const events: MusicalEvent[] = [];
   let next = { ...state };
   if (next.transport.playing) {
+    const beforeGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
     next.behaviorState = behavior.onTick(next.behaviorState, {
       bpm: next.transport.bpm,
       emit: (event) => events.push(event)
     });
+    const afterGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
+    const transitions = extractBirthDeathTransitions(beforeGrid, afterGrid);
+    events.push(...mapTransitionsToMusicalEvents(transitions, afterGrid.height, next.mappingConfig));
     next.transport = { ...next.transport, tick: next.transport.tick + 1 };
   }
   return { state: next, events };
+}
+
+function toGridSnapshot(model: { cells: boolean[] }): GridSnapshot {
+  return {
+    width: 16,
+    height: 16,
+    cells: model.cells
+  };
 }
 
 export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>): SimulatorFrame {
