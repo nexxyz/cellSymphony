@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+coverage/
+target/
+.turbo/
+.DS_Store
+Thumbs.db
+*.log
+pnpm-debug.log*
+apps/desktop/src-tauri/target/
