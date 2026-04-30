@@ -71,10 +71,44 @@ export function tick<TState>(
     });
     const afterGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
     const transitions = extractBirthDeathTransitions(beforeGrid, afterGrid);
-    events.push(...mapTransitionsToMusicalEvents(transitions, afterGrid.height, next.mappingConfig));
+    const mapped = mapTransitionsToMusicalEvents(transitions, afterGrid.height, next.mappingConfig);
+    events.push(...dedupeSimultaneousNotes(mapped));
     next.transport = { ...next.transport, tick: next.transport.tick + 1 };
   }
   return { state: next, events };
+}
+
+function dedupeSimultaneousNotes(events: MusicalEvent[]): MusicalEvent[] {
+  const out: MusicalEvent[] = [];
+  const seen = new Map<string, number>();
+
+  for (const event of events) {
+    if (event.type !== "note_on") {
+      out.push(event);
+      continue;
+    }
+
+    const key = `${event.channel}:${event.note}`;
+    const existingIndex = seen.get(key);
+    if (existingIndex === undefined) {
+      seen.set(key, out.length);
+      out.push(event);
+      continue;
+    }
+
+    const existing = out[existingIndex];
+    if (existing.type !== "note_on") {
+      continue;
+    }
+
+    out[existingIndex] = {
+      ...existing,
+      velocity: Math.max(existing.velocity, event.velocity),
+      durationMs: Math.max(existing.durationMs ?? 0, event.durationMs ?? 0)
+    };
+  }
+
+  return out;
 }
 
 function toGridSnapshot(model: { cells: boolean[] }): GridSnapshot {

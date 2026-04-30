@@ -10,6 +10,7 @@ export type TriggerTarget = {
 
 export type MappingConfig = {
   baseMidiNote: number;
+  maxMidiNote: number;
   scale: number[];
   rowStepDegrees: number;
   columnStepDegrees: number;
@@ -47,16 +48,19 @@ function toPentatonicNote(x: number, y: number, gridHeight: number, config: Mapp
   const scaleIndex = mod(degree, scaleLen);
   const octave = Math.floor(degree / scaleLen);
   const note = config.baseMidiNote + octave * 12 + config.scale[scaleIndex];
-  return clamp(note, 0, 127);
+  return clamp(note, config.baseMidiNote, config.maxMidiNote);
 }
 
 function validateConfig(config: MappingConfig): MappingConfig {
   if (config.scale.length === 0) {
     throw new Error("Mapping scale must contain at least one degree.");
   }
+  const baseMidiNote = clamp(Math.floor(config.baseMidiNote), 0, 127);
+  const maxMidiNote = clamp(Math.floor(config.maxMidiNote), baseMidiNote, 127);
   return {
     ...config,
-    baseMidiNote: clamp(Math.floor(config.baseMidiNote), 0, 127),
+    baseMidiNote,
+    maxMidiNote,
     scale: config.scale.map((step) => clamp(Math.floor(step), 0, 11)),
     rowStepDegrees: Math.max(0, Math.floor(config.rowStepDegrees)),
     columnStepDegrees: Math.max(0, Math.floor(config.columnStepDegrees)),
