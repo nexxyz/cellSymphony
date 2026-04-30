@@ -1,18 +1,18 @@
 {
   "baseMidiNote": 24,
-  "maxMidiNote": 72,
+  "maxMidiNote": 84,
   "rangeMode": "wrap",
   "scale": [0, 3, 5, 7, 10],
   "rowStepDegrees": 3,
-  "columnStepDegrees": 3,
+  "columnStepDegrees": 1,
   "birth": {
     "channel": 0,
     "velocity": 96,
-    "durationMs": 120
+    "durationMs": 150
   },
   "death": {
     "channel": 1,
-    "velocity": 84,
+    "velocity": 68,
     "durationMs": 90
   }
 }

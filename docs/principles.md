@@ -1,0 +1,32 @@
+# Cell Symphony Principles
+
+## Purpose
+
+These principles preserve the core intent of Cell Symphony as the project grows.
+
+## Product Principles
+
+- Hardware-first interaction parity: simulator controls must map to physical-device controls.
+- Native audio truth: desktop UI is a control surface; realtime audio behavior belongs to native engine paths.
+- Internal engines first: synth and ROMpler are built in; plugin hosting is out of scope.
+- Project portability: runtime assets are local to project folders; avoid brittle absolute-path dependencies.
+
+## Architectural Principles
+
+- Grid evolution is independent from musical interpretation.
+- Interpretation is independent from output mapping.
+- Mapping is independent from audio rendering implementation.
+- Transport/timing orchestrates subsystem execution, but does not couple subsystem internals.
+
+## Musical Principles
+
+- Birth/death are distinct event kinds and can carry distinct sonic identity.
+- Mapping defaults should be musical immediately, then user-editable later.
+- Preserve melodic contour when constraining note range (prefer degree-space wrapping over flattening clamps).
+- Avoid redundant same-note retriggers in the same tick for the same channel.
+
+## Quality Principles
+
+- Keep decisions explicit and recorded in ADRs.
+- Validate behavior with both technical tests and listening tests.
+- Optimize for modular extension (future modes like sequencer/drum/launchpad) without rewriting foundations.

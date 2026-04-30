@@ -1,6 +1,6 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import { PAGES, type DeviceInput, type DisplayFrame, type LedCell, type LedMatrixFrame, type PageId, type SimulatorFrame, type TransportFrame } from "@cellsymphony/device-contracts";
-import { extractBirthDeathTransitions, type GridSnapshot } from "@cellsymphony/interpretation-core";
+import { extractBirthDeathTransitions, type CellTransition, type GridSnapshot } from "@cellsymphony/interpretation-core";
 import { loadDefaultMappingConfig, mapTransitionsToMusicalEvents, type MappingConfig } from "@cellsymphony/mapping-core";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 
@@ -71,11 +71,23 @@ export function tick<TState>(
     });
     const afterGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
     const transitions = extractBirthDeathTransitions(beforeGrid, afterGrid);
-    const mapped = mapTransitionsToMusicalEvents(transitions, afterGrid.height, next.mappingConfig);
+    const phaseFilteredTransitions = filterTransitionsByTickParity(transitions, next.transport.tick);
+    const mapped = mapTransitionsToMusicalEvents(phaseFilteredTransitions, afterGrid.height, next.mappingConfig);
     events.push(...dedupeSimultaneousNotes(mapped));
     next.transport = { ...next.transport, tick: next.transport.tick + 1 };
   }
   return { state: next, events };
+}
+
+function filterTransitionsByTickParity(
+  transitions: CellTransition[],
+  tick: number
+): CellTransition[] {
+  const evenTick = tick % 2 === 0;
+  if (evenTick) {
+    return transitions.filter((transition) => transition.kind === "birth");
+  }
+  return transitions.filter((transition) => transition.kind === "death");
 }
 
 function dedupeSimultaneousNotes(events: MusicalEvent[]): MusicalEvent[] {
