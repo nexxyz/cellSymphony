@@ -17,6 +17,7 @@ These principles preserve the core intent of Cell Symphony as the project grows.
 - Matrix Interpretation Logic is independent from Cell Trigger Mapping.
 - Cell Trigger Mapping is independent from Cell Trigger Execution implementation.
 - Transport/timing orchestrates subsystem execution, but does not couple subsystem internals.
+- Matrix Interpretation Logic should be profile-composable across Tick, X, and Y dimensions.
 
 ## Musical Principles
 

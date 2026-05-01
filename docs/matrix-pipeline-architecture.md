@@ -31,9 +31,19 @@ Output:
   - parity gating
   - future row/column scan modes
 
+Modular interpretation model:
+
+- Tick component: defines what a tick scans or advances.
+- X component: defines how x contributes (scale step, timing-only, ignore, etc.).
+- Y component: defines how y contributes (scale step, sample lane mapping, modulation mapping, etc.).
+
 Output:
 
 - `CellTransition[]` or equivalent trigger-intent list
+
+Current contract:
+
+- `CellTriggerIntent[]` (kind + x/y + derived degree)
 
 ### 3) Cell Trigger Mapping
 

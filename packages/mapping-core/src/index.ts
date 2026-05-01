@@ -1,4 +1,4 @@
-import type { CellTransition } from "@cellsymphony/interpretation-core";
+import type { CellTransition, CellTriggerIntent } from "@cellsymphony/interpretation-core";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import defaults from "./config/default-mapping.json";
 
@@ -44,10 +44,33 @@ export function mapTransitionsToMusicalEvents(
   });
 }
 
+export function mapIntentsToMusicalEvents(intents: CellTriggerIntent[], config: MappingConfig): MusicalEvent[] {
+  const safe = validateConfig(config);
+  return intents.map((intent) => {
+    const note = noteFromDegree(intent.degree, safe);
+    const target = intent.kind === "birth" ? safe.birth : safe.death;
+    return {
+      type: "note_on",
+      channel: target.channel,
+      note,
+      velocity: target.velocity,
+      durationMs: target.durationMs
+    } satisfies MusicalEvent;
+  });
+}
+
 function toPentatonicNote(x: number, y: number, gridHeight: number, config: MappingConfig): number {
   const rowFromBottom = Math.max(0, gridHeight - 1 - y);
   const degree = rowFromBottom * config.rowStepDegrees + x * config.columnStepDegrees;
 
+  const note = degreeToPentatonicNote(degree, config);
+  if (config.rangeMode === "wrap") {
+    return wrapDegreeIntoRange(degree, config);
+  }
+  return clamp(note, config.baseMidiNote, config.maxMidiNote);
+}
+
+function noteFromDegree(degree: number, config: MappingConfig): number {
   const note = degreeToPentatonicNote(degree, config);
   if (config.rangeMode === "wrap") {
     return wrapDegreeIntoRange(degree, config);
