@@ -13,9 +13,9 @@ These principles preserve the core intent of Cell Symphony as the project grows.
 
 ## Architectural Principles
 
-- Grid evolution is independent from musical interpretation.
-- Interpretation is independent from output mapping.
-- Mapping is independent from audio rendering implementation.
+- Matrix Population Logic is independent from Matrix Interpretation Logic.
+- Matrix Interpretation Logic is independent from Cell Trigger Mapping.
+- Cell Trigger Mapping is independent from Cell Trigger Execution implementation.
 - Transport/timing orchestrates subsystem execution, but does not couple subsystem internals.
 
 ## Musical Principles
