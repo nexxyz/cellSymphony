@@ -12,6 +12,8 @@ export type CellTransition = {
   kind: CellTransitionKind;
 };
 
+export type InterpretationMode = "birth_death" | "birth_death_parity";
+
 export function extractBirthDeathTransitions(previous: GridSnapshot, next: GridSnapshot): CellTransition[] {
   const transitions: CellTransition[] = [];
   const len = Math.min(previous.cells.length, next.cells.length);
@@ -26,4 +28,25 @@ export function extractBirthDeathTransitions(previous: GridSnapshot, next: GridS
     transitions.push({ x, y, kind: after ? "birth" : "death" });
   }
   return transitions;
+}
+
+export function interpretTransitions(
+  previous: GridSnapshot,
+  next: GridSnapshot,
+  tick: number,
+  mode: InterpretationMode = "birth_death_parity"
+): CellTransition[] {
+  const transitions = extractBirthDeathTransitions(previous, next);
+  if (mode === "birth_death") {
+    return transitions;
+  }
+  return applyBirthDeathParityGating(transitions, tick);
+}
+
+export function applyBirthDeathParityGating(transitions: CellTransition[], tick: number): CellTransition[] {
+  const evenTick = tick % 2 === 0;
+  if (evenTick) {
+    return transitions.filter((transition) => transition.kind === "birth");
+  }
+  return transitions.filter((transition) => transition.kind === "death");
 }
