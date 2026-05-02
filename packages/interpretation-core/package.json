@@ -10,10 +10,12 @@
     "lint": "node -e \"process.exit(0)\"",
     "format:check": "node -e \"process.exit(0)\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "node -e \"process.exit(0)\"",
-    "test:coverage": "node -e \"process.exit(0)\""
+    "test": "tsx --test tests/**/*.test.ts",
+    "test:coverage": "c8 --reporter=text --reporter=lcov tsx --test tests/**/*.test.ts"
   },
   "devDependencies": {
+    "c8": "^11.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.6.3"
   }
 }
