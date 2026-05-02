@@ -21,6 +21,7 @@ import type { MusicalEvent } from "@cellsymphony/musical-events";
 type ScanMode = "immediate" | "scanning";
 type ScanAxis = "rows" | "columns";
 type Direction = "forward" | "reverse";
+type NoteUnit = "1/16" | "1/8" | "1/4" | "1/2" | "1/1";
 type ModMode = "scale_steps" | "filter_cutoff" | "filter_resonance" | "velocity";
 type Curve = "linear" | "curve";
 
@@ -39,8 +40,9 @@ type RuntimeConfig = {
   populationMode: "grid" | "conway";
   scanMode: ScanMode;
   scanAxis: ScanAxis;
-  ticksPerUnit: number;
+  scanUnit: NoteUnit;
   scanDirection: Direction;
+  conwayStepUnit: NoteUnit;
   eventEnabled: boolean;
   eventParity: "none" | "birth_even_death_odd";
   stateEnabled: boolean;
@@ -67,6 +69,9 @@ export type PlatformState<TState> = {
   mappingConfig: MappingConfig;
   runtimeConfig: RuntimeConfig;
   menu: MenuState;
+  scanIndex: number;
+  scanPulseAccumulator: number;
+  conwayPulseAccumulator: number;
 };
 
 export function createInitialState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
@@ -79,15 +84,19 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
       populationMode: "conway",
       scanMode: "immediate",
       scanAxis: "columns",
-      ticksPerUnit: 8,
+      scanUnit: "1/8",
       scanDirection: "forward",
+      conwayStepUnit: "1/8",
       eventEnabled: true,
       eventParity: "birth_even_death_odd",
       stateEnabled: true,
       x: { mode: "scale_steps", enabled: true, direction: "forward", scaleSteps: 1, min: 100, max: 100, gridOffset: 0, curve: "linear" },
       y: { mode: "scale_steps", enabled: true, direction: "forward", scaleSteps: 3, min: 100, max: 100, gridOffset: 0, curve: "linear" }
     },
-    menu: { stack: [], cursor: 0, editing: false }
+    menu: { stack: [], cursor: 0, editing: false },
+    scanIndex: 0,
+    scanPulseAccumulator: 0,
+    conwayPulseAccumulator: 0
   };
 }
 
@@ -116,13 +125,29 @@ export function tick<TState>(state: PlatformState<TState>, behavior: BehaviorEng
   const events: MusicalEvent[] = [];
   let next = { ...state };
   if (next.transport.playing) {
+    const pulsesPerFrame = pulsesPerSecond(next.transport.bpm) * FRAME_SECONDS;
+    next.scanPulseAccumulator += pulsesPerFrame;
+    next.conwayPulseAccumulator += pulsesPerFrame;
+
+    if (next.runtimeConfig.scanMode === "scanning") {
+      const scanStepPulses = noteUnitToPulses(next.runtimeConfig.scanUnit);
+      while (next.scanPulseAccumulator >= scanStepPulses) {
+        next.scanPulseAccumulator -= scanStepPulses;
+        next.scanIndex = advanceScanIndex(next.scanIndex, next.runtimeConfig.scanDirection);
+      }
+    }
+
     const beforeGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
     if (next.runtimeConfig.populationMode === "conway") {
-      next.behaviorState = behavior.onTick(next.behaviorState, { bpm: next.transport.bpm, emit: () => {} });
+      const conwayStepPulses = noteUnitToPulses(next.runtimeConfig.conwayStepUnit);
+      while (next.conwayPulseAccumulator >= conwayStepPulses) {
+        next.conwayPulseAccumulator -= conwayStepPulses;
+        next.behaviorState = behavior.onTick(next.behaviorState, { bpm: next.transport.bpm, emit: () => {} });
+      }
     }
     const afterGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
     const profile = profileFromConfig(next.runtimeConfig);
-    const interpretationTick = toInterpretationTick(next.transport.tick, next.runtimeConfig);
+    const interpretationTick = next.runtimeConfig.scanMode === "scanning" ? next.scanIndex : next.transport.tick;
     const intents = interpretGrid(beforeGrid, afterGrid, interpretationTick, profile);
     const mapped = mapIntentsToMusicalEvents(intents, withScaleSteps(next.mappingConfig, next.runtimeConfig));
     events.push(...dedupeSimultaneousNotes(mapped));
@@ -134,7 +159,7 @@ export function tick<TState>(state: PlatformState<TState>, behavior: BehaviorEng
 export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>): SimulatorFrame {
   const model = behavior.renderModel(state.behaviorState);
   const menuView = currentMenuView(state.runtimeConfig, state.menu);
-  const scanCursor = getScanCursor(state.transport.tick, state.runtimeConfig);
+  const scanCursor = state.runtimeConfig.scanMode === "scanning" ? { axis: state.runtimeConfig.scanAxis, index: state.scanIndex } : null;
   return {
     display: {
       page: PAGES[0] as PageId,
@@ -148,23 +173,28 @@ export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior:
   };
 }
 
-function toInterpretationTick(baseTick: number, cfg: RuntimeConfig): number {
-  if (cfg.scanMode !== "scanning") {
-    return baseTick;
-  }
-  const step = Math.max(1, Math.floor(cfg.ticksPerUnit));
-  const unitTick = Math.floor(baseTick / step);
-  return cfg.scanDirection === "reverse" ? -unitTick : unitTick;
+function pulsesPerSecond(bpm: number): number {
+  return (bpm / 60) * PPQN;
 }
 
-function getScanCursor(baseTick: number, cfg: RuntimeConfig): { axis: ScanAxis; index: number } | null {
-  if (cfg.scanMode !== "scanning") {
-    return null;
+function noteUnitToPulses(unit: NoteUnit): number {
+  switch (unit) {
+    case "1/16":
+      return 6;
+    case "1/8":
+      return 12;
+    case "1/4":
+      return 24;
+    case "1/2":
+      return 48;
+    case "1/1":
+      return 96;
   }
-  const unitTick = toInterpretationTick(baseTick, cfg);
-  const size = 16;
-  const index = mod(unitTick, size);
-  return { axis: cfg.scanAxis, index };
+}
+
+function advanceScanIndex(current: number, direction: Direction): number {
+  const delta = direction === "reverse" ? -1 : 1;
+  return mod(current + delta, 16);
 }
 
 function withScaleSteps(mapping: MappingConfig, cfg: RuntimeConfig): MappingConfig {
@@ -198,8 +228,9 @@ function menuTree(): MenuNode {
         children: [
           { kind: "enum", label: "Scan Mode", key: "scanMode", options: ["immediate", "scanning"] },
           { kind: "enum", label: "Scan Axis", key: "scanAxis", options: ["rows", "columns"], visible: (c) => c.scanMode === "scanning" },
-          { kind: "enum", label: "Ticks/Unit", key: "ticksPerUnit", options: ["2", "4", "8", "16"], visible: (c) => c.scanMode === "scanning" },
+          { kind: "enum", label: "Ticks/Unit", key: "scanUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.scanMode === "scanning" },
           { kind: "enum", label: "Scan Dir", key: "scanDirection", options: ["forward", "reverse"], visible: (c) => c.scanMode === "scanning" },
+          { kind: "enum", label: "Conway Step", key: "conwayStepUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.populationMode === "conway" },
           { kind: "bool", label: "Event On", key: "eventEnabled" },
           { kind: "enum", label: "Event Parity", key: "eventParity", options: ["none", "birth_even_death_odd"] },
           { kind: "bool", label: "State On", key: "stateEnabled" },
@@ -291,7 +322,7 @@ function turnMenu<TState>(state: PlatformState<TState>, delta: -1 | 1): Platform
   const idx = selected.options.indexOf(String(current));
   const nextIdx = clamp(idx + delta, 0, selected.options.length - 1);
   const raw = selected.options[nextIdx];
-  const value = selected.key === "ticksPerUnit" ? Number(raw) : raw;
+  const value = raw;
   return { ...state, runtimeConfig: writeValue(state.runtimeConfig, selected.key, value) };
 }
 
@@ -365,6 +396,9 @@ function clamp(value: number, min: number, max: number): number {
 function mod(value: number, base: number): number {
   return ((value % base) + base) % base;
 }
+
+const PPQN = 24;
+const FRAME_SECONDS = 0.15;
 
 export function toDisplayFrame(page: PageId, line1: string, editing: boolean): DisplayFrame {
   return { page, title: "Cell Symphony", editing, lines: [line1, "A:Back S:Play/Stop"] };

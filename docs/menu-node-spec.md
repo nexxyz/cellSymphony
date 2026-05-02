@@ -9,8 +9,9 @@ This is the implemented menu-driven control surface, navigated by encoder + A/S.
 - Interpretation
   - Scan Mode (`immediate` | `scanning`)
   - Scan Axis (`rows` | `columns`) [shown when scanning]
-  - Ticks/Unit (`2` | `4` | `8` | `16`) [shown when scanning]
+  - Ticks/Unit (`1/16` | `1/8` | `1/4` | `1/2` | `1/1`) [shown when scanning]
   - Scan Dir (`forward` | `reverse`) [shown when scanning]
+  - Conway Step (`1/16` | `1/8` | `1/4` | `1/2` | `1/1`) [shown when population mode = conway]
   - Event On (bool)
   - Event Parity (`none` | `birth_even_death_odd`)
   - State On (bool)
@@ -39,3 +40,5 @@ This is the implemented menu-driven control surface, navigated by encoder + A/S.
 - Encoder press: enter group / toggle bool / enter-or-exit edit
 - A: back one level or exit edit
 - S: global transport play/stop
+
+Timing semantics use MIDI clock style resolution (PPQN=24).
