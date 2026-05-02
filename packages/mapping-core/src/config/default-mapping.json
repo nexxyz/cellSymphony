@@ -14,5 +14,10 @@
     "channel": 1,
     "velocity": 68,
     "durationMs": 90
+  },
+  "state": {
+    "channel": 0,
+    "velocity": 88,
+    "durationMs": 130
   }
 }

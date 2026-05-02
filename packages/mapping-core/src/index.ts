@@ -1,4 +1,4 @@
-import type { CellTransition, CellTriggerIntent } from "@cellsymphony/interpretation-core";
+import type { CellTransition, CellTriggerIntent, CellTriggerKind } from "@cellsymphony/interpretation-core";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import defaults from "./config/default-mapping.json";
 
@@ -19,6 +19,7 @@ export type MappingConfig = {
   columnStepDegrees: number;
   birth: TriggerTarget;
   death: TriggerTarget;
+  state: TriggerTarget;
 };
 
 export function loadDefaultMappingConfig(): MappingConfig {
@@ -48,7 +49,7 @@ export function mapIntentsToMusicalEvents(intents: CellTriggerIntent[], config: 
   const safe = validateConfig(config);
   return intents.map((intent) => {
     const note = noteFromDegree(intent.degree, safe);
-    const target = intent.kind === "birth" ? safe.birth : safe.death;
+    const target = targetForKind(intent.kind, safe);
     return {
       type: "note_on",
       channel: target.channel,
@@ -57,6 +58,12 @@ export function mapIntentsToMusicalEvents(intents: CellTriggerIntent[], config: 
       durationMs: target.durationMs
     } satisfies MusicalEvent;
   });
+}
+
+function targetForKind(kind: CellTriggerKind, config: MappingConfig): TriggerTarget {
+  if (kind === "birth") return config.birth;
+  if (kind === "death") return config.death;
+  return config.state;
 }
 
 function toPentatonicNote(x: number, y: number, gridHeight: number, config: MappingConfig): number {
@@ -100,7 +107,8 @@ function validateConfig(config: MappingConfig): MappingConfig {
     rowStepDegrees: Math.max(0, Math.floor(config.rowStepDegrees)),
     columnStepDegrees: Math.max(0, Math.floor(config.columnStepDegrees)),
     birth: sanitizeTarget(config.birth),
-    death: sanitizeTarget(config.death)
+    death: sanitizeTarget(config.death),
+    state: sanitizeTarget(config.state ?? config.birth)
   };
 }
 

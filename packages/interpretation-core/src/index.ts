@@ -5,6 +5,7 @@ export type GridSnapshot = {
 };
 
 export type CellTransitionKind = "birth" | "death";
+export type CellTriggerKind = CellTransitionKind | "state_on";
 
 export type CellTransition = {
   x: number;
@@ -14,6 +15,7 @@ export type CellTransition = {
 
 export type TickStrategy =
   | { mode: "whole_grid_transitions"; parity: "none" | "birth_even_death_odd" }
+  | { mode: "whole_grid_active" }
   | { mode: "scan_column_active" }
   | { mode: "scan_row_active" };
 
@@ -24,7 +26,8 @@ export type AxisStrategy =
 
 export type InterpretationProfile = {
   id: string;
-  tick: TickStrategy;
+  event: { enabled: boolean; parity: "none" | "birth_even_death_odd" };
+  state: { enabled: boolean; tick: TickStrategy };
   x: AxisStrategy;
   y: AxisStrategy;
 };
@@ -32,20 +35,22 @@ export type InterpretationProfile = {
 export type CellTriggerIntent = {
   x: number;
   y: number;
-  kind: CellTransitionKind;
+  kind: CellTriggerKind;
   degree: number;
 };
 
 export const PROFILE_LIFE_DEFAULT: InterpretationProfile = {
   id: "life_default",
-  tick: { mode: "whole_grid_transitions", parity: "birth_even_death_odd" },
+  event: { enabled: true, parity: "birth_even_death_odd" },
+  state: { enabled: false, tick: { mode: "scan_column_active" } },
   x: { mode: "scale_step", step: 1 },
   y: { mode: "scale_step", step: 3 }
 };
 
 export const PROFILE_COLUMN_SEQUENCER_BASIC: InterpretationProfile = {
   id: "column_sequencer_basic",
-  tick: { mode: "scan_column_active" },
+  event: { enabled: true, parity: "none" },
+  state: { enabled: true, tick: { mode: "scan_column_active" } },
   x: { mode: "timing_only" },
   y: { mode: "scale_step", step: 1 }
 };
@@ -90,10 +95,16 @@ export function interpretGrid(
   tick: number,
   profile: InterpretationProfile
 ): CellTriggerIntent[] {
-  const candidates = selectCandidates(previous, next, tick, profile.tick);
-  return candidates.map((transition) => ({
-    ...transition,
-    degree: computeDegree(next.height, transition.x, transition.y, profile)
+  const eventCandidates = profile.event.enabled
+    ? selectEventCandidates(previous, next, tick, profile.event.parity)
+    : [];
+  const stateCandidates = profile.state.enabled
+    ? selectStateCandidates(next, tick, profile.state.tick)
+    : [];
+
+  return [...eventCandidates, ...stateCandidates].map((intent) => ({
+    ...intent,
+    degree: computeDegree(next.height, intent.x, intent.y, profile)
   }));
 }
 
@@ -105,31 +116,56 @@ export function applyBirthDeathParityGating(transitions: CellTransition[], tick:
   return transitions.filter((transition) => transition.kind === "death");
 }
 
-function selectCandidates(previous: GridSnapshot, next: GridSnapshot, tick: number, strategy: TickStrategy): CellTransition[] {
-  if (strategy.mode === "whole_grid_transitions") {
-    const transitions = extractBirthDeathTransitions(previous, next);
-    if (strategy.parity === "birth_even_death_odd") {
-      return applyBirthDeathParityGating(transitions, tick);
-    }
-    return transitions;
+function selectEventCandidates(
+  previous: GridSnapshot,
+  next: GridSnapshot,
+  tick: number,
+  parity: "none" | "birth_even_death_odd"
+): Array<{ x: number; y: number; kind: CellTriggerKind }> {
+  const transitions = extractBirthDeathTransitions(previous, next);
+  if (parity === "birth_even_death_odd") {
+    return applyBirthDeathParityGating(transitions, tick);
   }
+  return transitions;
+}
 
-  if (strategy.mode === "scan_column_active") {
-    const column = tick % next.width;
-    const out: CellTransition[] = [];
+function selectStateCandidates(
+  next: GridSnapshot,
+  tick: number,
+  strategy: TickStrategy
+): Array<{ x: number; y: number; kind: CellTriggerKind }> {
+  if (strategy.mode === "whole_grid_active") {
+    const out: Array<{ x: number; y: number; kind: CellTriggerKind }> = [];
     for (let y = 0; y < next.height; y += 1) {
-      if (next.cells[y * next.width + column]) {
-        out.push({ x: column, y, kind: "birth" });
+      for (let x = 0; x < next.width; x += 1) {
+        if (next.cells[y * next.width + x]) {
+          out.push({ x, y, kind: "state_on" });
+        }
       }
     }
     return out;
   }
 
+  if (strategy.mode === "scan_column_active") {
+    const column = tick % next.width;
+    const out: Array<{ x: number; y: number; kind: CellTriggerKind }> = [];
+    for (let y = 0; y < next.height; y += 1) {
+      if (next.cells[y * next.width + column]) {
+        out.push({ x: column, y, kind: "state_on" });
+      }
+    }
+    return out;
+  }
+
+  if (strategy.mode === "whole_grid_transitions") {
+    return [];
+  }
+
   const row = tick % next.height;
-  const out: CellTransition[] = [];
+  const out: Array<{ x: number; y: number; kind: CellTriggerKind }> = [];
   for (let x = 0; x < next.width; x += 1) {
     if (next.cells[row * next.width + x]) {
-      out.push({ x, y: row, kind: "birth" });
+      out.push({ x, y: row, kind: "state_on" });
     }
   }
   return out;
