@@ -2,19 +2,26 @@ import { useEffect, useMemo, useState } from "react";
 import type { DeviceInput } from "@cellsymphony/device-contracts";
 import { lifeBehavior } from "@cellsymphony/behaviors-life";
 import { createInitialState, routeInput, tick, toSimulatorFrame } from "@cellsymphony/platform-core";
-import { INTERPRETATION_PROFILES } from "@cellsymphony/interpretation-core";
+import { INTERPRETATION_PROFILES, type InterpretationProfile } from "@cellsymphony/interpretation-core";
 import { nativeAudioBridge } from "../audio/nativeAudioBridge";
 
 export function App() {
   const behavior = useMemo(() => lifeBehavior, []);
   const [state, setState] = useState(() => createInitialState(behavior));
   const [profileIndex, setProfileIndex] = useState(0);
+  const [eventEnabled, setEventEnabled] = useState(true);
+  const [stateEnabled, setStateEnabled] = useState(true);
   const [paintMode, setPaintMode] = useState<boolean | null>(null);
   const [painted, setPainted] = useState<Set<string>>(new Set());
 
   const frame = useMemo(() => toSimulatorFrame(state, behavior), [state, behavior]);
 
-  const activeProfile = INTERPRETATION_PROFILES[profileIndex] ?? INTERPRETATION_PROFILES[0];
+  const baseProfile = INTERPRETATION_PROFILES[profileIndex] ?? INTERPRETATION_PROFILES[0];
+  const activeProfile: InterpretationProfile = {
+    ...baseProfile,
+    event: { ...baseProfile.event, enabled: eventEnabled },
+    state: { ...baseProfile.state, enabled: stateEnabled }
+  };
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -42,6 +49,12 @@ export function App() {
       if (key === "s" || key === "S") dispatch({ type: "button_s" });
       if (key === "d" || key === "D") {
         setProfileIndex((prev) => (prev + 1) % INTERPRETATION_PROFILES.length);
+      }
+      if (key === "e" || key === "E") {
+        setEventEnabled((prev) => !prev);
+      }
+      if (key === "r" || key === "R") {
+        setStateEnabled((prev) => !prev);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -103,6 +116,8 @@ export function App() {
             <p>Page: {frame.display.page}</p>
             <p>Mode: {frame.display.editing ? "Edit" : "Select"}</p>
             <p>Profile: {activeProfile.id} (D to toggle)</p>
+            <p>Event: {activeProfile.event.enabled ? "On" : "Off"} (E toggle)</p>
+            <p>State: {activeProfile.state.enabled ? "On" : "Off"} (R toggle)</p>
             {frame.display.lines.map((line) => (
               <p key={line}>{line}</p>
             ))}
