@@ -117,10 +117,13 @@ export function tick<TState>(state: PlatformState<TState>, behavior: BehaviorEng
   let next = { ...state };
   if (next.transport.playing) {
     const beforeGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
-    next.behaviorState = behavior.onTick(next.behaviorState, { bpm: next.transport.bpm, emit: () => {} });
+    if (next.runtimeConfig.populationMode === "conway") {
+      next.behaviorState = behavior.onTick(next.behaviorState, { bpm: next.transport.bpm, emit: () => {} });
+    }
     const afterGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
     const profile = profileFromConfig(next.runtimeConfig);
-    const intents = interpretGrid(beforeGrid, afterGrid, next.transport.tick, profile);
+    const interpretationTick = toInterpretationTick(next.transport.tick, next.runtimeConfig);
+    const intents = interpretGrid(beforeGrid, afterGrid, interpretationTick, profile);
     const mapped = mapIntentsToMusicalEvents(intents, withScaleSteps(next.mappingConfig, next.runtimeConfig));
     events.push(...dedupeSimultaneousNotes(mapped));
     next.transport = { ...next.transport, tick: next.transport.tick + 1 };
@@ -131,6 +134,7 @@ export function tick<TState>(state: PlatformState<TState>, behavior: BehaviorEng
 export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>): SimulatorFrame {
   const model = behavior.renderModel(state.behaviorState);
   const menuView = currentMenuView(state.runtimeConfig, state.menu);
+  const scanCursor = getScanCursor(state.transport.tick, state.runtimeConfig);
   return {
     display: {
       page: PAGES[0] as PageId,
@@ -138,10 +142,29 @@ export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior:
       editing: state.menu.editing,
       lines: [menuView.path, menuView.line1, menuView.line2]
     },
-    leds: { width: 16, height: 16, cells: cellsToLeds(model.cells) },
+    leds: { width: 16, height: 16, cells: cellsToLeds(model.cells, scanCursor) },
     transport: state.transport,
     activeBehavior: model.name
   };
+}
+
+function toInterpretationTick(baseTick: number, cfg: RuntimeConfig): number {
+  if (cfg.scanMode !== "scanning") {
+    return baseTick;
+  }
+  const step = Math.max(1, Math.floor(cfg.ticksPerUnit));
+  const unitTick = Math.floor(baseTick / step);
+  return cfg.scanDirection === "reverse" ? -unitTick : unitTick;
+}
+
+function getScanCursor(baseTick: number, cfg: RuntimeConfig): { axis: ScanAxis; index: number } | null {
+  if (cfg.scanMode !== "scanning") {
+    return null;
+  }
+  const unitTick = toInterpretationTick(baseTick, cfg);
+  const size = 16;
+  const index = mod(unitTick, size);
+  return { axis: cfg.scanAxis, index };
 }
 
 function withScaleSteps(mapping: MappingConfig, cfg: RuntimeConfig): MappingConfig {
@@ -315,12 +338,32 @@ function toGridSnapshot(model: { cells: boolean[] }): GridSnapshot {
   return { width: 16, height: 16, cells: model.cells };
 }
 
-function cellsToLeds(cells: boolean[]): LedCell[] {
-  return cells.map((alive) => (alive ? { r: 0, g: 255, b: 120 } : { r: 15, g: 15, b: 22 }));
+function cellsToLeds(cells: boolean[], scanCursor: { axis: ScanAxis; index: number } | null): LedCell[] {
+  return cells.map((alive, i) => {
+    const x = i % 16;
+    const y = Math.floor(i / 16);
+    const inCursor =
+      scanCursor !== null &&
+      ((scanCursor.axis === "columns" && x === scanCursor.index) ||
+        (scanCursor.axis === "rows" && y === scanCursor.index));
+
+    if (!inCursor) {
+      return alive ? { r: 0, g: 255, b: 120 } : { r: 15, g: 15, b: 22 };
+    }
+
+    if (alive) {
+      return { r: 90, g: 160, b: 120 };
+    }
+    return { r: 70, g: 70, b: 76 };
+  });
 }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function mod(value: number, base: number): number {
+  return ((value % base) + base) % base;
 }
 
 export function toDisplayFrame(page: PageId, line1: string, editing: boolean): DisplayFrame {
