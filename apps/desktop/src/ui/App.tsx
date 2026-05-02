@@ -2,31 +2,20 @@ import { useEffect, useMemo, useState } from "react";
 import type { DeviceInput } from "@cellsymphony/device-contracts";
 import { lifeBehavior } from "@cellsymphony/behaviors-life";
 import { createInitialState, routeInput, tick, toSimulatorFrame } from "@cellsymphony/platform-core";
-import { INTERPRETATION_PROFILES, type InterpretationProfile } from "@cellsymphony/interpretation-core";
 import { nativeAudioBridge } from "../audio/nativeAudioBridge";
 
 export function App() {
   const behavior = useMemo(() => lifeBehavior, []);
   const [state, setState] = useState(() => createInitialState(behavior));
-  const [profileIndex, setProfileIndex] = useState(0);
-  const [eventEnabled, setEventEnabled] = useState(true);
-  const [stateEnabled, setStateEnabled] = useState(true);
   const [paintMode, setPaintMode] = useState<boolean | null>(null);
   const [painted, setPainted] = useState<Set<string>>(new Set());
 
   const frame = useMemo(() => toSimulatorFrame(state, behavior), [state, behavior]);
 
-  const baseProfile = INTERPRETATION_PROFILES[profileIndex] ?? INTERPRETATION_PROFILES[0];
-  const activeProfile: InterpretationProfile = {
-    ...baseProfile,
-    event: { ...baseProfile.event, enabled: eventEnabled },
-    state: { ...baseProfile.state, enabled: stateEnabled }
-  };
-
   useEffect(() => {
     const id = window.setInterval(() => {
       setState((prev) => {
-        const result = tick(prev, behavior, activeProfile);
+        const result = tick(prev, behavior);
         for (const event of result.events) {
           void nativeAudioBridge.trigger(event);
         }
@@ -34,7 +23,7 @@ export function App() {
       });
     }, 150);
     return () => window.clearInterval(id);
-  }, [behavior, activeProfile]);
+  }, [behavior]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -47,15 +36,6 @@ export function App() {
       if (key === "Enter") dispatch({ type: "encoder_press" });
       if (key === "a" || key === "A") dispatch({ type: "button_a" });
       if (key === "s" || key === "S") dispatch({ type: "button_s" });
-      if (key === "d" || key === "D") {
-        setProfileIndex((prev) => (prev + 1) % INTERPRETATION_PROFILES.length);
-      }
-      if (key === "e" || key === "E") {
-        setEventEnabled((prev) => !prev);
-      }
-      if (key === "r" || key === "R") {
-        setStateEnabled((prev) => !prev);
-      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -115,9 +95,6 @@ export function App() {
             <h1>{frame.display.title}</h1>
             <p>Page: {frame.display.page}</p>
             <p>Mode: {frame.display.editing ? "Edit" : "Select"}</p>
-            <p>Profile: {activeProfile.id} (D to toggle)</p>
-            <p>Event: {activeProfile.event.enabled ? "On" : "Off"} (E toggle)</p>
-            <p>State: {activeProfile.state.enabled ? "On" : "Off"} (R toggle)</p>
             {frame.display.lines.map((line) => (
               <p key={line}>{line}</p>
             ))}
