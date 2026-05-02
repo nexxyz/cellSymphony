@@ -10,3 +10,4 @@ Thumbs.db
 pnpm-debug.log*
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
+hardware/KiCAD/.history/
