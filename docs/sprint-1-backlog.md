@@ -100,7 +100,7 @@ Tasks:
   - screen panel
   - encoder control widget
   - A/S button widgets
-  - clickable 16x16 matrix
+  - clickable 8x8 matrix
 - Implement keyboard mapping:
   - Left/Right -> encoder delta
   - Enter -> encoder press

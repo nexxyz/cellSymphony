@@ -1,5 +1,7 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import {
+  GRID_HEIGHT,
+  GRID_WIDTH,
   PAGES,
   type DeviceInput,
   type DisplayFrame,
@@ -133,7 +135,11 @@ export function tick<TState>(state: PlatformState<TState>, behavior: BehaviorEng
       const scanStepPulses = noteUnitToPulses(next.runtimeConfig.scanUnit);
       while (next.scanPulseAccumulator >= scanStepPulses) {
         next.scanPulseAccumulator -= scanStepPulses;
-        next.scanIndex = advanceScanIndex(next.scanIndex, next.runtimeConfig.scanDirection);
+        next.scanIndex = advanceScanIndex(
+          next.scanIndex,
+          next.runtimeConfig.scanDirection,
+          next.runtimeConfig.scanAxis === "columns" ? GRID_WIDTH : GRID_HEIGHT
+        );
       }
     }
 
@@ -167,7 +173,7 @@ export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior:
       editing: state.menu.editing,
       lines: [menuView.path, menuView.line1, menuView.line2]
     },
-    leds: { width: 16, height: 16, cells: cellsToLeds(model.cells, scanCursor) },
+    leds: { width: GRID_WIDTH, height: GRID_HEIGHT, cells: cellsToLeds(model.cells, scanCursor) },
     transport: state.transport,
     activeBehavior: model.name
   };
@@ -192,9 +198,9 @@ function noteUnitToPulses(unit: NoteUnit): number {
   }
 }
 
-function advanceScanIndex(current: number, direction: Direction): number {
+function advanceScanIndex(current: number, direction: Direction, size: number): number {
   const delta = direction === "reverse" ? -1 : 1;
-  return mod(current + delta, 16);
+  return mod(current + delta, size);
 }
 
 function withScaleSteps(mapping: MappingConfig, cfg: RuntimeConfig): MappingConfig {
@@ -253,7 +259,7 @@ function axisGroup(label: string, prefix: "x" | "y", _defaultStep: number): Menu
       { kind: "number", label: "Scale Steps", key: `${prefix}.scaleSteps`, min: 0, max: 16, step: 1 },
       { kind: "number", label: "Min", key: `${prefix}.min`, min: 0, max: 100, step: 1 },
       { kind: "number", label: "Max", key: `${prefix}.max`, min: 0, max: 100, step: 1 },
-      { kind: "number", label: "Grid Offset", key: `${prefix}.gridOffset`, min: -64, max: 64, step: 1 },
+      { kind: "number", label: "Grid Offset", key: `${prefix}.gridOffset`, min: -16, max: 16, step: 1 },
       { kind: "enum", label: "Curve", key: `${prefix}.curve`, options: ["linear", "curve"] }
     ]
   };
@@ -366,13 +372,13 @@ function dedupeSimultaneousNotes(events: MusicalEvent[]): MusicalEvent[] {
 }
 
 function toGridSnapshot(model: { cells: boolean[] }): GridSnapshot {
-  return { width: 16, height: 16, cells: model.cells };
+  return { width: GRID_WIDTH, height: GRID_HEIGHT, cells: model.cells };
 }
 
 function cellsToLeds(cells: boolean[], scanCursor: { axis: ScanAxis; index: number } | null): LedCell[] {
   return cells.map((alive, i) => {
-    const x = i % 16;
-    const y = Math.floor(i / 16);
+    const x = i % GRID_WIDTH;
+    const y = Math.floor(i / GRID_WIDTH);
     const inCursor =
       scanCursor !== null &&
       ((scanCursor.axis === "columns" && x === scanCursor.index) ||

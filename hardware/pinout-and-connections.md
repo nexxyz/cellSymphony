@@ -20,7 +20,7 @@ Target platform: Raspberry Pi Zero 2W
 - NeoKey VIN -> +5V
 - NeoKey GND -> GND
 
-## OLED (SPI, 16-bit color, SSD1351 / Adafruit ADA684)
+## OLED (SPI, 16-bit color, SSD1351 / Adafruit 1431)
 
 - Pi Pin 6 (GND) -> OLED GND
 - Pi Pin 19 (GPIO10/MOSI) -> OLED MOSI
