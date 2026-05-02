@@ -73,6 +73,8 @@ For `scanMode = scanning`, the currently interpreted row/column is highlighted o
 - Columns mode: highlight current column
 - Cursor remains visible while transport is running and while stopped
 
+Scanning progression and Conway step timing use MIDI-clock style timing (PPQN=24), with note-unit settings (`1/16`, `1/8`, `1/4`, `1/2`, `1/1`) mapped to pulse counts.
+
 ## Current Status and Adaptation
 
 Current implementation now follows the canonical flow with one explicit interpretation module path:
