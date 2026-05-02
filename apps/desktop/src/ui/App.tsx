@@ -93,8 +93,7 @@ export function App() {
         <section className="content">
           <section className="screen">
             <h1>{frame.display.title}</h1>
-            <p>Page: {frame.display.page}</p>
-            <p>Mode: {frame.display.editing ? "Edit" : "Select"}</p>
+            <p>Transport: {frame.transport.playing ? "Running" : "Stopped"} @ {frame.transport.bpm} BPM</p>
             {frame.display.lines.map((line) => (
               <p key={line}>{line}</p>
             ))}
@@ -131,7 +130,7 @@ export function App() {
         </section>
       </section>
 
-      <footer className="bar footer">Arrows: encoder, Enter: press, A: back, S: play/stop</footer>
+      <footer className="bar footer">Arrows: encoder  Enter: select/edit  A: back/cancel  S: play/stop</footer>
     </main>
   );
 }
