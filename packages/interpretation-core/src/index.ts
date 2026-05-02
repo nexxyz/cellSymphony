@@ -43,6 +43,18 @@ export const PROFILE_LIFE_DEFAULT: InterpretationProfile = {
   y: { mode: "scale_step", step: 3 }
 };
 
+export const PROFILE_COLUMN_SEQUENCER_BASIC: InterpretationProfile = {
+  id: "column_sequencer_basic",
+  tick: { mode: "scan_column_active" },
+  x: { mode: "timing_only" },
+  y: { mode: "scale_step", step: 1 }
+};
+
+export const INTERPRETATION_PROFILES: InterpretationProfile[] = [
+  PROFILE_LIFE_DEFAULT,
+  PROFILE_COLUMN_SEQUENCER_BASIC
+];
+
 export function extractBirthDeathTransitions(previous: GridSnapshot, next: GridSnapshot): CellTransition[] {
   const transitions: CellTransition[] = [];
   const len = Math.min(previous.cells.length, next.cells.length);

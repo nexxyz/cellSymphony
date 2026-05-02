@@ -1,6 +1,6 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import { PAGES, type DeviceInput, type DisplayFrame, type LedCell, type LedMatrixFrame, type PageId, type SimulatorFrame, type TransportFrame } from "@cellsymphony/device-contracts";
-import { interpretGrid, PROFILE_LIFE_DEFAULT, type GridSnapshot } from "@cellsymphony/interpretation-core";
+import { interpretGrid, PROFILE_LIFE_DEFAULT, type GridSnapshot, type InterpretationProfile } from "@cellsymphony/interpretation-core";
 import { loadDefaultMappingConfig, mapIntentsToMusicalEvents, type MappingConfig } from "@cellsymphony/mapping-core";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 
@@ -59,7 +59,8 @@ export function routeInput<TState>(
 
 export function tick<TState>(
   state: PlatformState<TState>,
-  behavior: BehaviorEngine<TState, unknown>
+  behavior: BehaviorEngine<TState, unknown>,
+  interpretationProfile: InterpretationProfile = PROFILE_LIFE_DEFAULT
 ): { state: PlatformState<TState>; events: MusicalEvent[] } {
   const events: MusicalEvent[] = [];
   let next = { ...state };
@@ -70,7 +71,7 @@ export function tick<TState>(
       emit: (event) => events.push(event)
     });
     const afterGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
-    const intents = interpretGrid(beforeGrid, afterGrid, next.transport.tick, PROFILE_LIFE_DEFAULT);
+    const intents = interpretGrid(beforeGrid, afterGrid, next.transport.tick, interpretationProfile);
     const mapped = mapIntentsToMusicalEvents(intents, next.mappingConfig);
     events.push(...dedupeSimultaneousNotes(mapped));
     next.transport = { ...next.transport, tick: next.transport.tick + 1 };
