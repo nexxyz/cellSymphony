@@ -209,8 +209,9 @@ function currentMenuView(cfg: RuntimeConfig, menu: MenuState): { path: string; l
   const { node, siblings, path } = locate(menuTree(), cfg, menu);
   if (!siblings.length) return { path, line1: "", line2: "" };
   const selected = siblings[menu.cursor] ?? siblings[0];
-  const line1 = selected.label;
-  const line2 = selected.kind === "group" ? ">" : String(readValue(cfg, selected.key));
+  const line1 = `${menu.editing ? "[EDIT] " : ""}${selected.label}`;
+  const value = selected.kind === "group" ? ">" : String(readValue(cfg, selected.key));
+  const line2 = `${value}  (${menu.cursor + 1}/${siblings.length})`;
   return { path, line1, line2 };
 }
 
