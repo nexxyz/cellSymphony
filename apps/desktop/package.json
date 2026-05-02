@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@cellsymphony/device-contracts": "workspace:*",
+    "@cellsymphony/interpretation-core": "workspace:*",
     "@cellsymphony/musical-events": "workspace:*",
     "@tauri-apps/api": "^2.0.0",
     "@cellsymphony/behaviors-life": "workspace:*",

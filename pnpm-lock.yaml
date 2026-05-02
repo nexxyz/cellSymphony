@@ -16,6 +16,9 @@ importers:
       '@cellsymphony/device-contracts':
         specifier: workspace:*
         version: link:../../packages/device-contracts
+      '@cellsymphony/interpretation-core':
+        specifier: workspace:*
+        version: link:../../packages/interpretation-core
       '@cellsymphony/musical-events':
         specifier: workspace:*
         version: link:../../packages/musical-events
