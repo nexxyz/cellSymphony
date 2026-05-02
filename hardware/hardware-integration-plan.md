@@ -30,7 +30,7 @@ Hardware abstraction (HAL) feeds control inputs and consumes display/LED outputs
 - `hal/i2c_bus`
   - shared I2C bus scheduler/owner
 - `hal/neotrellis`
-  - 16x16 key scan + LED frame batching over seesaw
+  - 8x8 key scan + LED frame batching over seesaw
 - `hal/neokey`
   - 1x4 key scan over seesaw
 - `hal/oled_ssd1351`

@@ -1,8 +1,10 @@
 export type DeviceInput =
-  | { type: "encoder_turn"; delta: -1 | 1 }
-  | { type: "encoder_press" }
+  | { type: "encoder_turn"; delta: -1 | 1; id?: "main" | "aux1" | "aux2" | "aux3" | "aux4" }
+  | { type: "encoder_press"; id?: "main" | "aux1" | "aux2" | "aux3" | "aux4" }
   | { type: "button_a" }
   | { type: "button_s" }
+  | { type: "button_shift" }
+  | { type: "button_fn" }
   | { type: "grid_press"; x: number; y: number };
 
 export const PAGES = ["Transport", "Rule", "Mapping", "Sound", "Samples", "Project"] as const;
@@ -16,9 +18,11 @@ export type DisplayFrame = {
 };
 
 export type LedCell = { r: number; g: number; b: number };
+export const GRID_WIDTH = 8 as const;
+export const GRID_HEIGHT = 8 as const;
 export type LedMatrixFrame = {
-  width: 16;
-  height: 16;
+  width: typeof GRID_WIDTH;
+  height: typeof GRID_HEIGHT;
   cells: LedCell[];
 };
 

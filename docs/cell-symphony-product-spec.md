@@ -61,7 +61,7 @@ Controls:
 - Encoder press: keyboard Enter
 - Button A: keyboard A
 - Button S: keyboard S
-- 16x16 NeoPixel-like matrix: clickable grid cells (mouse/touch) in simulator
+- 8x8 NeoTrellis-like matrix: clickable grid cells (mouse/touch) in simulator
 
 Global behavior defaults:
 
@@ -74,7 +74,7 @@ Hardware target assumptions:
 - Small display
 - 1 rotary encoder with push
 - 2 auxiliary buttons
-- 16x16 pressable illuminated matrix
+- 8x8 pressable illuminated matrix
 
 ## 4) High-Level Architecture
 
@@ -129,7 +129,7 @@ Design rule: behavior modules can be replaced or added without rewriting platfor
 - Small device-screen panel (menu/status text model)
 - Encoder UI element
 - Button UI elements (Encoder press, A, S)
-- 16x16 clickable LED matrix
+- 8x8 clickable LED matrix
 
 ### 5.2 Input mapping requirements
 
@@ -159,7 +159,7 @@ Design rule: behavior modules can be replaced or added without rewriting platfor
 
 ### 6.1 Cellular automata phase
 
-- Initial automata: Conway's Game of Life on 16x16 grid.
+- Initial automata: Conway's Game of Life on 8x8 grid.
 - Deterministic stepping with seedable behavior where randomness is used.
 - Transport supports stopped/running and BPM control.
 
@@ -256,7 +256,7 @@ Project metadata should include:
 ## 10) Acceptance Criteria (v1)
 
 - Keyboard and UI controls exactly mirror planned hardware controls.
-- 16x16 grid is clickable and can drive automata/music.
+- 8x8 grid is clickable and can drive automata/music.
 - MIDI out functions for generated events.
 - Internal synth and ROMpler both operate standalone.
 - FLAC import succeeds and runtime reads only project-local WAV.

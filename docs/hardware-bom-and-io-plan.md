@@ -11,7 +11,7 @@ This document captures the current hardware direction for the first physical Cel
 - Controls:
   - 1 primary rotary encoder with push (navigation)
   - 2 dedicated buttons
-  - 16x16 interactive grid with LED feedback
+  - 8x8 interactive grid with LED feedback
   - small display
 
 ## Future-Proofing Update (Locked)
@@ -41,8 +41,8 @@ Reserve I/O capacity for:
 - Quadrature signals for 5 encoders.
 - Optional 5 encoder switch lines.
 - 2 dedicated buttons.
-- 16x16 grid input path.
-- 16x16 LED output path.
+- 8x8 grid input path.
+- 8x8 LED output path.
 - Display bus (SPI/I2C as selected).
 
 Recommendation:

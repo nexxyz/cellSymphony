@@ -59,7 +59,7 @@ body {
 
 .matrix {
   display: grid;
-  grid-template-columns: repeat(16, 1fr);
+  grid-template-columns: repeat(8, 1fr);
   gap: 2px;
   align-self: start;
 }

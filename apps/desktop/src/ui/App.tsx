@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { DeviceInput } from "@cellsymphony/device-contracts";
+import { GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 import { lifeBehavior } from "@cellsymphony/behaviors-life";
 import { createInitialState, routeInput, tick, toSimulatorFrame } from "@cellsymphony/platform-core";
 import { nativeAudioBridge } from "../audio/nativeAudioBridge";
@@ -55,7 +55,7 @@ export function App() {
     if (painted.has(key)) {
       return;
     }
-    const index = y * 16 + x;
+    const index = y * GRID_WIDTH + x;
     if (cellAlive(index) !== desired) {
       dispatch({ type: "grid_press", x, y });
     }
@@ -99,10 +99,10 @@ export function App() {
             ))}
           </section>
 
-          <section className="matrix" aria-label="16 by 16 matrix">
+          <section className="matrix" aria-label="8 by 8 matrix">
             {frame.leds.cells.map((cell, index) => {
-              const x = index % 16;
-              const y = Math.floor(index / 16);
+              const x = index % GRID_WIDTH;
+              const y = Math.floor(index / GRID_WIDTH);
               return (
                 <button
                   key={`${x}-${y}`}

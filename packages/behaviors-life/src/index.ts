@@ -1,25 +1,25 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
-import type { DeviceInput } from "@cellsymphony/device-contracts";
+import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 
 export type LifeState = {
-  width: 16;
-  height: 16;
+  width: typeof GRID_WIDTH;
+  height: typeof GRID_HEIGHT;
   cells: boolean[];
   generation: number;
 };
 
 export type LifeConfig = {
-  width?: 16;
-  height?: 16;
+  width?: typeof GRID_WIDTH;
+  height?: typeof GRID_HEIGHT;
 };
 
 export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
   id: "life",
   init(): LifeState {
     return {
-      width: 16,
-      height: 16,
-      cells: new Array(16 * 16).fill(false),
+      width: GRID_WIDTH,
+      height: GRID_HEIGHT,
+      cells: new Array(GRID_WIDTH * GRID_HEIGHT).fill(false),
       generation: 0
     };
   },
@@ -27,10 +27,10 @@ export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
     if (input.type !== "grid_press") {
       return state;
     }
-    if (input.x < 0 || input.x >= 16 || input.y < 0 || input.y >= 16) {
+    if (input.x < 0 || input.x >= GRID_WIDTH || input.y < 0 || input.y >= GRID_HEIGHT) {
       return state;
     }
-    const i = input.y * 16 + input.x;
+    const i = input.y * GRID_WIDTH + input.x;
     const nextCells = state.cells.slice();
     nextCells[i] = !nextCells[i];
     return {
@@ -41,9 +41,9 @@ export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
   onTick(state, context) {
     const nextCells = state.cells.slice();
     let aliveCount = 0;
-    for (let y = 0; y < 16; y += 1) {
-      for (let x = 0; x < 16; x += 1) {
-        const i = y * 16 + x;
+    for (let y = 0; y < GRID_HEIGHT; y += 1) {
+      for (let x = 0; x < GRID_WIDTH; x += 1) {
+        const i = y * GRID_WIDTH + x;
         const alive = state.cells[i];
         const neighbors = countNeighbors(state.cells, x, y);
         nextCells[i] = alive ? neighbors === 2 || neighbors === 3 : neighbors === 3;
@@ -86,10 +86,10 @@ function countNeighbors(cells: boolean[], x: number, y: number): number {
       }
       const nx = x + ox;
       const ny = y + oy;
-      if (nx < 0 || nx >= 16 || ny < 0 || ny >= 16) {
+      if (nx < 0 || nx >= GRID_WIDTH || ny < 0 || ny >= GRID_HEIGHT) {
         continue;
       }
-      if (cells[ny * 16 + nx]) {
+      if (cells[ny * GRID_WIDTH + nx]) {
         count += 1;
       }
     }
