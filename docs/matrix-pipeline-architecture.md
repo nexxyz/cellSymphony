@@ -63,7 +63,15 @@ Output:
 - Examples:
   - internal synth trigger
   - ROMpler/sample trigger
-  - MIDI output
+- MIDI output
+
+## Scanning Visual Cursor
+
+For `scanMode = scanning`, the currently interpreted row/column is highlighted on the matrix with a low-intensity gray/soft-white cursor tint.
+
+- Rows mode: highlight current row
+- Columns mode: highlight current column
+- Cursor remains visible while transport is running and while stopped
 
 ## Current Status and Adaptation
 
