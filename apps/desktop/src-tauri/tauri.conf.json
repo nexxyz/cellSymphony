@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "Cell Symphony",
-        "width": 1200,
-        "height": 900,
+        "width": 1080,
+        "height": 720,
         "resizable": true
       }
     ]

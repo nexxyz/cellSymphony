@@ -7,6 +7,8 @@ export function mapKeyboardEventToInputAction(event: KeyboardEvent): InputAction
   if (key === " " && event.shiftKey) return { type: "emergency_brake" };
   if (key === "ArrowLeft") return wrap({ type: "encoder_turn", delta: -1, id: "main" });
   if (key === "ArrowRight") return wrap({ type: "encoder_turn", delta: 1, id: "main" });
+  if (key === "ArrowUp") return wrap({ type: "encoder_turn", delta: -1, id: "main" });
+  if (key === "ArrowDown") return wrap({ type: "encoder_turn", delta: 1, id: "main" });
   if (key === "Enter") return wrap({ type: "encoder_press", id: "main" });
   if (key === "Backspace") return wrap({ type: "button_a" });
   if (key === " ") return wrap({ type: "button_s" });

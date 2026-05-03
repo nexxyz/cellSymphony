@@ -14,6 +14,9 @@ body {
   display: grid;
   grid-template-rows: auto 1fr auto;
   gap: 12px;
+  box-sizing: border-box;
+  max-width: 100vw;
+  overflow-x: clip;
 }
 
 .bar {
@@ -23,35 +26,56 @@ body {
   padding: 9px 12px;
   font-size: 13px;
   letter-spacing: 0.03em;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .footer {
   font-size: 12px;
   opacity: 0.9;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .panel-layout {
-  width: min(1220px, 100%);
+  width: fit-content;
+  max-width: 100%;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(440px, 520px) minmax(460px, 1fr);
-  gap: 12px;
+  grid-template-columns: max-content max-content;
+  align-items: start;
+  gap: 30px;
 }
 
-.left-rail {
+.control-grid {
   display: grid;
+  grid-template-columns: 120px auto 120px 118px;
+  grid-template-areas:
+    "sw1 oled oled oled"
+    "sw2 sw3 sw3 stacka"
+    "sw4 sw5 sw5 stackb";
   gap: 10px;
+  align-items: start;
 }
 
 .oled-wrap,
-.encoder-grid,
-.neokey-row,
+.encoder-card,
+.button-stack,
 .matrix-chassis {
   border: 1px solid #2d4638;
   border-radius: 12px;
   background: linear-gradient(180deg, rgba(17, 26, 21, 0.92), rgba(10, 15, 12, 0.94));
   padding: 10px;
 }
+
+.sw1 { grid-area: sw1; }
+.sw2 { grid-area: sw2; }
+.sw3 { grid-area: sw3; }
+.sw4 { grid-area: sw4; }
+.sw5 { grid-area: sw5; }
+.oled-wrap { grid-area: oled; justify-self: start; }
+.stack-a { grid-area: stacka; }
+.stack-b { grid-area: stackb; }
 
 .oled-bezel {
   width: fit-content;
@@ -90,6 +114,14 @@ body {
   text-shadow: 0 0 5px rgba(114, 255, 177, 0.35);
 }
 
+.oled-panel .oled-selected {
+  background: rgba(145, 255, 186, 0.9);
+  color: #08120d;
+  text-shadow: none;
+  border-radius: 2px;
+  padding: 0 2px;
+}
+
 .transport-indicator {
   position: absolute;
   right: 10px;
@@ -99,6 +131,25 @@ body {
   align-items: center;
   gap: 5px;
   color: #6be89f;
+}
+
+.pause-slash {
+  position: relative;
+  width: 11px;
+  height: 11px;
+  border: 1px solid currentColor;
+  display: inline-block;
+}
+
+.pause-slash::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: -1px;
+  width: 1px;
+  height: 12px;
+  background: currentColor;
+  transform: rotate(35deg);
 }
 
 .transport-indicator.beat {
@@ -126,12 +177,6 @@ body {
   font-size: 12px;
   margin: 8px 0 0;
   color: #b8c8be;
-}
-
-.encoder-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(180px, 1fr));
-  gap: 8px;
 }
 
 .encoder-card {
@@ -191,38 +236,41 @@ body {
   cursor: pointer;
 }
 
-.neokey-row {
+
+.button-stack {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+  width: 118px;
+  justify-self: start;
 }
 
-.neokey-row .reserved {
-  opacity: 0.6;
+.button-stack button {
+  min-height: 44px;
+  width: 118px;
 }
 
-.neokey-row .neokey-back {
+.button-stack .neokey-back {
   border-color: #894242;
   background: linear-gradient(180deg, #4d1f1f, #381617);
 }
 
-.neokey-row .solid_red {
+.button-stack .solid_red {
   background: linear-gradient(180deg, #8a2f2f, #5e1f1f);
   box-shadow: 0 0 12px rgba(255, 92, 92, 0.45);
 }
 
-.neokey-row .beat {
+.button-stack .beat {
   background: linear-gradient(180deg, #3e7f4f, #285837);
   box-shadow: 0 0 14px rgba(114, 255, 139, 0.42);
 }
 
-.neokey-row .measure {
+.button-stack .measure {
   background: linear-gradient(180deg, #3f7682, #28535e);
   box-shadow: 0 0 18px rgba(84, 234, 255, 0.6);
   border-color: #5ec9d5;
 }
 
-.neokey-row .solid_yellow {
+.button-stack .solid_yellow {
   background: linear-gradient(180deg, #85702e, #62521d);
   border-color: #baa14a;
   box-shadow: 0 0 12px rgba(245, 220, 106, 0.6);
@@ -230,11 +278,13 @@ body {
 
 .matrix-chassis {
   display: grid;
-  place-items: center;
+  place-items: start;
+  padding: 6px;
+  align-self: start;
 }
 
 .matrix {
-  width: min(560px, 100%);
+  width: 560px;
   display: grid;
   grid-template-columns: repeat(8, 1fr);
   gap: 6px;
@@ -255,7 +305,21 @@ body {
 
 @media (max-width: 1040px) {
   .panel-layout {
+    width: 100%;
     grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .control-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "sw1"
+      "oled"
+      "sw2"
+      "sw3"
+      "stacka"
+      "sw4"
+      "sw5"
+      "stackb";
   }
   .matrix {
     width: min(500px, 100%);
