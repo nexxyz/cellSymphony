@@ -1,0 +1,39 @@
+# Runtime Boundaries
+
+This project keeps UI/hardware emulation separate from logic and processing.
+
+## Layer Responsibilities
+
+- UI layer (`apps/desktop/src/ui`)
+  - renders simulator snapshot data
+  - captures user interaction and emits `DeviceInput`
+  - contains no transport/menu/audio/interpretation logic
+
+- Runtime orchestration layer (`apps/desktop/src/runtime`)
+  - owns lifecycle (`start`/`stop`)
+  - schedules ticks through `runtimeScheduler`
+  - applies core state transitions (`routeInput`, `tick`)
+  - publishes snapshots and musical events
+
+- Core logic layer (`packages/platform-core`, `packages/interpretation-core`, `packages/mapping-core`, behavior packages)
+  - deterministic simulation, menu/control state, interpretation, mapping
+  - no UI framework code
+
+- Output adapters
+  - desktop audio sink maps musical events to native Tauri bridge
+  - future hardware sinks map outputs to OLED/NeoTrellis/HAL drivers
+
+## Dependency Rules
+
+- UI may import runtime modules and type contracts only.
+- UI must not call `tick`, `routeInput`, or native audio bridges directly.
+- Runtime may import core and output/input adapters.
+- Core packages must stay platform-agnostic.
+
+## Data Flow
+
+1. UI interaction -> `DeviceInput`
+2. Runtime receives input -> `platform-core` transition
+3. Runtime scheduler triggers tick -> `platform-core` processing
+4. Runtime publishes snapshot -> UI render
+5. Runtime publishes musical events -> output adapter(s)
