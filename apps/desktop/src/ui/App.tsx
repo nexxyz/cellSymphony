@@ -34,7 +34,7 @@ export function App() {
   useEffect(() => {
     const unsubscribeState = runtime.subscribe(setSnapshot);
     const unsubscribeEvents = runtime.subscribeEvents((events) => {
-      void sendEventsToAudio(events);
+      void sendEventsToAudio(events, runtime.getSnapshot().masterVolume);
     });
     runtime.start();
     return () => {
@@ -158,7 +158,7 @@ export function App() {
 
           <section className="oled-wrap">
             <div className="oled-bezel">
-              <div className="oled-panel" style={{ width: OLED_WIDTH, height: OLED_HEIGHT }}>
+              <div className="oled-panel" style={{ width: OLED_WIDTH, height: OLED_HEIGHT, opacity: Math.max(0.2, snapshot.displayBrightness / 100) }}>
                 {snapshot.oledLines.map((line, index) => {
                   const selected = line.startsWith("@@");
                   const text = selected ? line.slice(2) : line;
@@ -309,6 +309,7 @@ function NeoKey({
         if (button.key === "shift") runtime.dispatchAction({ type: "shift", active: false });
       }}
       className={`neokey-${button.key} ${snapshot.neoKeyLeds[button.key]}`}
+      style={{ opacity: Math.max(0.25, snapshot.buttonBrightness / 100) }}
     >
       {button.label}
     </button>

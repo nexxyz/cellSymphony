@@ -1,5 +1,7 @@
 # Simulator Hardware-Parity Plan
 
+Note: Active menu/control truth now lives in `docs/menu-and-controls-spec.md`.
+
 This plan captures the agreed UI/runtime behavior so simulator and hardware match in control semantics.
 
 ## Core Rules

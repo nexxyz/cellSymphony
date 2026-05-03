@@ -16,12 +16,12 @@
     "tauri:build:ci": "tauri build --debug"
   },
   "dependencies": {
+    "@cellsymphony/behaviors-life": "workspace:*",
     "@cellsymphony/device-contracts": "workspace:*",
     "@cellsymphony/interpretation-core": "workspace:*",
     "@cellsymphony/musical-events": "workspace:*",
-    "@tauri-apps/api": "^2.0.0",
-    "@cellsymphony/behaviors-life": "workspace:*",
     "@cellsymphony/platform-core": "workspace:*",
+    "@tauri-apps/api": "^2.0.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },

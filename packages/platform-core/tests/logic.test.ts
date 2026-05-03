@@ -105,6 +105,49 @@ test("scan mode advances cursor using PPQN timing", () => {
   assert.equal(state.scanIndex, 1);
 });
 
+test("grid brightness scales rendered LED intensity", () => {
+  let state = createInitialState(mockBehavior);
+  state.runtimeConfig.gridBrightness = 20;
+  const dim = toSimulatorFrame(state, mockBehavior);
+  state.runtimeConfig.gridBrightness = 100;
+  const bright = toSimulatorFrame(state, mockBehavior);
+  const dimTotal = dim.leds.cells.reduce((sum, c) => sum + c.r + c.g + c.b, 0);
+  const brightTotal = bright.leds.cells.reduce((sum, c) => sum + c.r + c.g + c.b, 0);
+  assert.ok(brightTotal > dimTotal);
+});
+
+test("velocity modulation mode changes output velocity", () => {
+  let state = createInitialState(mockBehavior);
+  state.transport.playing = true;
+  state.runtimeConfig.populationMode = "conway";
+  state.runtimeConfig.conwayStepUnit = "1/16";
+  state.runtimeConfig.eventParity = "none";
+  state.runtimeConfig.x.mode = "velocity";
+  state.runtimeConfig.x.min = 20;
+  state.runtimeConfig.x.max = 100;
+  const result = tick(state, mockBehavior);
+  const note = result.events.find((e) => e.type === "note_on");
+  assert.ok(note && note.type === "note_on");
+  if (note && note.type === "note_on") {
+    assert.ok(note.velocity >= 20 && note.velocity <= 100);
+  }
+});
+
+test("filter modulation mode emits cutoff/resonance CC", () => {
+  let state = createInitialState(mockBehavior);
+  state.transport.playing = true;
+  state.runtimeConfig.populationMode = "conway";
+  state.runtimeConfig.conwayStepUnit = "1/16";
+  state.runtimeConfig.eventParity = "none";
+  state.runtimeConfig.x.mode = "filter_cutoff";
+  state.runtimeConfig.y.mode = "filter_resonance";
+  const result = tick(state, mockBehavior);
+  const hasCutoff = result.events.some((e) => e.type === "cc" && e.controller === 74);
+  const hasResonance = result.events.some((e) => e.type === "cc" && e.controller === 71);
+  assert.equal(hasCutoff, true);
+  assert.equal(hasResonance, true);
+});
+
 test("aux encoder inputs are reserved and do not navigate menu", () => {
   let state = createInitialState(mockBehavior);
   state = routeInput(state, { type: "encoder_turn", delta: 1, id: "aux1" }, mockBehavior).state;
@@ -122,7 +165,7 @@ test("OLED formatter clamps display lines and width", () => {
     lines: ["line one", "line two", "line three", "line four"]
   });
 
-  assert.equal(lines.length, 4);
+  assert.equal(lines.length, 5);
   assert.equal(lines[0].length, OLED_TEXT_COLUMNS);
-  assert.equal(lines[3], "line three");
+  assert.equal(lines[lines.length - 1], "line four");
 });

@@ -7,8 +7,7 @@ export type DeviceInput =
   | { type: "button_fn" }
   | { type: "grid_press"; x: number; y: number };
 
-export const PAGES = ["Transport", "Rule", "Mapping", "Sound", "Samples", "Project"] as const;
-export type PageId = (typeof PAGES)[number];
+export type PageId = string;
 
 export type DisplayFrame = {
   page: PageId;
@@ -31,11 +30,6 @@ export type TransportFrame = {
   bpm: number;
   tick: number;
   ppqnPulse: number;
-};
-
-export type EngineFrame = {
-  activeBehavior: string;
-  cpuHintPercent: number;
 };
 
 export type SimulatorFrame = {

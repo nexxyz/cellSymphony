@@ -24,6 +24,9 @@ export type SimulatorSnapshot = {
   oledLines: string[];
   transportIndicator: TransportIndicator;
   neoKeyLeds: NeoKeyLeds;
+  displayBrightness: number;
+  buttonBrightness: number;
+  masterVolume: number;
 };
 
 export type RuntimeListener = (snapshot: SimulatorSnapshot) => void;
