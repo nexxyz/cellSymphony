@@ -6,7 +6,7 @@ import type { DeviceInput } from "@cellsymphony/device-contracts";
 import { GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contracts";
 import { interpretGrid, type GridSnapshot } from "@cellsymphony/interpretation-core";
 import { loadDefaultMappingConfig, mapIntentsToMusicalEvents } from "@cellsymphony/mapping-core";
-import { createInitialState, routeInput, tick, toSimulatorFrame } from "../src/index";
+import { createInitialState, OLED_TEXT_COLUMNS, routeInput, tick, toOledLines, toSimulatorFrame } from "../src/index";
 
 type MockState = {
   cells: boolean[];
@@ -102,4 +102,26 @@ test("scan mode advances cursor using PPQN timing", () => {
   state = tick(state, mockBehavior).state;
 
   assert.equal(state.scanIndex, 1);
+});
+
+test("aux encoder inputs are reserved and do not navigate menu", () => {
+  let state = createInitialState(mockBehavior);
+  state = routeInput(state, { type: "encoder_turn", delta: 1, id: "aux1" }, mockBehavior).state;
+  assert.equal(state.menu.cursor, 0);
+
+  state = routeInput(state, { type: "encoder_press", id: "aux2" }, mockBehavior).state;
+  assert.deepEqual(state.menu.stack, []);
+});
+
+test("OLED formatter clamps display lines and width", () => {
+  const lines = toOledLines({
+    page: "Transport",
+    title: "Cell Symphony Super Long Header",
+    editing: false,
+    lines: ["line one", "line two", "line three", "line four"]
+  });
+
+  assert.equal(lines.length, 4);
+  assert.equal(lines[0].length, OLED_TEXT_COLUMNS);
+  assert.equal(lines[3], "line three");
 });
