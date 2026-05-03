@@ -98,7 +98,7 @@ test("scan mode advances cursor using PPQN timing", () => {
   state.runtimeConfig.scanMode = "scanning";
   state.runtimeConfig.scanAxis = "columns";
   state.runtimeConfig.scanDirection = "forward";
-  state.runtimeConfig.x.scanUnit = "1/16";
+  state.runtimeConfig.scanUnit = "1/16";
 
   state = tick(state, mockBehavior).state;
 

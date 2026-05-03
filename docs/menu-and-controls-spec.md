@@ -29,12 +29,11 @@ This is the single source of truth for menu structure, control mappings, and par
 - Interpretation
   - Scan Mode (functional)
   - Scan Axis (functional in scanning mode)
-  - X Scan Unit (functional in scanning mode)
-  - Y Scan Unit (functional in scanning mode)
+  - Scan Unit (functional in scanning mode)
   - Scan Direction (functional in scanning mode)
   - Event Triggers (functional)
-  - Event Filter (`All` | `Odd/Even`) (functional)
-  - State Triggers (functional)
+  - Event Pattern (`All` | `Odd/Even`) (functional)
+  - State Notes (functional)
   - X Axis (functional)
   - Y Axis (functional)
 - Mapping
