@@ -23,18 +23,37 @@ type ScanMode = "immediate" | "scanning";
 type ScanAxis = "rows" | "columns";
 type Direction = "forward" | "reverse";
 type NoteUnit = "1/16" | "1/8" | "1/4" | "1/2" | "1/1";
-type ModMode = "scale_steps" | "filter_cutoff" | "filter_resonance" | "velocity";
 type Curve = "linear" | "curve";
 
-type AxisModConfig = {
-  mode: ModMode;
+type OutOfRangeMode = "clamp" | "wrap";
+
+type PitchSettings = {
+  startingNote: number;
+  lowestNote: number;
+  highestNote: number;
+  outOfRange: OutOfRangeMode;
+};
+
+type PitchLaneConfig = {
   enabled: boolean;
-  direction: Direction;
-  scaleSteps: number;
-  min: number;
-  max: number;
+  steps: number;
+};
+
+type ValueLaneConfig = {
+  enabled: boolean;
+  from: number;
+  to: number;
   gridOffset: number;
   curve: Curve;
+};
+
+type AxisModConfig = {
+  direction: Direction;
+  scanUnit: NoteUnit;
+  pitch: PitchLaneConfig;
+  velocity: ValueLaneConfig;
+  filterCutoff: ValueLaneConfig;
+  filterResonance: ValueLaneConfig;
 };
 
 type RuntimeConfig = {
@@ -45,12 +64,12 @@ type RuntimeConfig = {
   buttonBrightness: number;
   scanMode: ScanMode;
   scanAxis: ScanAxis;
-  scanUnit: NoteUnit;
   scanDirection: Direction;
   conwayStepUnit: NoteUnit;
   eventEnabled: boolean;
   eventParity: "none" | "birth_even_death_odd";
   stateEnabled: boolean;
+  pitch: PitchSettings;
   x: AxisModConfig;
   y: AxisModConfig;
 };
@@ -99,14 +118,28 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
       buttonBrightness: 75,
       scanMode: "immediate",
       scanAxis: "columns",
-      scanUnit: "1/8",
       scanDirection: "forward",
       conwayStepUnit: "1/8",
       eventEnabled: true,
       eventParity: "birth_even_death_odd",
       stateEnabled: true,
-      x: { mode: "scale_steps", enabled: true, direction: "forward", scaleSteps: 1, min: 100, max: 100, gridOffset: 0, curve: "linear" },
-      y: { mode: "scale_steps", enabled: true, direction: "forward", scaleSteps: 3, min: 100, max: 100, gridOffset: 0, curve: "linear" }
+      pitch: { startingNote: 60, lowestNote: 48, highestNote: 84, outOfRange: "clamp" },
+      x: {
+        direction: "forward",
+        scanUnit: "1/8",
+        pitch: { enabled: true, steps: 1 },
+        velocity: { enabled: false, from: 20, to: 100, gridOffset: 0, curve: "linear" },
+        filterCutoff: { enabled: false, from: 20, to: 127, gridOffset: 0, curve: "linear" },
+        filterResonance: { enabled: false, from: 10, to: 90, gridOffset: 0, curve: "linear" }
+      },
+      y: {
+        direction: "forward",
+        scanUnit: "1/8",
+        pitch: { enabled: true, steps: 8 },
+        velocity: { enabled: false, from: 20, to: 100, gridOffset: 0, curve: "linear" },
+        filterCutoff: { enabled: false, from: 20, to: 127, gridOffset: 0, curve: "linear" },
+        filterResonance: { enabled: false, from: 10, to: 90, gridOffset: 0, curve: "linear" }
+      }
     },
     menu: { stack: [], cursor: 0, editing: false },
     scanIndex: 0,
@@ -152,7 +185,8 @@ export function tick<TState>(state: PlatformState<TState>, behavior: BehaviorEng
     }
 
     if (next.runtimeConfig.scanMode === "scanning") {
-      const scanStepPulses = noteUnitToPulses(next.runtimeConfig.scanUnit);
+      const axisUnit = next.runtimeConfig.scanAxis === "columns" ? next.runtimeConfig.x.scanUnit : next.runtimeConfig.y.scanUnit;
+      const scanStepPulses = noteUnitToPulses(axisUnit);
       while (next.scanPulseAccumulator >= scanStepPulses) {
         next.scanPulseAccumulator -= scanStepPulses;
         next.scanIndex = advanceScanIndex(
@@ -225,15 +259,19 @@ function advanceScanIndex(current: number, direction: Direction, size: number): 
 }
 
 function withScaleSteps(mapping: MappingConfig, cfg: RuntimeConfig): MappingConfig {
-  return { ...mapping, rowStepDegrees: cfg.y.scaleSteps, columnStepDegrees: cfg.x.scaleSteps };
+  return {
+    ...mapping,
+    rowStepDegrees: cfg.y.pitch.enabled ? Math.abs(cfg.y.pitch.steps) : 0,
+    columnStepDegrees: cfg.x.pitch.enabled ? Math.abs(cfg.x.pitch.steps) : 0
+  };
 }
 
 function profileFromConfig(cfg: RuntimeConfig): InterpretationProfile {
   const tick: TickStrategy = cfg.scanMode === "immediate"
     ? { mode: "whole_grid_transitions", parity: cfg.eventParity }
     : { mode: cfg.scanAxis === "columns" ? "scan_column_active" : "scan_row_active" };
-  const axisX: AxisStrategy = cfg.x.mode === "scale_steps" ? { mode: "scale_step", step: cfg.x.scaleSteps } : { mode: "timing_only" };
-  const axisY: AxisStrategy = cfg.y.mode === "scale_steps" ? { mode: "scale_step", step: cfg.y.scaleSteps } : { mode: "timing_only" };
+  const axisX: AxisStrategy = cfg.x.pitch.enabled ? { mode: "scale_step", step: Math.abs(cfg.x.pitch.steps) } : { mode: "timing_only" };
+  const axisY: AxisStrategy = cfg.y.pitch.enabled ? { mode: "scale_step", step: Math.abs(cfg.y.pitch.steps) } : { mode: "timing_only" };
   return {
     id: "menu_profile",
     event: { enabled: cfg.eventEnabled, parity: cfg.eventParity },
@@ -275,19 +313,24 @@ function menuTree(): MenuNode {
         children: [
           { kind: "enum", label: "Scan Mode", key: "scanMode", options: ["immediate", "scanning"] },
           { kind: "enum", label: "Scan Axis", key: "scanAxis", options: ["rows", "columns"], visible: (c) => c.scanMode === "scanning" },
-          { kind: "enum", label: "Scan Unit", key: "scanUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.scanMode === "scanning" },
+          { kind: "enum", label: "X Scan Unit", key: "x.scanUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.scanMode === "scanning" },
+          { kind: "enum", label: "Y Scan Unit", key: "y.scanUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.scanMode === "scanning" },
           { kind: "enum", label: "Scan Direction", key: "scanDirection", options: ["forward", "reverse"], visible: (c) => c.scanMode === "scanning" },
           { kind: "bool", label: "Event Triggers", key: "eventEnabled" },
           { kind: "enum", label: "Event Filter", key: "eventParity", options: ["none", "birth_even_death_odd"] },
           { kind: "bool", label: "State Triggers", key: "stateEnabled" },
           axisGroup("X Axis", "x", 1),
-          axisGroup("Y Axis", "y", 3)
+          axisGroup("Y Axis", "y", 8)
         ]
       },
       {
         kind: "group",
         label: "Mapping",
         children: [
+          { kind: "number", label: "Starting Note", key: "pitch.startingNote", min: 0, max: 127, step: 1 },
+          { kind: "number", label: "Lowest Note", key: "pitch.lowestNote", min: 0, max: 127, step: 1 },
+          { kind: "number", label: "Highest Note", key: "pitch.highestNote", min: 0, max: 127, step: 1 },
+          { kind: "enum", label: "Out of Range", key: "pitch.outOfRange", options: ["clamp", "wrap"] },
           { kind: "number", label: "Base Note", key: "mapping.baseMidiNote", min: 0, max: 127, step: 1 },
           { kind: "enum", label: "Range Mode", key: "mapping.rangeMode", options: ["clamp", "wrap"] },
           { kind: "enum", label: "Birth Target", key: "mapping.birth.channel", options: ["0", "1", "2", "3"] },
@@ -311,18 +354,37 @@ function menuTree(): MenuNode {
 }
 
 function axisGroup(label: string, prefix: "x" | "y", _defaultStep: number): MenuNode {
+  const offsetLimit = prefix === "x" ? GRID_WIDTH - 1 : GRID_HEIGHT - 1;
   return {
     kind: "group",
     label,
     children: [
-      { kind: "enum", label: "Mode", key: `${prefix}.mode`, options: ["scale_steps", "filter_cutoff", "filter_resonance", "velocity"] },
-      { kind: "bool", label: "On", key: `${prefix}.enabled` },
-      { kind: "enum", label: "Dir", key: `${prefix}.direction`, options: ["forward", "reverse"] },
-      { kind: "number", label: "Scale Steps", key: `${prefix}.scaleSteps`, min: 0, max: 16, step: 1 },
-      { kind: "number", label: "Min", key: `${prefix}.min`, min: 0, max: 100, step: 1 },
-      { kind: "number", label: "Max", key: `${prefix}.max`, min: 0, max: 100, step: 1 },
-      { kind: "number", label: "Grid Offset", key: `${prefix}.gridOffset`, min: -16, max: 16, step: 1 },
-      { kind: "enum", label: "Curve", key: `${prefix}.curve`, options: ["linear", "curve"] }
+      { kind: "enum", label: "Direction", key: `${prefix}.direction`, options: ["forward", "reverse"] },
+      {
+        kind: "group",
+        label: "Pitch Steps",
+        children: [
+          { kind: "bool", label: "Enabled", key: `${prefix}.pitch.enabled` },
+          { kind: "number", label: "Steps", key: `${prefix}.pitch.steps`, min: -16, max: 16, step: 1, visible: (c) => readValue(c, `${prefix}.pitch.enabled`) === true }
+        ]
+      },
+      laneGroup("Velocity", `${prefix}.velocity`, offsetLimit),
+      laneGroup("Filter Cutoff", `${prefix}.filterCutoff`, offsetLimit),
+      laneGroup("Filter Resonance", `${prefix}.filterResonance`, offsetLimit)
+    ]
+  };
+}
+
+function laneGroup(label: string, prefix: string, offsetLimit: number): MenuNode {
+  return {
+    kind: "group",
+    label,
+    children: [
+      { kind: "bool", label: "Enabled", key: `${prefix}.enabled` },
+      { kind: "number", label: "From", key: `${prefix}.from`, min: 0, max: 127, step: 1, visible: (c) => readValue(c, `${prefix}.enabled`) === true },
+      { kind: "number", label: "To", key: `${prefix}.to`, min: 0, max: 127, step: 1, visible: (c) => readValue(c, `${prefix}.enabled`) === true },
+      { kind: "number", label: "Grid Offset", key: `${prefix}.gridOffset`, min: -offsetLimit, max: offsetLimit, step: 1, visible: (c) => readValue(c, `${prefix}.enabled`) === true },
+      { kind: "enum", label: "Curve", key: `${prefix}.curve`, options: ["linear", "curve"], visible: (c) => readValue(c, `${prefix}.enabled`) === true }
     ]
   };
 }
@@ -391,7 +453,7 @@ function formatMenuItemLines<TState>(item: MenuNode, state: PlatformState<TState
   }
   const value = formatDisplayValue(item.key, readAnyValue(state, item.key));
   if (selected) {
-    return [`${mark}> ${item.label}:`, `${mark}  ${editing ? "[EDIT] " : ""}${value}`];
+    return [`${mark}> ${item.label}:`, `${mark}${editing ? " *" : "  "}${value}`];
   }
   return [`  ${item.label}`];
 }
@@ -600,6 +662,10 @@ function formatDisplayValue(key: string, value: unknown): string {
   if (key === "scanMode") return value === "immediate" ? "Immediate" : "Scanning";
   if (key === "scanAxis") return value === "columns" ? "Cols" : "Rows";
   if (key === "scanDirection") return value === "forward" ? "Fwd" : "Rev";
+  if (key === "pitch.startingNote" || key === "pitch.lowestNote" || key === "pitch.highestNote") {
+    return formatNoteWithMidi(Number(value));
+  }
+  if (key === "pitch.outOfRange") return value === "wrap" ? "Wrap" : "Clamp";
   if (key === "transport.playing") return value === true || value === "true" ? "Play" : "Stop";
   if (key === "eventParity") return value === "none" ? "All" : "Odd/Even";
   if (typeof value === "boolean") return value ? "On" : "Off";
@@ -611,41 +677,83 @@ function applyModulation(intents: { x: number; y: number; degree: number; kind: 
   for (let i = 0; i < events.length; i += 1) {
     const event = events[i];
     const intent = intents[i] ?? intents[intents.length - 1];
-    out.push(event);
-    if (!intent) continue;
+    if (!intent) {
+      out.push(event);
+      continue;
+    }
+    const targetChannel = event.type === "note_on" ? event.channel : 0;
+    const ccs = ccFromIntent(intent, cfg, targetChannel);
+    out.push(...ccs);
     if (event.type === "note_on") {
+      const note = pitchFromIntent(intent, cfg, event.note);
       const vel = velocityFromIntent(intent, cfg);
       if (vel !== null) {
-        out[out.length - 1] = { ...event, velocity: vel };
+        out.push({ ...event, note, velocity: vel });
+        continue;
       }
+      out.push({ ...event, note });
+      continue;
     }
-    const ccs = ccFromIntent(intent, cfg);
-    out.push(...ccs);
+    out.push(event);
   }
   return out;
 }
 
-function velocityFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig): number | null {
-  if (cfg.x.mode !== "velocity" && cfg.y.mode !== "velocity") return null;
-  const src = cfg.x.mode === "velocity" ? intent.x / Math.max(1, GRID_WIDTH - 1) : intent.y / Math.max(1, GRID_HEIGHT - 1);
-  const min = cfg.x.mode === "velocity" ? cfg.x.min : cfg.y.min;
-  const max = cfg.x.mode === "velocity" ? cfg.x.max : cfg.y.max;
-  return clamp(Math.round(min + src * (max - min)), 1, 127);
+function pitchFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig, fallbackNote: number): number {
+  const xNorm = normalizedAxis(intent.x, GRID_WIDTH, cfg.x.direction, 0);
+  const yNorm = normalizedAxis(intent.y, GRID_HEIGHT, cfg.y.direction, 0);
+  const xPos = Math.round(xNorm * (GRID_WIDTH - 1));
+  const yPos = Math.round(yNorm * (GRID_HEIGHT - 1));
+  const xDelta = cfg.x.pitch.enabled ? xPos * cfg.x.pitch.steps : 0;
+  const yDelta = cfg.y.pitch.enabled ? yPos * cfg.y.pitch.steps : 0;
+  if (!cfg.x.pitch.enabled && !cfg.y.pitch.enabled) return fallbackNote;
+  const raw = cfg.pitch.startingNote + xDelta + yDelta;
+  const low = Math.min(cfg.pitch.lowestNote, cfg.pitch.highestNote);
+  const high = Math.max(cfg.pitch.lowestNote, cfg.pitch.highestNote);
+  if (cfg.pitch.outOfRange === "clamp") return clamp(raw, low, high);
+  const span = high - low + 1;
+  if (span <= 0) return clamp(raw, 0, 127);
+  return low + mod(raw - low, span);
 }
 
-function ccFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig): MusicalEvent[] {
+function velocityFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig): number | null {
+  const vals: number[] = [];
+  if (cfg.x.velocity.enabled) vals.push(valueFromAxis(intent.x, GRID_WIDTH, cfg.x.direction, cfg.x.velocity));
+  if (cfg.y.velocity.enabled) vals.push(valueFromAxis(intent.y, GRID_HEIGHT, cfg.y.direction, cfg.y.velocity));
+  if (vals.length === 0) return null;
+  return clamp(Math.round(vals.reduce((a, b) => a + b, 0) / vals.length), 1, 127);
+}
+
+function ccFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig, channel: number): MusicalEvent[] {
   const events: MusicalEvent[] = [];
   const pushCc = (controller: number, source: number, min: number, max: number) => {
     const scaled = clamp(Math.round(min + source * (max - min)), 0, 127);
-    events.push({ type: "cc", channel: 0, controller, value: scaled });
+    events.push({ type: "cc", channel: clamp(channel, 0, 15), controller, value: scaled });
   };
-  const xNorm = intent.x / Math.max(1, GRID_WIDTH - 1);
-  const yNorm = intent.y / Math.max(1, GRID_HEIGHT - 1);
-  if (cfg.x.mode === "filter_cutoff") pushCc(74, xNorm, cfg.x.min, cfg.x.max);
-  if (cfg.y.mode === "filter_cutoff") pushCc(74, yNorm, cfg.y.min, cfg.y.max);
-  if (cfg.x.mode === "filter_resonance") pushCc(71, xNorm, cfg.x.min, cfg.x.max);
-  if (cfg.y.mode === "filter_resonance") pushCc(71, yNorm, cfg.y.min, cfg.y.max);
+  if (cfg.x.filterCutoff.enabled) pushCc(74, normalizedAxis(intent.x, GRID_WIDTH, cfg.x.direction, cfg.x.filterCutoff.gridOffset), cfg.x.filterCutoff.from, cfg.x.filterCutoff.to);
+  if (cfg.y.filterCutoff.enabled) pushCc(74, normalizedAxis(intent.y, GRID_HEIGHT, cfg.y.direction, cfg.y.filterCutoff.gridOffset), cfg.y.filterCutoff.from, cfg.y.filterCutoff.to);
+  if (cfg.x.filterResonance.enabled) pushCc(71, normalizedAxis(intent.x, GRID_WIDTH, cfg.x.direction, cfg.x.filterResonance.gridOffset), cfg.x.filterResonance.from, cfg.x.filterResonance.to);
+  if (cfg.y.filterResonance.enabled) pushCc(71, normalizedAxis(intent.y, GRID_HEIGHT, cfg.y.direction, cfg.y.filterResonance.gridOffset), cfg.y.filterResonance.from, cfg.y.filterResonance.to);
   return events;
+}
+
+function valueFromAxis(index: number, size: number, direction: Direction, lane: ValueLaneConfig): number {
+  const norm = normalizedAxis(index, size, direction, lane.gridOffset);
+  return lane.from + norm * (lane.to - lane.from);
+}
+
+function normalizedAxis(index: number, size: number, direction: Direction, gridOffset: number): number {
+  const shifted = mod(index + gridOffset, size);
+  const directed = direction === "reverse" ? size - 1 - shifted : shifted;
+  return directed / Math.max(1, size - 1);
+}
+
+function formatNoteWithMidi(note: number): string {
+  const n = clamp(Math.round(note), 0, 127);
+  const names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+  const name = names[n % 12];
+  const octave = Math.floor(n / 12) - 1;
+  return `${name}${octave} (${n})`;
 }
 
 export function emergencyBrake<TState>(state: PlatformState<TState>): { state: PlatformState<TState>; events: MusicalEvent[] } {
