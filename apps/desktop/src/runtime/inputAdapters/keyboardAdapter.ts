@@ -1,15 +1,21 @@
 import type { DeviceInput } from "@cellsymphony/device-contracts";
+import type { InputAction } from "../types";
 
-export function mapKeyboardEventToDeviceInput(event: KeyboardEvent): DeviceInput | null {
+export function mapKeyboardEventToInputAction(event: KeyboardEvent): InputAction | null {
   const key = event.key;
-  if (key === "ArrowLeft") return { type: "encoder_turn", delta: -1, id: "main" };
-  if (key === "ArrowRight") return { type: "encoder_turn", delta: 1, id: "main" };
-  if (key === "Enter") return { type: "encoder_press", id: "main" };
-  if (key === "a" || key === "A") return { type: "button_a" };
-  if (key === " ") return { type: "button_s" };
+  if (key === " " && event.shiftKey) return { type: "emergency_brake" };
+  if (key === "ArrowLeft") return wrap({ type: "encoder_turn", delta: -1, id: "main" });
+  if (key === "ArrowRight") return wrap({ type: "encoder_turn", delta: 1, id: "main" });
+  if (key === "Enter") return wrap({ type: "encoder_press", id: "main" });
+  if (key === "Backspace") return wrap({ type: "button_a" });
+  if (key === " ") return wrap({ type: "button_s" });
   return null;
 }
 
 export function shouldPreventKeyboardDefault(event: KeyboardEvent): boolean {
-  return mapKeyboardEventToDeviceInput(event) !== null;
+  return mapKeyboardEventToInputAction(event) !== null;
+}
+
+function wrap(input: DeviceInput): InputAction {
+  return { type: "device_input", input };
 }

@@ -1,12 +1,13 @@
 import { lifeBehavior } from "@cellsymphony/behaviors-life";
 import type { DeviceInput } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
-import { createInitialState, routeInput, tick, toOledLines, toSimulatorFrame, type PlatformState } from "@cellsymphony/platform-core";
+import { createInitialState, emergencyBrake, routeInput, tick, toOledLines, toSimulatorFrame, type PlatformState } from "@cellsymphony/platform-core";
 import { createIntervalRuntimeScheduler, type RuntimeScheduler } from "./runtimeScheduler";
-import type { EventsListener, RuntimeListener, SimulatorSnapshot } from "./types";
+import type { EventsListener, InputAction, RuntimeListener, SimulatorSnapshot } from "./types";
 
 type SimulatorRuntime = {
   dispatch(input: DeviceInput): void;
+  dispatchAction(action: InputAction): void;
   start(): void;
   stop(): void;
   subscribe(listener: RuntimeListener): () => void;
@@ -18,12 +19,28 @@ const behavior = lifeBehavior;
 
 export function createSimulatorRuntime(scheduler: RuntimeScheduler = createIntervalRuntimeScheduler(150)): SimulatorRuntime {
   let state: PlatformState<ReturnType<typeof behavior.init>> = createInitialState(behavior);
+  let eventBlipUntilMs = 0;
+  let transportFlash: "none" | "beat" | "measure" = "none";
   const listeners = new Set<RuntimeListener>();
   const eventListeners = new Set<EventsListener>();
 
   function snapshotFromState(next: typeof state): SimulatorSnapshot {
     const frame = toSimulatorFrame(next, behavior);
-    return { frame, oledLines: toOledLines(frame.display) };
+    return {
+      frame,
+      oledLines: toOledLines(frame.display),
+      transportIndicator: {
+        icon: frame.transport.playing ? "play" : "stop",
+        flash: transportFlash,
+        eventBlipUntilMs
+      },
+      neoKeyLeds: {
+        back: "solid_red",
+        space: !frame.transport.playing ? "off" : transportFlash === "measure" ? "measure" : transportFlash === "beat" ? "beat" : "off",
+        shift: "off",
+        fn: "off"
+      }
+    };
   }
 
   function publishSnapshot() {
@@ -35,22 +52,57 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
 
   function publishEvents(events: MusicalEvent[]) {
     if (events.length === 0) return;
+    if (events.some((event) => event.type === "note_on" || event.type === "sample_trigger")) {
+      eventBlipUntilMs = Date.now() + 100;
+    }
     for (const listener of eventListeners) {
       listener(events);
     }
   }
 
+  function applyBeatFlash(prevPulse: number, nextPulse: number) {
+    transportFlash = "none";
+    if (nextPulse <= prevPulse) return;
+    for (let pulse = prevPulse + 1; pulse <= nextPulse; pulse += 1) {
+      if (pulse % 96 === 0) {
+        transportFlash = "measure";
+      } else if (pulse % 24 === 0 && transportFlash !== "measure") {
+        transportFlash = "beat";
+      }
+    }
+  }
+
+  function applyInput(input: DeviceInput) {
+    const result = routeInput(state, input, behavior);
+    state = result.state;
+    publishEvents(result.events);
+    publishSnapshot();
+  }
+
   return {
     dispatch(input) {
-      const result = routeInput(state, input, behavior);
-      state = result.state;
-      publishEvents(result.events);
-      publishSnapshot();
+      applyInput(input);
+    },
+    dispatchAction(action) {
+      if (action.type === "emergency_brake") {
+        const result = emergencyBrake(state);
+        state = result.state;
+        transportFlash = "none";
+        publishEvents(result.events);
+        publishSnapshot();
+        return;
+      }
+      applyInput(action.input);
     },
     start() {
       scheduler.start(() => {
+        if (eventBlipUntilMs < Date.now()) {
+          eventBlipUntilMs = 0;
+        }
+        const prevPulse = state.transport.ppqnPulse;
         const result = tick(state, behavior);
         state = result.state;
+        applyBeatFlash(prevPulse, state.transport.ppqnPulse);
         publishEvents(result.events);
         publishSnapshot();
       });
