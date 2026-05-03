@@ -76,6 +76,11 @@ export type PlatformState<TState> = {
   conwayPulseAccumulator: number;
 };
 
+export const OLED_WIDTH = 128;
+export const OLED_HEIGHT = 128;
+export const OLED_TEXT_COLUMNS = 20;
+export const OLED_TEXT_LINES = 4;
+
 export function createInitialState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
   return {
     transport: { playing: false, bpm: 120, tick: 0 },
@@ -110,9 +115,9 @@ export function routeInput<TState>(state: PlatformState<TState>, input: DeviceIn
     nextState.transport = { ...nextState.transport, playing: !nextState.transport.playing };
   } else if (input.type === "button_a") {
     nextState.menu = backMenu(nextState.menu);
-  } else if (input.type === "encoder_press") {
+  } else if (input.type === "encoder_press" && isMainEncoderInput(input.id)) {
     nextState = pressMenu(nextState);
-  } else if (input.type === "encoder_turn") {
+  } else if (input.type === "encoder_turn" && isMainEncoderInput(input.id)) {
     nextState = turnMenu(nextState, input.delta);
   }
 
@@ -408,4 +413,23 @@ const FRAME_SECONDS = 0.15;
 
 export function toDisplayFrame(page: PageId, line1: string, editing: boolean): DisplayFrame {
   return { page, title: "Cell Symphony", editing, lines: [line1, "A:Back S:Play/Stop"] };
+}
+
+export function toOledLines(display: DisplayFrame): string[] {
+  const title = fitOledText(display.title);
+  const body = display.lines.slice(0, OLED_TEXT_LINES - 1).map(fitOledText);
+  while (body.length < OLED_TEXT_LINES - 1) {
+    body.push("");
+  }
+  return [title, ...body];
+}
+
+function fitOledText(text: string): string {
+  if (text.length <= OLED_TEXT_COLUMNS) return text;
+  if (OLED_TEXT_COLUMNS <= 3) return text.slice(0, OLED_TEXT_COLUMNS);
+  return `${text.slice(0, OLED_TEXT_COLUMNS - 3)}...`;
+}
+
+function isMainEncoderInput(id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined): boolean {
+  return id === undefined || id === "main";
 }

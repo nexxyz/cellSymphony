@@ -1,7 +1,7 @@
 :root {
-  font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  color: #f4f5f6;
-  background: radial-gradient(circle at 15% 20%, #3a4e3f, #0f1419 55%);
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  color: #dae4de;
+  background: radial-gradient(circle at 12% 10%, #2c3a30 0%, #111814 58%, #0a0f0d 100%);
 }
 
 body {
@@ -10,19 +10,19 @@ body {
 
 .app-shell {
   min-height: 100vh;
-  padding: 10px 12px;
+  padding: 14px;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  gap: 10px;
-  overflow: auto;
+  gap: 12px;
 }
 
 .bar {
-  border: 1px solid #2f3d44;
+  border: 1px solid #355042;
   border-radius: 10px;
-  background: rgba(7, 10, 14, 0.7);
-  padding: 8px 12px;
-  font-size: 14px;
+  background: linear-gradient(180deg, #18231d, #111915);
+  padding: 9px 12px;
+  font-size: 13px;
+  letter-spacing: 0.03em;
 }
 
 .footer {
@@ -30,68 +30,155 @@ body {
   opacity: 0.9;
 }
 
-.layout {
-  width: min(1100px, 100%);
+.panel-layout {
+  width: min(1220px, 100%);
   margin: 0 auto;
   display: grid;
-  gap: 10px;
+  grid-template-columns: minmax(440px, 520px) minmax(460px, 1fr);
+  gap: 12px;
 }
 
-.content {
+.left-rail {
   display: grid;
   gap: 10px;
-  grid-template-columns: 240px minmax(480px, 700px);
-  align-items: start;
 }
 
-.screen,
-.controls,
-.matrix {
-  border: 1px solid #2f3d44;
+.oled-wrap,
+.encoder-grid,
+.neokey-row,
+.matrix-chassis {
+  border: 1px solid #2d4638;
   border-radius: 12px;
-  background: rgba(7, 10, 14, 0.7);
-  padding: 9px;
+  background: linear-gradient(180deg, rgba(17, 26, 21, 0.92), rgba(10, 15, 12, 0.94));
+  padding: 10px;
 }
 
-.screen p {
-  margin: 6px 0;
+.oled-bezel {
+  width: fit-content;
+  margin: 0 auto;
+  border: 1px solid #476451;
+  border-radius: 12px;
+  padding: 8px;
+  background: linear-gradient(145deg, #121917, #0b0f0d);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+.oled-panel {
+  image-rendering: pixelated;
+  border-radius: 6px;
+  border: 1px solid #2a3f33;
+  color: #78f7ab;
+  display: grid;
+  grid-template-rows: repeat(4, 1fr);
+  padding: 8px;
+  box-sizing: border-box;
+  background:
+    repeating-linear-gradient(0deg, rgba(120, 247, 171, 0.04) 0 1px, transparent 1px 3px),
+    radial-gradient(circle at 40% 35%, rgba(16, 102, 55, 0.48) 0, rgba(3, 16, 8, 0.95) 70%);
+  box-shadow:
+    inset 0 0 18px rgba(84, 221, 140, 0.2),
+    0 0 24px rgba(50, 205, 124, 0.12);
+}
+
+.oled-panel p {
+  margin: 0;
+  font-family: "IBM Plex Mono", "Consolas", monospace;
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: pre;
+  text-shadow: 0 0 5px rgba(114, 255, 177, 0.35);
+}
+
+.meta {
+  text-align: center;
+  font-size: 12px;
+  margin: 8px 0 0;
+  color: #b8c8be;
+}
+
+.encoder-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.encoder-card {
+  border: 1px solid #355142;
+  border-radius: 10px;
+  padding: 8px;
+  background: linear-gradient(180deg, #16231d, #0f1814);
+}
+
+.encoder-card h3 {
+  margin: 0 0 7px;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+}
+
+.encoder-card small {
+  display: block;
+  margin-top: 7px;
+  font-size: 11px;
+  color: #93a99b;
+}
+
+.encoder-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.encoder-buttons button,
+.neokey-row button {
+  font: inherit;
+  border-radius: 8px;
+  border: 1px solid #3a5e49;
+  background: linear-gradient(180deg, #213629, #17271f);
+  color: #e7f4ec;
+  padding: 8px;
+  cursor: pointer;
+}
+
+.neokey-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.neokey-row .reserved {
+  opacity: 0.6;
+}
+
+.matrix-chassis {
+  display: grid;
+  place-items: center;
 }
 
 .matrix {
+  width: min(560px, 100%);
   display: grid;
   grid-template-columns: repeat(8, 1fr);
-  gap: 2px;
-  align-self: start;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid #385343;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #111a15, #0b120e);
 }
 
 .cell {
   width: 100%;
   aspect-ratio: 1;
-  border: none;
-  border-radius: 3px;
+  border: 1px solid rgba(203, 255, 228, 0.12);
+  border-radius: 8px;
+  box-shadow: inset 0 0 10px rgba(180, 255, 222, 0.15), 0 0 9px rgba(105, 239, 156, 0.14);
   cursor: pointer;
 }
 
-.controls {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(95px, 1fr));
-  gap: 8px;
-}
-
-.controls button {
-  font: inherit;
-  padding: 8px;
-  border-radius: 8px;
-  border: 1px solid #345;
-  color: #e7eef5;
-  background: linear-gradient(180deg, #253745, #1a2632);
-}
-
-@media (max-width: 900px) {
-  .content {
+@media (max-width: 1040px) {
+  .panel-layout {
     grid-template-columns: 1fr;
   }
-  .controls {
-    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  .matrix {
+    width: min(500px, 100%);
   }
 }
