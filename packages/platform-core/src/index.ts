@@ -166,14 +166,18 @@ export function routeInput<TState>(state: PlatformState<TState>, input: DeviceIn
   return { state: nextState, events };
 }
 
-export function tick<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>): { state: PlatformState<TState>; events: MusicalEvent[] } {
+export function tick<TState>(
+  state: PlatformState<TState>,
+  behavior: BehaviorEngine<TState, unknown>,
+  elapsedSeconds: number = FRAME_SECONDS
+): { state: PlatformState<TState>; events: MusicalEvent[] } {
   const events: MusicalEvent[] = [];
   let next = { ...state };
   if (next.transport.playing) {
-    const pulsesPerFrame = pulsesPerSecond(next.transport.bpm) * FRAME_SECONDS;
-    next.scanPulseAccumulator += pulsesPerFrame;
-    next.conwayPulseAccumulator += pulsesPerFrame;
-    next.ppqnPulseRemainder += pulsesPerFrame;
+    const elapsedPulses = pulsesPerSecond(next.transport.bpm) * elapsedSeconds;
+    next.scanPulseAccumulator += elapsedPulses;
+    next.conwayPulseAccumulator += elapsedPulses;
+    next.ppqnPulseRemainder += elapsedPulses;
     const wholePulses = Math.floor(next.ppqnPulseRemainder);
     if (wholePulses > 0) {
       next.ppqnPulseRemainder -= wholePulses;

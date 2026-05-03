@@ -16,14 +16,22 @@ type SimulatorRuntime = {
 };
 
 const behavior = lifeBehavior;
+const LOOKAHEAD_MS = 20;
+const MAX_CATCHUP_MS = 250;
 
-export function createSimulatorRuntime(scheduler: RuntimeScheduler = createIntervalRuntimeScheduler(150)): SimulatorRuntime {
+type ScheduledEvents = {
+  dueMs: number;
+  events: MusicalEvent[];
+};
+
+export function createSimulatorRuntime(scheduler: RuntimeScheduler = createIntervalRuntimeScheduler(8)): SimulatorRuntime {
   let state: PlatformState<ReturnType<typeof behavior.init>> = createInitialState(behavior);
   let eventBlipUntilMs = 0;
   let transportFlash: "none" | "beat" | "measure" = "none";
   let transportFlashUntilMs = 0;
   let shiftActive = false;
   let stopLatched = false;
+  const eventQueue: ScheduledEvents[] = [];
   const listeners = new Set<RuntimeListener>();
   const eventListeners = new Set<EventsListener>();
 
@@ -66,6 +74,21 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
     }
   }
 
+  function enqueueEvents(events: MusicalEvent[], dueMs: number) {
+    if (events.length === 0) return;
+    eventQueue.push({ dueMs, events });
+  }
+
+  function flushDueEvents(nowMs: number) {
+    if (eventQueue.length === 0) return;
+    eventQueue.sort((a, b) => a.dueMs - b.dueMs);
+    while (eventQueue.length > 0 && eventQueue[0].dueMs <= nowMs) {
+      const due = eventQueue.shift();
+      if (!due) break;
+      publishEvents(due.events);
+    }
+  }
+
   function applyBeatFlash(prevPulse: number, nextPulse: number) {
     if (nextPulse <= prevPulse) return;
     for (let pulse = prevPulse + 1; pulse <= nextPulse; pulse += 1) {
@@ -94,7 +117,8 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
     }
     const result = routeInput(state, input, behavior);
     state = result.state;
-    publishEvents(result.events);
+    enqueueEvents(result.events, performance.now());
+    flushDueEvents(performance.now());
     publishSnapshot();
   }
 
@@ -108,7 +132,8 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
         state = result.state;
         transportFlash = "none";
         stopLatched = true;
-        publishEvents(result.events);
+        enqueueEvents(result.events, performance.now());
+        flushDueEvents(performance.now());
         publishSnapshot();
         return;
       }
@@ -120,7 +145,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       applyInput(action.input);
     },
     start() {
-      scheduler.start(() => {
+      scheduler.start((nowMs, elapsedMs) => {
         if (transportFlashUntilMs > 0 && Date.now() > transportFlashUntilMs) {
           transportFlashUntilMs = 0;
           transportFlash = "none";
@@ -128,11 +153,13 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
         if (eventBlipUntilMs < Date.now()) {
           eventBlipUntilMs = 0;
         }
+        const safeElapsedMs = Math.min(elapsedMs, MAX_CATCHUP_MS);
         const prevPulse = state.transport.ppqnPulse;
-        const result = tick(state, behavior);
+        const result = tick(state, behavior, safeElapsedMs / 1000);
         state = result.state;
         applyBeatFlash(prevPulse, state.transport.ppqnPulse);
-        publishEvents(result.events);
+        enqueueEvents(result.events, nowMs + LOOKAHEAD_MS);
+        flushDueEvents(nowMs);
         publishSnapshot();
       });
       publishSnapshot();
