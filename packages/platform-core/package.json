@@ -10,8 +10,8 @@
     "lint": "node -e \"process.exit(0)\"",
     "format:check": "node -e \"process.exit(0)\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test tests/**/*.test.ts",
-    "test:coverage": "c8 --reporter=text --reporter=lcov tsx --test tests/**/*.test.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "test:coverage": "c8 --reporter=text --reporter=lcov tsx --test tests/*.test.ts",
     "test:fixtures": "node scripts/test-fixtures.mjs"
   },
   "dependencies": {

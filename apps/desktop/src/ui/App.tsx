@@ -6,6 +6,7 @@ import { sendEventsToAudio } from "../runtime/outputAdapters/audioSink";
 import { createSimulatorRuntime } from "../runtime/simulatorRuntime";
 
 const runtime = createSimulatorRuntime();
+type EncoderId = "main" | "aux1" | "aux2" | "aux3" | "aux4";
 
 const ENCODERS = [
   { id: "main", label: "SW1", active: true },
@@ -26,7 +27,7 @@ export function App() {
   const [snapshot, setSnapshot] = useState(() => runtime.getSnapshot());
   const [paintMode, setPaintMode] = useState<boolean | null>(null);
   const [painted, setPainted] = useState<Set<string>>(new Set());
-  const [dialDrag, setDialDrag] = useState<{ id: DeviceInput["id"]; y: number; acc: number } | null>(null);
+  const [dialDrag, setDialDrag] = useState<{ id: EncoderId; y: number; acc: number } | null>(null);
   const [dialPhase, setDialPhase] = useState<Record<string, number>>({ main: 0, aux1: 0, aux2: 0, aux3: 0, aux4: 0 });
   const frame = snapshot.frame;
   const isEventBlip = snapshot.transportIndicator.eventBlipUntilMs > Date.now();
@@ -94,12 +95,12 @@ export function App() {
     runtime.dispatch(input);
   }
 
-  function bumpDialPhase(id: DeviceInput["id"], delta: -1 | 1) {
+  function bumpDialPhase(id: EncoderId | undefined, delta: -1 | 1) {
     const key = id ?? "main";
     setDialPhase((prev) => ({ ...prev, [key]: ((prev[key] ?? 0) + delta + 8) % 8 }));
   }
 
-  function turnWithAcceleration(id: DeviceInput["id"], delta: -1 | 1, magnitude: number) {
+  function turnWithAcceleration(id: EncoderId, delta: -1 | 1, magnitude: number) {
     const turns = magnitude >= 90 ? 4 : magnitude >= 40 ? 2 : 1;
     for (let i = 0; i < turns; i += 1) dispatch({ type: "encoder_turn", delta, id });
   }
@@ -252,11 +253,11 @@ function Dial({
   setDialDrag,
   turnWithAcceleration
 }: {
-  id: DeviceInput["id"];
+  id: EncoderId;
   phase: number;
   dispatch: (input: DeviceInput) => void;
-  setDialDrag: (state: { id: DeviceInput["id"]; y: number; acc: number } | null) => void;
-  turnWithAcceleration: (id: DeviceInput["id"], delta: -1 | 1, magnitude: number) => void;
+  setDialDrag: (state: { id: EncoderId; y: number; acc: number } | null) => void;
+  turnWithAcceleration: (id: EncoderId, delta: -1 | 1, magnitude: number) => void;
 }) {
   return (
     <div
