@@ -93,8 +93,10 @@ body {
   border-radius: 6px;
   border: 1px solid #2a3f33;
   color: #78f7ab;
-  display: grid;
-  grid-template-rows: repeat(4, 1fr);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 2px;
   padding: 8px;
   box-sizing: border-box;
   background:
@@ -109,7 +111,7 @@ body {
   margin: 0;
   font-family: "IBM Plex Mono", "Consolas", monospace;
   font-size: 10px;
-  line-height: 1.2;
+  line-height: 1.05;
   white-space: pre;
   text-shadow: 0 0 5px rgba(114, 255, 177, 0.35);
 }
