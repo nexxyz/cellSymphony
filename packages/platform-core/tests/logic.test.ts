@@ -238,3 +238,10 @@ test("additive pitch uses shared starting/lowest/highest", () => {
     assert.ok(note.note >= 48 && note.note <= 84);
   }
 });
+
+test("default note mapping range is C2 to C6 with C3 start", () => {
+  const state = createInitialState(mockBehavior);
+  assert.equal(state.runtimeConfig.pitch.lowestNote, 36);
+  assert.equal(state.runtimeConfig.pitch.startingNote, 48);
+  assert.equal(state.runtimeConfig.pitch.highestNote, 84);
+});

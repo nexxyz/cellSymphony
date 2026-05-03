@@ -37,12 +37,13 @@ This is the single source of truth for menu structure, control mappings, and par
   - X Axis (functional)
   - Y Axis (functional)
 - Mapping
-  - Starting Note (functional)
-  - Lowest Note (functional)
-  - Highest Note (functional)
-  - Out of Range (`Clamp` | `Wrap`) (functional)
-  - Base Note (functional)
-  - Range Mode (functional)
+  - Note Mapping
+    - Starting Note (functional)
+    - Lowest Note (functional)
+    - Highest Note (functional)
+    - Out of Range (`Clamp` | `Wrap`) (functional)
+    - Scale (functional)
+    - Root (functional)
   - Birth Target (functional)
   - Death Target (functional)
   - State Target (functional)
@@ -63,6 +64,7 @@ This is the single source of truth for menu structure, control mappings, and par
 
 - Pitch modulation is additive across axes (`X Steps + Y Steps`).
 - Axis pitch steps are signed (`-16..16`).
+- Pitch note generation uses scale-degree stepping (not post-quantize).
 - `Velocity` lane modulates outgoing `note_on` velocity.
 - `Filter Cutoff` lane emits CC74 (mapped to lowpass cutoff).
 - `Filter Resonance` lane emits CC71 (mapped to lowpass resonance).
