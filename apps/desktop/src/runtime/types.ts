@@ -3,10 +3,11 @@ import type { MusicalEvent } from "@cellsymphony/musical-events";
 
 export type InputAction =
   | { type: "device_input"; input: import("@cellsymphony/device-contracts").DeviceInput }
-  | { type: "emergency_brake" };
+  | { type: "emergency_brake" }
+  | { type: "shift"; active: boolean };
 
 export type TransportIndicator = {
-  icon: "play" | "stop";
+  icon: "play" | "pause" | "stop";
   flash: "none" | "beat" | "measure";
   eventBlipUntilMs: number;
 };
@@ -14,7 +15,7 @@ export type TransportIndicator = {
 export type NeoKeyLeds = {
   back: "off" | "solid_red";
   space: "off" | "beat" | "measure";
-  shift: "off";
+  shift: "off" | "solid_yellow";
   fn: "off";
 };
 

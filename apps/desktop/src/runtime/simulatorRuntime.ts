@@ -21,6 +21,8 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
   let state: PlatformState<ReturnType<typeof behavior.init>> = createInitialState(behavior);
   let eventBlipUntilMs = 0;
   let transportFlash: "none" | "beat" | "measure" = "none";
+  let shiftActive = false;
+  let stopLatched = false;
   const listeners = new Set<RuntimeListener>();
   const eventListeners = new Set<EventsListener>();
 
@@ -30,14 +32,14 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       frame,
       oledLines: toOledLines(frame.display),
       transportIndicator: {
-        icon: frame.transport.playing ? "play" : "stop",
+        icon: frame.transport.playing ? "play" : stopLatched ? "stop" : "pause",
         flash: transportFlash,
         eventBlipUntilMs
       },
       neoKeyLeds: {
         back: "solid_red",
         space: !frame.transport.playing ? "off" : transportFlash === "measure" ? "measure" : transportFlash === "beat" ? "beat" : "off",
-        shift: "off",
+        shift: shiftActive ? "solid_yellow" : "off",
         fn: "off"
       }
     };
@@ -73,6 +75,21 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
   }
 
   function applyInput(input: DeviceInput) {
+    if (input.type === "button_s" && shiftActive) {
+      const result = emergencyBrake(state);
+      state = result.state;
+      transportFlash = "none";
+      stopLatched = true;
+      publishEvents(result.events);
+      publishSnapshot();
+      return;
+    }
+    if (input.type === "button_s") {
+      stopLatched = false;
+    }
+    if (input.type === "button_shift") {
+      shiftActive = !shiftActive;
+    }
     const result = routeInput(state, input, behavior);
     state = result.state;
     publishEvents(result.events);
@@ -88,7 +105,13 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
         const result = emergencyBrake(state);
         state = result.state;
         transportFlash = "none";
+        stopLatched = true;
         publishEvents(result.events);
+        publishSnapshot();
+        return;
+      }
+      if (action.type === "shift") {
+        shiftActive = action.active;
         publishSnapshot();
         return;
       }
