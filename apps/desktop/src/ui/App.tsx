@@ -27,6 +27,7 @@ export function App() {
   const [paintMode, setPaintMode] = useState<boolean | null>(null);
   const [painted, setPainted] = useState<Set<string>>(new Set());
   const [dialDrag, setDialDrag] = useState<{ id: DeviceInput["id"]; y: number; acc: number } | null>(null);
+  const [dialPhase, setDialPhase] = useState<Record<string, number>>({ main: 0, aux1: 0, aux2: 0, aux3: 0, aux4: 0 });
   const frame = snapshot.frame;
   const isEventBlip = snapshot.transportIndicator.eventBlipUntilMs > Date.now();
 
@@ -47,7 +48,11 @@ export function App() {
     const onKey = (event: KeyboardEvent) => {
       if (shouldPreventKeyboardDefault(event)) event.preventDefault();
       const action = mapKeyboardEventToInputAction(event);
-      if (action) runtime.dispatchAction(action);
+      if (!action) return;
+      if (action.type === "device_input" && action.input.type === "encoder_turn") {
+        bumpDialPhase(action.input.id, action.input.delta);
+      }
+      runtime.dispatchAction(action);
     };
     const onKeyUp = (event: KeyboardEvent) => {
       const action = mapKeyboardKeyupToInputAction(event);
@@ -83,7 +88,15 @@ export function App() {
   }, [dialDrag]);
 
   function dispatch(input: DeviceInput) {
+    if (input.type === "encoder_turn") {
+      bumpDialPhase(input.id, input.delta);
+    }
     runtime.dispatch(input);
+  }
+
+  function bumpDialPhase(id: DeviceInput["id"], delta: -1 | 1) {
+    const key = id ?? "main";
+    setDialPhase((prev) => ({ ...prev, [key]: ((prev[key] ?? 0) + delta + 8) % 8 }));
   }
 
   function turnWithAcceleration(id: DeviceInput["id"], delta: -1 | 1, magnitude: number) {
@@ -127,6 +140,15 @@ export function App() {
                 turnWithAcceleration("main", event.deltaY > 0 ? 1 : -1, Math.abs(event.deltaY));
               }}
             >
+              <div className="encoder-ring" aria-hidden="true">
+                {Array.from({ length: 8 }, (_, i) => (
+                  <span
+                    key={`main-tick-${i}`}
+                    className={`encoder-tick ${i === (dialPhase.main ?? 0) ? "active" : ""}`}
+                    style={{ transform: `translate(-50%, -50%) rotate(${i * 45}deg) translateY(-45px)` }}
+                  />
+                ))}
+              </div>
               <button type="button" className="encoder-center" onClick={() => dispatch({ type: "encoder_press", id: "main" })}>
                 Push
               </button>
@@ -157,12 +179,12 @@ export function App() {
 
           <article className="encoder-card sw2">
             <h3>{ENCODERS[1].label}</h3>
-            <Dial id="aux1" dispatch={dispatch} setDialDrag={setDialDrag} turnWithAcceleration={turnWithAcceleration} />
+            <Dial id="aux1" phase={dialPhase.aux1 ?? 0} dispatch={dispatch} setDialDrag={setDialDrag} turnWithAcceleration={turnWithAcceleration} />
             <small>Reserved</small>
           </article>
           <article className="encoder-card sw3">
             <h3>{ENCODERS[2].label}</h3>
-            <Dial id="aux2" dispatch={dispatch} setDialDrag={setDialDrag} turnWithAcceleration={turnWithAcceleration} />
+            <Dial id="aux2" phase={dialPhase.aux2 ?? 0} dispatch={dispatch} setDialDrag={setDialDrag} turnWithAcceleration={turnWithAcceleration} />
             <small>Reserved</small>
           </article>
           <section className="button-stack stack-a">
@@ -173,12 +195,12 @@ export function App() {
 
           <article className="encoder-card sw4">
             <h3>{ENCODERS[3].label}</h3>
-            <Dial id="aux3" dispatch={dispatch} setDialDrag={setDialDrag} turnWithAcceleration={turnWithAcceleration} />
+            <Dial id="aux3" phase={dialPhase.aux3 ?? 0} dispatch={dispatch} setDialDrag={setDialDrag} turnWithAcceleration={turnWithAcceleration} />
             <small>Reserved</small>
           </article>
           <article className="encoder-card sw5">
             <h3>{ENCODERS[4].label}</h3>
-            <Dial id="aux4" dispatch={dispatch} setDialDrag={setDialDrag} turnWithAcceleration={turnWithAcceleration} />
+            <Dial id="aux4" phase={dialPhase.aux4 ?? 0} dispatch={dispatch} setDialDrag={setDialDrag} turnWithAcceleration={turnWithAcceleration} />
             <small>Reserved</small>
           </article>
           <section className="button-stack stack-b">
@@ -225,11 +247,13 @@ export function App() {
 
 function Dial({
   id,
+  phase,
   dispatch,
   setDialDrag,
   turnWithAcceleration
 }: {
   id: DeviceInput["id"];
+  phase: number;
   dispatch: (input: DeviceInput) => void;
   setDialDrag: (state: { id: DeviceInput["id"]; y: number; acc: number } | null) => void;
   turnWithAcceleration: (id: DeviceInput["id"], delta: -1 | 1, magnitude: number) => void;
@@ -246,6 +270,15 @@ function Dial({
         turnWithAcceleration(id, event.deltaY > 0 ? 1 : -1, Math.abs(event.deltaY));
       }}
     >
+      <div className="encoder-ring" aria-hidden="true">
+        {Array.from({ length: 8 }, (_, i) => (
+          <span
+            key={`${id}-tick-${i}`}
+            className={`encoder-tick ${i === phase ? "active" : ""}`}
+            style={{ transform: `translate(-50%, -50%) rotate(${i * 45}deg) translateY(-45px)` }}
+          />
+        ))}
+      </div>
       <button type="button" className="encoder-center" onClick={() => dispatch({ type: "encoder_press", id })}>
         Push
       </button>

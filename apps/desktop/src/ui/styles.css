@@ -49,7 +49,7 @@ body {
 
 .control-grid {
   display: grid;
-  grid-template-columns: 120px auto 120px 118px;
+  grid-template-columns: 120px auto 120px 98px;
   grid-template-areas:
     "sw1 oled oled oled"
     "sw2 sw3 sw3 stacka"
@@ -155,11 +155,11 @@ body {
 }
 
 .transport-indicator.beat {
-  color: #7dff9c;
+  color: #f2df78;
 }
 
 .transport-indicator.measure {
-  color: #5ce3ff;
+  color: #7dff9c;
 }
 
 .event-dot {
@@ -216,6 +216,31 @@ body {
   background: radial-gradient(circle at 35% 30%, #2a4335, #12231b 68%);
   display: grid;
   place-items: center;
+  position: relative;
+}
+
+.encoder-ring {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.encoder-tick {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 8px;
+  border-radius: 2px;
+  background: rgba(120, 247, 171, 0.22);
+  transform-origin: center center;
+  transition: background-color 90ms ease, box-shadow 90ms ease;
+}
+
+.encoder-tick.active {
+  background: rgba(185, 255, 213, 0.96);
+  box-shadow: 0 0 6px rgba(185, 255, 213, 0.8);
 }
 
 .encoder-center {
@@ -240,15 +265,18 @@ body {
 
 
 .button-stack {
-  display: grid;
-  gap: 8px;
-  width: 118px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 22px;
+  width: 98px;
   justify-self: start;
+  align-self: stretch;
 }
 
 .button-stack button {
-  min-height: 44px;
-  width: 118px;
+  min-height: 48px;
+  width: 98px;
 }
 
 .button-stack .neokey-back {
@@ -262,14 +290,14 @@ body {
 }
 
 .button-stack .beat {
-  background: linear-gradient(180deg, #3e7f4f, #285837);
-  box-shadow: 0 0 14px rgba(114, 255, 139, 0.42);
+  background: linear-gradient(180deg, #84782f, #5d541f);
+  box-shadow: 0 0 14px rgba(242, 223, 120, 0.5);
 }
 
 .button-stack .measure {
-  background: linear-gradient(180deg, #3f7682, #28535e);
-  box-shadow: 0 0 18px rgba(84, 234, 255, 0.6);
-  border-color: #5ec9d5;
+  background: linear-gradient(180deg, #3e7f4f, #285837);
+  box-shadow: 0 0 18px rgba(114, 255, 139, 0.55);
+  border-color: #86d6a1;
 }
 
 .button-stack .solid_yellow {
