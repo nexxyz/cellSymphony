@@ -87,9 +87,6 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
     if (input.type === "button_s") {
       stopLatched = false;
     }
-    if (input.type === "button_shift") {
-      shiftActive = !shiftActive;
-    }
     const result = routeInput(state, input, behavior);
     state = result.state;
     publishEvents(result.events);

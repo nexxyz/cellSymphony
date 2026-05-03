@@ -323,17 +323,21 @@ function axisGroup(label: string, prefix: "x" | "y", _defaultStep: number): Menu
 
 function currentMenuView<TState>(state: PlatformState<TState>): { path: string; lines: string[] } {
   const { runtimeConfig: cfg, menu } = state;
-  const { node, siblings, path } = locate(menuTree(), cfg, menu);
+  const { siblings, path } = locate(menuTree(), cfg, menu);
   if (!siblings.length) return { path, lines: ["", "", ""] };
-  const current = siblings[menu.cursor] ?? siblings[0];
-  const prev = siblings[Math.max(0, menu.cursor - 1)];
-  const next = siblings[Math.min(siblings.length - 1, menu.cursor + 1)];
-  const selectedValue = current.kind === "group" ? "->" : formatDisplayValue(current.key, readAnyValue(state, current.key));
-  const cursorMark = menu.editing ? "*" : ">";
-  const line1 = prev ? `  ${prev.label}` : "";
-  const line2 = `${cursorMark} ${current.label} ${selectedValue}`;
-  const line3 = next ? `  ${next.label}` : `${menu.cursor + 1}/${siblings.length}`;
-  return { path, lines: [line1, line2, line3] };
+  const cursor = clamp(menu.cursor, 0, siblings.length - 1);
+  const start = clamp(cursor - 1, 0, Math.max(0, siblings.length - 3));
+  const windowRows = siblings.slice(start, start + 3);
+  const lines = windowRows.map((item, index) => {
+    const rowIndex = start + index;
+    const selected = rowIndex === cursor;
+    const marker = selected ? ">" : " ";
+    const label = item.kind === "group" ? `${item.label} ->` : item.label;
+    const value = item.kind === "group" ? "" : ` ${formatDisplayValue(item.key, readAnyValue(state, item.key))}`;
+    return `${marker} ${label}${value}`.trimEnd();
+  });
+  while (lines.length < 3) lines.push("");
+  return { path, lines };
 }
 
 function locate(root: MenuNode, cfg: RuntimeConfig, menu: MenuState): { node: MenuNode; siblings: MenuNode[]; path: string } {
