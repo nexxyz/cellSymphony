@@ -412,7 +412,7 @@ const PPQN = 24;
 const FRAME_SECONDS = 0.15;
 
 export function toDisplayFrame(page: PageId, line1: string, editing: boolean): DisplayFrame {
-  return { page, title: "Cell Symphony", editing, lines: [line1, "A:Back S:Play/Stop"] };
+  return { page, title: "Cell Symphony", editing, lines: [line1, "A:Back Space:Play"] };
 }
 
 export function toOledLines(display: DisplayFrame): string[] {

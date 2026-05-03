@@ -22,7 +22,7 @@ const ENCODERS = [
 
 const NEOKEY_BUTTONS = [
   { input: { type: "button_a" } as DeviceInput, label: "A", active: true },
-  { input: { type: "button_s" } as DeviceInput, label: "S", active: true },
+  { input: { type: "button_s" } as DeviceInput, label: "Space", active: true },
   { input: { type: "button_shift" } as DeviceInput, label: "Shift", active: false },
   { input: { type: "button_fn" } as DeviceInput, label: "Fn", active: false }
 ];
@@ -52,14 +52,14 @@ export function App() {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const key = event.key;
-      if (["ArrowLeft", "ArrowRight", "Enter", "a", "A", "s", "S"].includes(key)) {
+      if (["ArrowLeft", "ArrowRight", "Enter", "a", "A", " "].includes(key)) {
         event.preventDefault();
       }
       if (key === "ArrowLeft") dispatch({ type: "encoder_turn", delta: -1, id: "main" });
       if (key === "ArrowRight") dispatch({ type: "encoder_turn", delta: 1, id: "main" });
       if (key === "Enter") dispatch({ type: "encoder_press", id: "main" });
       if (key === "a" || key === "A") dispatch({ type: "button_a" });
-      if (key === "s" || key === "S") dispatch({ type: "button_s" });
+      if (key === " ") dispatch({ type: "button_s" });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -164,7 +164,7 @@ export function App() {
         </section>
       </section>
 
-      <footer className="bar footer">Arrows: SW1 turn • Enter: SW1 press • A/S keys mapped • Shift/Fn and SW2..SW5 reserved</footer>
+      <footer className="bar footer">Arrows: SW1 turn • Enter: SW1 press • A/Space mapped • Shift/Fn and SW2..SW5 reserved</footer>
     </main>
   );
 }
