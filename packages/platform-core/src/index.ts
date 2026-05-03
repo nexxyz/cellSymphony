@@ -81,7 +81,7 @@ export type PlatformState<TState> = {
 export const OLED_WIDTH = 128;
 export const OLED_HEIGHT = 128;
 export const OLED_TEXT_COLUMNS = 20;
-export const OLED_TEXT_LINES = 4;
+export const OLED_TEXT_LINES = 8;
 
 export function createInitialState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
   return {
@@ -324,20 +324,53 @@ function axisGroup(label: string, prefix: "x" | "y", _defaultStep: number): Menu
 function currentMenuView<TState>(state: PlatformState<TState>): { path: string; lines: string[] } {
   const { runtimeConfig: cfg, menu } = state;
   const { siblings, path } = locate(menuTree(), cfg, menu);
-  if (!siblings.length) return { path, lines: ["", "", ""] };
+  if (!siblings.length) return { path, lines: [] };
   const cursor = clamp(menu.cursor, 0, siblings.length - 1);
-  const start = clamp(cursor - 1, 0, Math.max(0, siblings.length - 3));
-  const windowRows = siblings.slice(start, start + 3);
-  const lines = windowRows.map((item, index) => {
-    const rowIndex = start + index;
-    const selected = rowIndex === cursor;
-    const marker = selected ? ">" : " ";
-    const label = item.kind === "group" ? `${item.label} ->` : item.label;
-    const value = item.kind === "group" ? "" : ` ${formatDisplayValue(item.key, readAnyValue(state, item.key))}`;
-    return `${marker} ${label}${value}`.trimEnd();
-  });
-  while (lines.length < 3) lines.push("");
-  return { path, lines };
+  const bodyBudget = Math.max(1, OLED_TEXT_LINES - 1);
+  let start = cursor;
+  let end = cursor + 1;
+  let rowCount = formatMenuItemLines(siblings[cursor], state, true, menu.editing).length;
+
+  while (rowCount < bodyBudget && (start > 0 || end < siblings.length)) {
+    let grew = false;
+    if (start > 0) {
+      const prevRows = formatMenuItemLines(siblings[start - 1], state, false, false).length;
+      if (rowCount + prevRows <= bodyBudget || end >= siblings.length) {
+        start -= 1;
+        rowCount += prevRows;
+        grew = true;
+      }
+    }
+    if (rowCount >= bodyBudget) break;
+    if (end < siblings.length) {
+      const nextRows = formatMenuItemLines(siblings[end], state, false, false).length;
+      if (rowCount + nextRows <= bodyBudget || start === 0) {
+        end += 1;
+        rowCount += nextRows;
+        grew = true;
+      }
+    }
+    if (!grew) break;
+  }
+
+  const lines: string[] = [];
+  for (let i = start; i < end; i += 1) {
+    lines.push(...formatMenuItemLines(siblings[i], state, i === cursor, i === cursor && menu.editing));
+  }
+  return { path, lines: lines.slice(0, bodyBudget) };
+}
+
+function formatMenuItemLines<TState>(item: MenuNode, state: PlatformState<TState>, selected: boolean, editing: boolean): string[] {
+  const selectedPrefix = "@@";
+  const mark = selected ? selectedPrefix : "";
+  if (item.kind === "group") {
+    return [`${mark}> ${item.label} ->`];
+  }
+  const value = formatDisplayValue(item.key, readAnyValue(state, item.key));
+  if (selected) {
+    return [`${mark}> ${item.label}:`, `${mark}  ${editing ? "[EDIT] " : ""}${value}`];
+  }
+  return [`  ${item.label}`];
 }
 
 function locate(root: MenuNode, cfg: RuntimeConfig, menu: MenuState): { node: MenuNode; siblings: MenuNode[]; path: string } {
@@ -520,10 +553,7 @@ export function toDisplayFrame(page: PageId, line1: string, editing: boolean): D
 
 export function toOledLines(display: DisplayFrame): string[] {
   const title = fitOledText(display.title);
-  const body = display.lines.slice(0, OLED_TEXT_LINES - 1).map(fitOledText);
-  while (body.length < OLED_TEXT_LINES - 1) {
-    body.push("");
-  }
+  const body = display.lines.filter((line) => line.trim().length > 0).slice(0, OLED_TEXT_LINES - 1).map(fitOledText);
   return [title, ...body];
 }
 

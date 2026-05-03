@@ -138,15 +138,16 @@ export function App() {
             <div className="oled-bezel">
               <div className="oled-panel" style={{ width: OLED_WIDTH, height: OLED_HEIGHT }}>
                 {snapshot.oledLines.map((line, index) => {
-                  const selected = line.startsWith("> ");
+                  const selected = line.startsWith("@@");
+                  const text = selected ? line.slice(2) : line;
                   return (
                     <p key={`oled-${index}`} className={selected ? "oled-selected" : ""}>
-                      {line}
+                      {text}
                     </p>
                   );
                 })}
                 <div className={`transport-indicator ${snapshot.transportIndicator.flash}`}>
-                  {snapshot.transportIndicator.icon === "play" ? <span>▶</span> : snapshot.transportIndicator.icon === "stop" ? <span>■</span> : <span className="pause-slash" />}
+                  {snapshot.transportIndicator.icon === "play" ? <span>▶</span> : snapshot.transportIndicator.icon === "stop" ? <span>■</span> : <span>⏸</span>}
                   <span className={`event-dot ${isEventBlip ? "on" : ""}`} />
                 </div>
               </div>
