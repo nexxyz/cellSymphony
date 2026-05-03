@@ -246,7 +246,7 @@ function menuTree(): MenuNode {
         kind: "group",
         label: "Transport",
         children: [
-          { kind: "enum", label: "Play/Stop", key: "transport.playing", options: ["false", "true"] },
+          { kind: "enum", label: "Play/Pause", key: "transport.playing", options: ["false", "true"] },
           { kind: "number", label: "BPM", key: "transport.bpm", min: 40, max: 240, step: 1 },
           { kind: "enum", label: "Time Sig", key: "timeSig", options: ["4/4"] }
         ]
@@ -258,9 +258,9 @@ function menuTree(): MenuNode {
       },
       {
         kind: "group",
-        label: "Population",
+        label: "Engine",
         children: [
-          { kind: "enum", label: "Mode", key: "populationMode", options: ["grid", "conway"] },
+          { kind: "enum", label: "Population Mode", key: "populationMode", options: ["grid", "conway"] },
           { kind: "enum", label: "Conway Step", key: "conwayStepUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.populationMode === "conway" }
         ]
       },
@@ -271,10 +271,10 @@ function menuTree(): MenuNode {
           { kind: "enum", label: "Scan Mode", key: "scanMode", options: ["immediate", "scanning"] },
           { kind: "enum", label: "Scan Axis", key: "scanAxis", options: ["rows", "columns"], visible: (c) => c.scanMode === "scanning" },
           { kind: "enum", label: "Scan Unit", key: "scanUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.scanMode === "scanning" },
-          { kind: "enum", label: "Scan Dir", key: "scanDirection", options: ["forward", "reverse"], visible: (c) => c.scanMode === "scanning" },
-          { kind: "bool", label: "Event On", key: "eventEnabled" },
+          { kind: "enum", label: "Scan Direction", key: "scanDirection", options: ["forward", "reverse"], visible: (c) => c.scanMode === "scanning" },
+          { kind: "bool", label: "Event Triggers", key: "eventEnabled" },
           { kind: "enum", label: "Event Filter", key: "eventParity", options: ["none", "birth_even_death_odd"] },
-          { kind: "bool", label: "State On", key: "stateEnabled" },
+          { kind: "bool", label: "State Triggers", key: "stateEnabled" },
           axisGroup("X Axis", "x", 1),
           axisGroup("Y Axis", "y", 3)
         ]
@@ -283,20 +283,20 @@ function menuTree(): MenuNode {
         kind: "group",
         label: "Mapping",
         children: [
-          axisGroup("X Axis", "x", 1),
-          axisGroup("Y Axis", "y", 3),
+          { kind: "number", label: "Base Note", key: "mapping.baseMidiNote", min: 0, max: 127, step: 1 },
+          { kind: "enum", label: "Range Mode", key: "mapping.rangeMode", options: ["clamp", "wrap"] },
           { kind: "enum", label: "Birth Target", key: "mapping.birth.channel", options: ["0", "1", "2", "3"] },
           { kind: "enum", label: "Death Target", key: "mapping.death.channel", options: ["0", "1", "2", "3"] },
           { kind: "enum", label: "State Target", key: "mapping.state.channel", options: ["0", "1", "2", "3"] },
-          { kind: "enum", label: "Range Mode", key: "mapping.rangeMode", options: ["clamp", "wrap"] },
-          { kind: "number", label: "Base Note", key: "mapping.baseMidiNote", min: 0, max: 127, step: 1 }
+          axisGroup("X Axis", "x", 1),
+          axisGroup("Y Axis", "y", 3)
         ]
       },
       {
         kind: "group",
         label: "System",
         children: [
-          { kind: "number", label: "Brightness", key: "displayBrightness", min: 10, max: 100, step: 5 },
+          { kind: "number", label: "Display Brightness", key: "displayBrightness", min: 10, max: 100, step: 5 },
           { kind: "enum", label: "About", key: "about", options: ["CellSymphony v0.1"] }
         ]
       }
@@ -324,7 +324,8 @@ function axisGroup(label: string, prefix: "x" | "y", _defaultStep: number): Menu
 function currentMenuView<TState>(state: PlatformState<TState>): { path: string; lines: string[] } {
   const { runtimeConfig: cfg, menu } = state;
   const { siblings, path } = locate(menuTree(), cfg, menu);
-  if (!siblings.length) return { path, lines: [] };
+  const shortPath = abbreviatePath(path);
+  if (!siblings.length) return { path: shortPath, lines: [] };
   const cursor = clamp(menu.cursor, 0, siblings.length - 1);
   const bodyBudget = Math.max(1, OLED_TEXT_LINES - 1);
   let start = cursor;
@@ -357,7 +358,23 @@ function currentMenuView<TState>(state: PlatformState<TState>): { path: string; 
   for (let i = start; i < end; i += 1) {
     lines.push(...formatMenuItemLines(siblings[i], state, i === cursor, i === cursor && menu.editing));
   }
-  return { path, lines: lines.slice(0, bodyBudget) };
+  return { path: shortPath, lines: lines.slice(0, bodyBudget) };
+}
+
+function abbreviatePath(path: string): string {
+  const map: Record<string, string> = {
+    Transport: "TRN",
+    Audio: "AUD",
+    Engine: "ENG",
+    Interpretation: "INT",
+    Mapping: "MAP",
+    System: "SYS"
+  };
+  if (!path || path === "Menu") return "MENU";
+  return path
+    .split("/")
+    .map((part) => map[part] ?? part)
+    .join("/");
 }
 
 function formatMenuItemLines<TState>(item: MenuNode, state: PlatformState<TState>, selected: boolean, editing: boolean): string[] {
