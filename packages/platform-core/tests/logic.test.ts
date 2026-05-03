@@ -105,6 +105,24 @@ test("scan mode advances cursor using PPQN timing", () => {
   assert.equal(state.scanIndex, 1);
 });
 
+test("scanning mode emits notes only when scan index advances", () => {
+  let state = createInitialState(mockBehavior);
+  state.transport.playing = true;
+  state.runtimeConfig.scanMode = "scanning";
+  state.runtimeConfig.scanAxis = "columns";
+  state.runtimeConfig.scanDirection = "forward";
+  state.runtimeConfig.scanUnit = "1/1";
+  state.runtimeConfig.populationMode = "grid";
+
+  const first = tick(state, mockBehavior);
+  assert.equal(first.state.scanIndex, 0);
+  assert.equal(first.events.some((e) => e.type === "note_on"), false);
+
+  const second = tick(first.state, mockBehavior);
+  assert.equal(second.state.scanIndex, 0);
+  assert.equal(second.events.some((e) => e.type === "note_on"), false);
+});
+
 test("grid brightness scales rendered LED intensity", () => {
   let state = createInitialState(mockBehavior);
   state.runtimeConfig.gridBrightness = 20;

@@ -184,6 +184,7 @@ export function tick<TState>(
       next.transport = { ...next.transport, ppqnPulse: next.transport.ppqnPulse + wholePulses };
     }
 
+    let scanAdvanced = false;
     if (next.runtimeConfig.scanMode === "scanning") {
       const scanStepPulses = noteUnitToPulses(next.runtimeConfig.scanUnit);
       while (next.scanPulseAccumulator >= scanStepPulses) {
@@ -193,6 +194,7 @@ export function tick<TState>(
           next.runtimeConfig.scanDirection,
           next.runtimeConfig.scanAxis === "columns" ? GRID_WIDTH : GRID_HEIGHT
         );
+        scanAdvanced = true;
       }
     }
 
@@ -205,12 +207,15 @@ export function tick<TState>(
       }
     }
     const afterGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
-    const profile = profileFromConfig(next.runtimeConfig);
-    const interpretationTick = next.runtimeConfig.scanMode === "scanning" ? next.scanIndex : next.transport.tick;
-    const intents = interpretGrid(beforeGrid, afterGrid, interpretationTick, profile);
-    const mapped = mapIntentsToMusicalEvents(intents, withScaleSteps(next.mappingConfig, next.runtimeConfig));
-    const modulated = applyModulation(intents, mapped, next.runtimeConfig);
-    events.push(...dedupeSimultaneousNotes(modulated));
+    const shouldInterpret = next.runtimeConfig.scanMode === "immediate" || scanAdvanced;
+    if (shouldInterpret) {
+      const profile = profileFromConfig(next.runtimeConfig);
+      const interpretationTick = next.runtimeConfig.scanMode === "scanning" ? next.scanIndex : next.transport.tick;
+      const intents = interpretGrid(beforeGrid, afterGrid, interpretationTick, profile);
+      const mapped = mapIntentsToMusicalEvents(intents, withScaleSteps(next.mappingConfig, next.runtimeConfig));
+      const modulated = applyModulation(intents, mapped, next.runtimeConfig);
+      events.push(...dedupeSimultaneousNotes(modulated));
+    }
     next.transport = { ...next.transport, tick: next.transport.tick + 1 };
   }
   return { state: next, events };
