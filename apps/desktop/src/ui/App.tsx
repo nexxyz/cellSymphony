@@ -1,16 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
-import { lifeBehavior } from "@cellsymphony/behaviors-life";
-import {
-  createInitialState,
-  OLED_HEIGHT,
-  OLED_WIDTH,
-  routeInput,
-  tick,
-  toOledLines,
-  toSimulatorFrame
-} from "@cellsymphony/platform-core";
-import { nativeAudioBridge } from "../audio/nativeAudioBridge";
+import { OLED_HEIGHT, OLED_WIDTH } from "@cellsymphony/platform-core";
+import { mapKeyboardEventToDeviceInput, shouldPreventKeyboardDefault } from "../runtime/inputAdapters/keyboardAdapter";
+import { sendEventsToAudio } from "../runtime/outputAdapters/audioSink";
+import { createSimulatorRuntime } from "../runtime/simulatorRuntime";
+
+const runtime = createSimulatorRuntime();
 
 const ENCODERS = [
   { id: "main", label: "SW1 Main", active: true },
@@ -28,45 +23,39 @@ const NEOKEY_BUTTONS = [
 ];
 
 export function App() {
-  const behavior = useMemo(() => lifeBehavior, []);
-  const [state, setState] = useState(() => createInitialState(behavior));
+  const [snapshot, setSnapshot] = useState(() => runtime.getSnapshot());
   const [paintMode, setPaintMode] = useState<boolean | null>(null);
   const [painted, setPainted] = useState<Set<string>>(new Set());
-
-  const frame = useMemo(() => toSimulatorFrame(state, behavior), [state, behavior]);
-  const oledLines = useMemo(() => toOledLines(frame.display), [frame.display]);
+  const frame = snapshot.frame;
+  const oledLines = snapshot.oledLines;
 
   useEffect(() => {
-    const id = window.setInterval(() => {
-      setState((prev) => {
-        const result = tick(prev, behavior);
-        for (const event of result.events) {
-          void nativeAudioBridge.trigger(event);
-        }
-        return result.state;
-      });
-    }, 150);
-    return () => window.clearInterval(id);
-  }, [behavior]);
+    const unsubscribeState = runtime.subscribe(setSnapshot);
+    const unsubscribeEvents = runtime.subscribeEvents((events) => {
+      void sendEventsToAudio(events);
+    });
+    runtime.start();
+    return () => {
+      unsubscribeState();
+      unsubscribeEvents();
+      runtime.stop();
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const key = event.key;
-      if (["ArrowLeft", "ArrowRight", "Enter", "a", "A", " "].includes(key)) {
+      if (shouldPreventKeyboardDefault(event)) {
         event.preventDefault();
       }
-      if (key === "ArrowLeft") dispatch({ type: "encoder_turn", delta: -1, id: "main" });
-      if (key === "ArrowRight") dispatch({ type: "encoder_turn", delta: 1, id: "main" });
-      if (key === "Enter") dispatch({ type: "encoder_press", id: "main" });
-      if (key === "a" || key === "A") dispatch({ type: "button_a" });
-      if (key === " ") dispatch({ type: "button_s" });
+      const mapped = mapKeyboardEventToDeviceInput(event);
+      if (mapped) dispatch(mapped);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   });
 
   function dispatch(input: DeviceInput) {
-    setState((prev) => routeInput(prev, input, behavior).state);
+    runtime.dispatch(input);
   }
 
   function cellAlive(index: number): boolean {
