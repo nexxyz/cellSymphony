@@ -21,6 +21,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
   let state: PlatformState<ReturnType<typeof behavior.init>> = createInitialState(behavior);
   let eventBlipUntilMs = 0;
   let transportFlash: "none" | "beat" | "measure" = "none";
+  let transportFlashUntilMs = 0;
   let shiftActive = false;
   let stopLatched = false;
   const listeners = new Set<RuntimeListener>();
@@ -66,13 +67,14 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
   }
 
   function applyBeatFlash(prevPulse: number, nextPulse: number) {
-    transportFlash = "none";
     if (nextPulse <= prevPulse) return;
     for (let pulse = prevPulse + 1; pulse <= nextPulse; pulse += 1) {
       if (pulse % 96 === 0) {
         transportFlash = "measure";
+        transportFlashUntilMs = Date.now() + 220;
       } else if (pulse % 24 === 0 && transportFlash !== "measure") {
         transportFlash = "beat";
+        transportFlashUntilMs = Date.now() + 220;
       }
     }
   }
@@ -119,6 +121,10 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
     },
     start() {
       scheduler.start(() => {
+        if (transportFlashUntilMs > 0 && Date.now() > transportFlashUntilMs) {
+          transportFlashUntilMs = 0;
+          transportFlash = "none";
+        }
         if (eventBlipUntilMs < Date.now()) {
           eventBlipUntilMs = 0;
         }

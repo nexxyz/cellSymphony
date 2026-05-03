@@ -98,7 +98,7 @@ test("scan mode advances cursor using PPQN timing", () => {
   state.runtimeConfig.scanMode = "scanning";
   state.runtimeConfig.scanAxis = "columns";
   state.runtimeConfig.scanDirection = "forward";
-  state.runtimeConfig.scanUnit = "1/16";
+  state.runtimeConfig.x.scanUnit = "1/16";
 
   state = tick(state, mockBehavior).state;
 
@@ -122,9 +122,9 @@ test("velocity modulation mode changes output velocity", () => {
   state.runtimeConfig.populationMode = "conway";
   state.runtimeConfig.conwayStepUnit = "1/16";
   state.runtimeConfig.eventParity = "none";
-  state.runtimeConfig.x.mode = "velocity";
-  state.runtimeConfig.x.min = 20;
-  state.runtimeConfig.x.max = 100;
+  state.runtimeConfig.x.velocity.enabled = true;
+  state.runtimeConfig.x.velocity.from = 20;
+  state.runtimeConfig.x.velocity.to = 100;
   const result = tick(state, mockBehavior);
   const note = result.events.find((e) => e.type === "note_on");
   assert.ok(note && note.type === "note_on");
@@ -139,13 +139,23 @@ test("filter modulation mode emits cutoff/resonance CC", () => {
   state.runtimeConfig.populationMode = "conway";
   state.runtimeConfig.conwayStepUnit = "1/16";
   state.runtimeConfig.eventParity = "none";
-  state.runtimeConfig.x.mode = "filter_cutoff";
-  state.runtimeConfig.y.mode = "filter_resonance";
+  state.runtimeConfig.x.filterCutoff.enabled = true;
+  state.runtimeConfig.y.filterResonance.enabled = true;
   const result = tick(state, mockBehavior);
   const hasCutoff = result.events.some((e) => e.type === "cc" && e.controller === 74);
   const hasResonance = result.events.some((e) => e.type === "cc" && e.controller === 71);
   assert.equal(hasCutoff, true);
   assert.equal(hasResonance, true);
+
+  const firstNote = result.events.findIndex((e) => e.type === "note_on");
+  const firstCutoff = result.events.findIndex((e) => e.type === "cc" && e.controller === 74);
+  assert.ok(firstCutoff !== -1 && firstNote !== -1 && firstCutoff < firstNote);
+
+  const note = result.events.find((e) => e.type === "note_on");
+  const cc = result.events.find((e) => e.type === "cc" && e.controller === 74);
+  if (note && note.type === "note_on" && cc && cc.type === "cc") {
+    assert.equal(cc.channel, note.channel);
+  }
 });
 
 test("aux encoder inputs are reserved and do not navigate menu", () => {
@@ -168,4 +178,45 @@ test("OLED formatter clamps display lines and width", () => {
   assert.equal(lines.length, 5);
   assert.equal(lines[0].length, OLED_TEXT_COLUMNS);
   assert.equal(lines[lines.length - 1], "line four");
+});
+
+test("edit marker uses compact star prefix", () => {
+  let state = createInitialState(mockBehavior);
+  state = routeInput(state, { type: "encoder_turn", delta: 1 }, mockBehavior).state;
+  state = routeInput(state, { type: "encoder_press" }, mockBehavior).state;
+  state = routeInput(state, { type: "encoder_press" }, mockBehavior).state;
+  const frame = toSimulatorFrame(state, mockBehavior);
+  const hasStarEdit = frame.display.lines.some((line) => line.includes("*Vol:"));
+  assert.equal(hasStarEdit, true);
+});
+
+test("modulation mode labels are user-facing", () => {
+  let state = createInitialState(mockBehavior);
+  state.runtimeConfig.x.filterCutoff.enabled = true;
+  const frame = toSimulatorFrame(state, mockBehavior);
+  const rendered = frame.display.lines.join(" ");
+  assert.equal(rendered.includes("filter_cutoff"), false);
+});
+
+test("additive pitch uses shared starting/lowest/highest", () => {
+  let state = createInitialState(mockBehavior);
+  state.transport.playing = true;
+  state.runtimeConfig.populationMode = "conway";
+  state.runtimeConfig.conwayStepUnit = "1/16";
+  state.runtimeConfig.eventParity = "none";
+  state.runtimeConfig.pitch.startingNote = 60;
+  state.runtimeConfig.pitch.lowestNote = 48;
+  state.runtimeConfig.pitch.highestNote = 84;
+  state.runtimeConfig.pitch.outOfRange = "clamp";
+  state.runtimeConfig.x.pitch.enabled = true;
+  state.runtimeConfig.x.pitch.steps = 1;
+  state.runtimeConfig.y.pitch.enabled = true;
+  state.runtimeConfig.y.pitch.steps = 8;
+
+  const result = tick(state, mockBehavior);
+  const note = result.events.find((e) => e.type === "note_on");
+  assert.ok(note && note.type === "note_on");
+  if (note && note.type === "note_on") {
+    assert.ok(note.note >= 48 && note.note <= 84);
+  }
 });

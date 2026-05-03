@@ -29,7 +29,8 @@ This is the single source of truth for menu structure, control mappings, and par
 - Interpretation
   - Scan Mode (functional)
   - Scan Axis (functional in scanning mode)
-  - Scan Unit (functional in scanning mode)
+  - X Scan Unit (functional in scanning mode)
+  - Y Scan Unit (functional in scanning mode)
   - Scan Direction (functional in scanning mode)
   - Event Triggers (functional)
   - Event Filter (`All` | `Odd/Even`) (functional)
@@ -37,6 +38,10 @@ This is the single source of truth for menu structure, control mappings, and par
   - X Axis (functional)
   - Y Axis (functional)
 - Mapping
+  - Starting Note (functional)
+  - Lowest Note (functional)
+  - Highest Note (functional)
+  - Out of Range (`Clamp` | `Wrap`) (functional)
   - Base Note (functional)
   - Range Mode (functional)
   - Birth Target (functional)
@@ -57,10 +62,18 @@ This is the single source of truth for menu structure, control mappings, and par
 
 ## Modulation Behavior (Current)
 
-- `velocity` mode modulates outgoing `note_on` velocity.
-- `filter_cutoff` mode emits CC74 (mapped to lowpass cutoff).
-- `filter_resonance` mode emits CC71 (mapped to lowpass resonance).
+- Pitch modulation is additive across axes (`X Steps + Y Steps`).
+- Axis pitch steps are signed (`-16..16`).
+- `Velocity` lane modulates outgoing `note_on` velocity.
+- `Filter Cutoff` lane emits CC74 (mapped to lowpass cutoff).
+- `Filter Resonance` lane emits CC71 (mapped to lowpass resonance).
 - Lowpass is currently the active filter type.
+- `Grid Offset` rotates axis indexing (offset=5 => cell 5 treated as first, then wraps).
+- `Grid Offset` bounds are axis-size derived: `-(axis-1)..+(axis-1)` (8x8 => `-7..7`).
+
+## Edit Marker
+
+- Selected editable value line uses compact marker: `*Value`.
 
 ## Maintenance Rule
 
