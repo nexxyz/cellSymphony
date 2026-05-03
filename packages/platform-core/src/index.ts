@@ -24,6 +24,8 @@ type ScanAxis = "rows" | "columns";
 type Direction = "forward" | "reverse";
 type NoteUnit = "1/16" | "1/8" | "1/4" | "1/2" | "1/1";
 type Curve = "linear" | "curve";
+type ScaleId = "chromatic" | "major" | "natural_minor" | "dorian" | "mixolydian" | "major_pentatonic" | "minor_pentatonic" | "harmonic_minor";
+type RootName = "C" | "C#" | "D" | "D#" | "E" | "F" | "F#" | "G" | "G#" | "A" | "A#" | "B";
 
 type OutOfRangeMode = "clamp" | "wrap";
 
@@ -32,6 +34,8 @@ type PitchSettings = {
   lowestNote: number;
   highestNote: number;
   outOfRange: OutOfRangeMode;
+  scale: ScaleId;
+  root: RootName;
 };
 
 type PitchLaneConfig = {
@@ -123,7 +127,7 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
       eventEnabled: true,
       eventParity: "birth_even_death_odd",
       stateEnabled: true,
-      pitch: { startingNote: 60, lowestNote: 48, highestNote: 84, outOfRange: "clamp" },
+      pitch: { startingNote: 48, lowestNote: 36, highestNote: 84, outOfRange: "clamp", scale: "major_pentatonic", root: "C" },
       x: {
         pitch: { enabled: true, steps: 1 },
         velocity: { enabled: false, from: 20, to: 100, gridOffset: 0, curve: "linear" },
@@ -330,12 +334,18 @@ function menuTree(): MenuNode {
         kind: "group",
         label: "Mapping",
         children: [
-          { kind: "number", label: "Starting Note", key: "pitch.startingNote", min: 0, max: 127, step: 1 },
-          { kind: "number", label: "Lowest Note", key: "pitch.lowestNote", min: 0, max: 127, step: 1 },
-          { kind: "number", label: "Highest Note", key: "pitch.highestNote", min: 0, max: 127, step: 1 },
-          { kind: "enum", label: "Out of Range", key: "pitch.outOfRange", options: ["clamp", "wrap"] },
-          { kind: "number", label: "Base Note", key: "mapping.baseMidiNote", min: 0, max: 127, step: 1 },
-          { kind: "enum", label: "Range Mode", key: "mapping.rangeMode", options: ["clamp", "wrap"] },
+          {
+            kind: "group",
+            label: "Note Mapping",
+            children: [
+              { kind: "number", label: "Starting Note", key: "pitch.startingNote", min: 0, max: 127, step: 1 },
+              { kind: "number", label: "Lowest Note", key: "pitch.lowestNote", min: 0, max: 127, step: 1 },
+              { kind: "number", label: "Highest Note", key: "pitch.highestNote", min: 0, max: 127, step: 1 },
+              { kind: "enum", label: "Out of Range", key: "pitch.outOfRange", options: ["clamp", "wrap"] },
+              { kind: "enum", label: "Scale", key: "pitch.scale", options: ["chromatic", "major", "natural_minor", "dorian", "mixolydian", "major_pentatonic", "minor_pentatonic", "harmonic_minor"] },
+              { kind: "enum", label: "Root", key: "pitch.root", options: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] }
+            ]
+          },
           { kind: "enum", label: "Birth Target", key: "mapping.birth.channel", options: ["0", "1", "2", "3"] },
           { kind: "enum", label: "Death Target", key: "mapping.death.channel", options: ["0", "1", "2", "3"] },
           { kind: "enum", label: "State Target", key: "mapping.state.channel", options: ["0", "1", "2", "3"] },
@@ -668,6 +678,8 @@ function formatDisplayValue(key: string, value: unknown): string {
     return formatNoteWithMidi(Number(value));
   }
   if (key === "pitch.outOfRange") return value === "wrap" ? "Wrap" : "Clamp";
+  if (key === "pitch.scale") return formatScaleName(String(value));
+  if (key === "pitch.root") return String(value);
   if (key === "transport.playing") return value === true || value === "true" ? "Play" : "Stop";
   if (key === "eventParity") return value === "none" ? "All" : "Odd/Even";
   if (typeof value === "boolean") return value ? "On" : "Off";
@@ -709,13 +721,18 @@ function pitchFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig, f
   const xDelta = cfg.x.pitch.enabled ? xPos * cfg.x.pitch.steps : 0;
   const yDelta = cfg.y.pitch.enabled ? yPos * cfg.y.pitch.steps : 0;
   if (!cfg.x.pitch.enabled && !cfg.y.pitch.enabled) return fallbackNote;
-  const raw = cfg.pitch.startingNote + xDelta + yDelta;
   const low = Math.min(cfg.pitch.lowestNote, cfg.pitch.highestNote);
   const high = Math.max(cfg.pitch.lowestNote, cfg.pitch.highestNote);
-  if (cfg.pitch.outOfRange === "clamp") return clamp(raw, low, high);
-  const span = high - low + 1;
-  if (span <= 0) return clamp(raw, 0, 127);
-  return low + mod(raw - low, span);
+  const scaleNotes = buildScaleNotes(cfg.pitch.scale, cfg.pitch.root, low, high);
+  if (scaleNotes.length === 0) return clamp(fallbackNote, low, high);
+  const startIndex = nearestScaleIndex(scaleNotes, cfg.pitch.startingNote);
+  let targetIndex = startIndex + xDelta + yDelta;
+  if (cfg.pitch.outOfRange === "clamp") {
+    targetIndex = clamp(targetIndex, 0, scaleNotes.length - 1);
+  } else {
+    targetIndex = mod(targetIndex, scaleNotes.length);
+  }
+  return scaleNotes[targetIndex] ?? clamp(fallbackNote, low, high);
 }
 
 function velocityFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig): number | null {
@@ -755,6 +772,83 @@ function formatNoteWithMidi(note: number): string {
   const name = names[n % 12];
   const octave = Math.floor(n / 12) - 1;
   return `${name}${octave} (${n})`;
+}
+
+function formatScaleName(scale: string): string {
+  const map: Record<string, string> = {
+    chromatic: "Chromatic",
+    major: "Major",
+    natural_minor: "Natural Minor",
+    dorian: "Dorian",
+    mixolydian: "Mixolydian",
+    major_pentatonic: "Maj Pentatonic",
+    minor_pentatonic: "Min Pentatonic",
+    harmonic_minor: "Harm Minor"
+  };
+  return map[scale] ?? scale;
+}
+
+function buildScaleNotes(scale: ScaleId, root: RootName, low: number, high: number): number[] {
+  const intervals = scaleIntervals(scale);
+  const rootPc = rootPitchClass(root);
+  const notes: number[] = [];
+  for (let n = clamp(low, 0, 127); n <= clamp(high, 0, 127); n += 1) {
+    const pc = mod(n - rootPc, 12);
+    if (intervals.includes(pc)) notes.push(n);
+  }
+  return notes;
+}
+
+function nearestScaleIndex(notes: number[], target: number): number {
+  let bestIdx = 0;
+  let bestDist = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < notes.length; i += 1) {
+    const d = Math.abs(notes[i] - target);
+    if (d < bestDist) {
+      bestDist = d;
+      bestIdx = i;
+    }
+  }
+  return bestIdx;
+}
+
+function rootPitchClass(root: RootName): number {
+  const map: Record<RootName, number> = {
+    C: 0,
+    "C#": 1,
+    D: 2,
+    "D#": 3,
+    E: 4,
+    F: 5,
+    "F#": 6,
+    G: 7,
+    "G#": 8,
+    A: 9,
+    "A#": 10,
+    B: 11
+  };
+  return map[root];
+}
+
+function scaleIntervals(scale: ScaleId): number[] {
+  switch (scale) {
+    case "chromatic":
+      return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+    case "major":
+      return [0, 2, 4, 5, 7, 9, 11];
+    case "natural_minor":
+      return [0, 2, 3, 5, 7, 8, 10];
+    case "dorian":
+      return [0, 2, 3, 5, 7, 9, 10];
+    case "mixolydian":
+      return [0, 2, 4, 5, 7, 9, 10];
+    case "major_pentatonic":
+      return [0, 2, 4, 7, 9];
+    case "minor_pentatonic":
+      return [0, 3, 5, 7, 10];
+    case "harmonic_minor":
+      return [0, 2, 3, 5, 7, 8, 11];
+  }
 }
 
 export function emergencyBrake<TState>(state: PlatformState<TState>): { state: PlatformState<TState>; events: MusicalEvent[] } {
