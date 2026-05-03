@@ -64,6 +64,7 @@ body {
 }
 
 .oled-panel {
+  position: relative;
   image-rendering: pixelated;
   border-radius: 6px;
   border: 1px solid #2a3f33;
@@ -87,6 +88,37 @@ body {
   line-height: 1.2;
   white-space: pre;
   text-shadow: 0 0 5px rgba(114, 255, 177, 0.35);
+}
+
+.transport-indicator {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #6be89f;
+}
+
+.transport-indicator.beat {
+  color: #7dff9c;
+}
+
+.transport-indicator.measure {
+  color: #5ce3ff;
+}
+
+.event-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #244637;
+}
+
+.event-dot.on {
+  background: #80ffbc;
+  box-shadow: 0 0 6px #80ffbc;
 }
 
 .meta {
@@ -128,6 +160,26 @@ body {
   gap: 6px;
 }
 
+.encoder-dial {
+  width: 86px;
+  height: 86px;
+  margin: 0 auto;
+  border-radius: 50%;
+  border: 2px solid #3a5e49;
+  background: radial-gradient(circle at 35% 30%, #2a4335, #12231b 68%);
+  display: grid;
+  place-items: center;
+}
+
+.encoder-center {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid #496b56;
+  background: linear-gradient(180deg, #2e4a39, #1a2f25);
+  color: #dff7e8;
+}
+
 .encoder-buttons button,
 .neokey-row button {
   font: inherit;
@@ -147,6 +199,24 @@ body {
 
 .neokey-row .reserved {
   opacity: 0.6;
+}
+
+.neokey-row .neokey-back {
+  border-color: #894242;
+  background: linear-gradient(180deg, #4d1f1f, #381617);
+}
+
+.neokey-row .solid_red {
+  box-shadow: 0 0 12px rgba(255, 92, 92, 0.45);
+}
+
+.neokey-row .beat {
+  box-shadow: 0 0 14px rgba(114, 255, 139, 0.42);
+}
+
+.neokey-row .measure {
+  box-shadow: 0 0 18px rgba(84, 234, 255, 0.6);
+  border-color: #5ec9d5;
 }
 
 .matrix-chassis {

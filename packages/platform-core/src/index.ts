@@ -40,6 +40,7 @@ type AxisModConfig = {
 
 type RuntimeConfig = {
   populationMode: "grid" | "conway";
+  masterVolume: number;
   scanMode: ScanMode;
   scanAxis: ScanAxis;
   scanUnit: NoteUnit;
@@ -74,6 +75,7 @@ export type PlatformState<TState> = {
   scanIndex: number;
   scanPulseAccumulator: number;
   conwayPulseAccumulator: number;
+  ppqnPulseRemainder: number;
 };
 
 export const OLED_WIDTH = 128;
@@ -83,12 +85,13 @@ export const OLED_TEXT_LINES = 4;
 
 export function createInitialState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
   return {
-    transport: { playing: false, bpm: 120, tick: 0 },
+    transport: { playing: false, bpm: 120, tick: 0, ppqnPulse: 0 },
     behaviorState: behavior.init({}),
     activeBehavior: behavior.id,
     mappingConfig: loadDefaultMappingConfig(),
     runtimeConfig: {
       populationMode: "conway",
+      masterVolume: 73,
       scanMode: "immediate",
       scanAxis: "columns",
       scanUnit: "1/8",
@@ -103,7 +106,8 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
     menu: { stack: [], cursor: 0, editing: false },
     scanIndex: 0,
     scanPulseAccumulator: 0,
-    conwayPulseAccumulator: 0
+    conwayPulseAccumulator: 0,
+    ppqnPulseRemainder: 0
   };
 }
 
@@ -135,6 +139,12 @@ export function tick<TState>(state: PlatformState<TState>, behavior: BehaviorEng
     const pulsesPerFrame = pulsesPerSecond(next.transport.bpm) * FRAME_SECONDS;
     next.scanPulseAccumulator += pulsesPerFrame;
     next.conwayPulseAccumulator += pulsesPerFrame;
+    next.ppqnPulseRemainder += pulsesPerFrame;
+    const wholePulses = Math.floor(next.ppqnPulseRemainder);
+    if (wholePulses > 0) {
+      next.ppqnPulseRemainder -= wholePulses;
+      next.transport = { ...next.transport, ppqnPulse: next.transport.ppqnPulse + wholePulses };
+    }
 
     if (next.runtimeConfig.scanMode === "scanning") {
       const scanStepPulses = noteUnitToPulses(next.runtimeConfig.scanUnit);
@@ -174,9 +184,9 @@ export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior:
   return {
     display: {
       page: PAGES[0] as PageId,
-      title: "Cell Symphony",
+      title: menuView.path.split("/")[0] || "Menu",
       editing: state.menu.editing,
-      lines: [menuView.path, menuView.line1, menuView.line2]
+      lines: [menuView.line1, menuView.line2, state.transport.playing ? "State: Play" : "State: Stop"]
     },
     leds: { width: GRID_WIDTH, height: GRID_HEIGHT, cells: cellsToLeds(model.cells, scanCursor) },
     transport: state.transport,
@@ -232,21 +242,62 @@ function menuTree(): MenuNode {
     kind: "group",
     label: "Root",
     children: [
-      { kind: "group", label: "Population", children: [{ kind: "enum", label: "Mode", key: "populationMode", options: ["grid", "conway"] }] },
+      {
+        kind: "group",
+        label: "Transport",
+        children: [
+          { kind: "enum", label: "Play/Stop", key: "transport.playing", options: ["false", "true"] },
+          { kind: "number", label: "BPM", key: "transport.bpm", min: 40, max: 240, step: 1 },
+          { kind: "enum", label: "Time Sig", key: "timeSig", options: ["4/4"] }
+        ]
+      },
+      {
+        kind: "group",
+        label: "Audio",
+        children: [{ kind: "number", label: "Master Vol", key: "masterVolume", min: 0, max: 100, step: 1 }]
+      },
+      {
+        kind: "group",
+        label: "Population",
+        children: [
+          { kind: "enum", label: "Mode", key: "populationMode", options: ["grid", "conway"] },
+          { kind: "enum", label: "Conway Step", key: "conwayStepUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.populationMode === "conway" }
+        ]
+      },
       {
         kind: "group",
         label: "Interpretation",
         children: [
           { kind: "enum", label: "Scan Mode", key: "scanMode", options: ["immediate", "scanning"] },
           { kind: "enum", label: "Scan Axis", key: "scanAxis", options: ["rows", "columns"], visible: (c) => c.scanMode === "scanning" },
-          { kind: "enum", label: "Ticks/Unit", key: "scanUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.scanMode === "scanning" },
+          { kind: "enum", label: "Scan Unit", key: "scanUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.scanMode === "scanning" },
           { kind: "enum", label: "Scan Dir", key: "scanDirection", options: ["forward", "reverse"], visible: (c) => c.scanMode === "scanning" },
-          { kind: "enum", label: "Conway Step", key: "conwayStepUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.populationMode === "conway" },
           { kind: "bool", label: "Event On", key: "eventEnabled" },
           { kind: "enum", label: "Event Parity", key: "eventParity", options: ["none", "birth_even_death_odd"] },
           { kind: "bool", label: "State On", key: "stateEnabled" },
           axisGroup("X Axis", "x", 1),
           axisGroup("Y Axis", "y", 3)
+        ]
+      },
+      {
+        kind: "group",
+        label: "Mapping",
+        children: [
+          { kind: "group", label: "X Axis", children: [axisGroup("X Axis", "x", 1)] },
+          { kind: "group", label: "Y Axis", children: [axisGroup("Y Axis", "y", 3)] },
+          { kind: "enum", label: "Birth Target", key: "mapping.birth.channel", options: ["0", "1", "2", "3"] },
+          { kind: "enum", label: "Death Target", key: "mapping.death.channel", options: ["0", "1", "2", "3"] },
+          { kind: "enum", label: "State Target", key: "mapping.state.channel", options: ["0", "1", "2", "3"] },
+          { kind: "enum", label: "Range Mode", key: "mapping.rangeMode", options: ["clamp", "wrap"] },
+          { kind: "number", label: "Base Note", key: "mapping.baseMidiNote", min: 0, max: 127, step: 1 }
+        ]
+      },
+      {
+        kind: "group",
+        label: "System",
+        children: [
+          { kind: "number", label: "Brightness", key: "displayBrightness", min: 10, max: 100, step: 5 },
+          { kind: "enum", label: "About", key: "about", options: ["CellSymphony v0.1"] }
         ]
       }
     ]
@@ -275,7 +326,7 @@ function currentMenuView(cfg: RuntimeConfig, menu: MenuState): { path: string; l
   if (!siblings.length) return { path, line1: "", line2: "" };
   const selected = siblings[menu.cursor] ?? siblings[0];
   const line1 = `${menu.editing ? "[EDIT] " : ""}${selected.label}`;
-  const value = selected.kind === "group" ? ">" : String(readValue(cfg, selected.key));
+  const value = selected.kind === "group" ? ">" : formatDisplayValue(selected.key, readValue(cfg, selected.key));
   const line2 = `${value}  (${menu.cursor + 1}/${siblings.length})`;
   return { path, line1, line2 };
 }
@@ -311,6 +362,9 @@ function pressMenu<TState>(state: PlatformState<TState>): PlatformState<TState> 
   if (selected.kind === "group") {
     return { ...state, menu: { ...state.menu, stack: [...state.menu.stack, state.menu.cursor], cursor: 0 } };
   }
+  if (selected.kind === "enum" && selected.key === "transport.playing") {
+    return { ...state, transport: { ...state.transport, playing: !state.transport.playing } };
+  }
   if (selected.kind === "bool") {
     return { ...state, runtimeConfig: writeValue(state.runtimeConfig, selected.key, !readValue(state.runtimeConfig, selected.key)) };
   }
@@ -325,16 +379,56 @@ function turnMenu<TState>(state: PlatformState<TState>, delta: -1 | 1): Platform
   }
   const selected = view.siblings[state.menu.cursor];
   if (!selected || selected.kind === "group" || selected.kind === "bool") return state;
-  const current = readValue(state.runtimeConfig, selected.key);
+  const current = readAnyValue(state, selected.key);
   if (selected.kind === "number") {
     const nextValue = clamp(Number(current) + delta * selected.step, selected.min, selected.max);
-    return { ...state, runtimeConfig: writeValue(state.runtimeConfig, selected.key, nextValue) };
+    return writeAnyValue(state, selected.key, nextValue);
   }
   const idx = selected.options.indexOf(String(current));
   const nextIdx = clamp(idx + delta, 0, selected.options.length - 1);
   const raw = selected.options[nextIdx];
-  const value = raw;
-  return { ...state, runtimeConfig: writeValue(state.runtimeConfig, selected.key, value) };
+  if (selected.key === "transport.playing") {
+    return { ...state, transport: { ...state.transport, playing: raw === "true" } };
+  }
+  return writeAnyValue(state, selected.key, raw);
+}
+
+function readAnyValue<TState>(state: PlatformState<TState>, key: string): unknown {
+  if (key.startsWith("transport.")) return readNestedValue(state.transport, key.slice("transport.".length));
+  if (key.startsWith("mapping.")) return readNestedValue(state.mappingConfig, key.slice("mapping.".length));
+  if (key === "displayBrightness") return 100;
+  if (key === "about") return "CellSymphony v0.1";
+  if (key === "timeSig") return "4/4";
+  return readValue(state.runtimeConfig, key);
+}
+
+function writeAnyValue<TState>(state: PlatformState<TState>, key: string, value: unknown): PlatformState<TState> {
+  if (key.startsWith("transport.")) {
+    const transport = writeNestedValue(state.transport, key.slice("transport.".length), value) as TransportFrame;
+    return { ...state, transport };
+  }
+  if (key.startsWith("mapping.")) {
+    const mappingConfig = writeNestedValue(state.mappingConfig, key.slice("mapping.".length), value) as MappingConfig;
+    return { ...state, mappingConfig };
+  }
+  if (key === "displayBrightness" || key === "about" || key === "timeSig") return state;
+  return { ...state, runtimeConfig: writeValue(state.runtimeConfig, key, value) };
+}
+
+function readNestedValue(root: unknown, key: string): unknown {
+  const parts = key.split(".");
+  let cur: any = root;
+  for (const p of parts) cur = cur[p];
+  return cur;
+}
+
+function writeNestedValue(root: unknown, key: string, value: unknown): unknown {
+  const parts = key.split(".");
+  const next: any = structuredClone(root);
+  let cur: any = next;
+  for (let i = 0; i < parts.length - 1; i += 1) cur = cur[parts[i]];
+  cur[parts[parts.length - 1]] = typeof cur[parts[parts.length - 1]] === "number" ? Number(value) : value;
+  return next;
 }
 
 function readValue(cfg: RuntimeConfig, key: string): unknown {
@@ -432,4 +526,36 @@ function fitOledText(text: string): string {
 
 function isMainEncoderInput(id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined): boolean {
   return id === undefined || id === "main";
+}
+
+function formatDisplayValue(key: string, value: unknown): string {
+  if (key === "masterVolume") return `Vol: ${value}%`;
+  if (key === "populationMode") return value === "grid" ? "Sequencer" : "Conway";
+  if (key === "scanMode") return value === "immediate" ? "Immediate" : "Scanning";
+  if (key === "scanAxis") return value === "columns" ? "Cols" : "Rows";
+  if (key === "scanDirection") return value === "forward" ? "Fwd" : "Rev";
+  if (key === "transport.playing") return value === true || value === "true" ? "Play" : "Stop";
+  if (typeof value === "boolean") return value ? "On" : "Off";
+  return String(value);
+}
+
+export function emergencyBrake<TState>(state: PlatformState<TState>): { state: PlatformState<TState>; events: MusicalEvent[] } {
+  const size = state.runtimeConfig.scanAxis === "columns" ? GRID_WIDTH : GRID_HEIGHT;
+  const origin = state.runtimeConfig.scanDirection === "forward" ? 0 : size - 1;
+  const events: MusicalEvent[] = [];
+  for (let channel = 0; channel < 16; channel += 1) {
+    events.push({ type: "cc", channel, controller: 120, value: 0 });
+    events.push({ type: "cc", channel, controller: 123, value: 0 });
+  }
+  return {
+    state: {
+      ...state,
+      transport: { ...state.transport, playing: false, ppqnPulse: 0 },
+      scanIndex: origin,
+      scanPulseAccumulator: 0,
+      conwayPulseAccumulator: 0,
+      ppqnPulseRemainder: 0
+    },
+    events
+  };
 }

@@ -30,6 +30,7 @@ export type TransportFrame = {
   playing: boolean;
   bpm: number;
   tick: number;
+  ppqnPulse: number;
 };
 
 export type EngineFrame = {

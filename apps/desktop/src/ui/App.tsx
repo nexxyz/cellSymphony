@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 import { OLED_HEIGHT, OLED_WIDTH } from "@cellsymphony/platform-core";
-import { mapKeyboardEventToDeviceInput, shouldPreventKeyboardDefault } from "../runtime/inputAdapters/keyboardAdapter";
+import { mapKeyboardEventToInputAction, shouldPreventKeyboardDefault } from "../runtime/inputAdapters/keyboardAdapter";
 import { sendEventsToAudio } from "../runtime/outputAdapters/audioSink";
 import { createSimulatorRuntime } from "../runtime/simulatorRuntime";
 
@@ -16,10 +16,10 @@ const ENCODERS = [
 ] as const;
 
 const NEOKEY_BUTTONS = [
-  { input: { type: "button_a" } as DeviceInput, label: "A", active: true },
-  { input: { type: "button_s" } as DeviceInput, label: "Space", active: true },
-  { input: { type: "button_shift" } as DeviceInput, label: "Shift", active: false },
-  { input: { type: "button_fn" } as DeviceInput, label: "Fn", active: false }
+  { input: { type: "button_a" } as DeviceInput, label: "Back", key: "back" as const },
+  { input: { type: "button_s" } as DeviceInput, label: "Space", key: "space" as const },
+  { input: { type: "button_shift" } as DeviceInput, label: "Shift", key: "shift" as const },
+  { input: { type: "button_fn" } as DeviceInput, label: "Fn", key: "fn" as const }
 ];
 
 export function App() {
@@ -28,6 +28,7 @@ export function App() {
   const [painted, setPainted] = useState<Set<string>>(new Set());
   const frame = snapshot.frame;
   const oledLines = snapshot.oledLines;
+  const isEventBlip = snapshot.transportIndicator.eventBlipUntilMs > Date.now();
 
   useEffect(() => {
     const unsubscribeState = runtime.subscribe(setSnapshot);
@@ -47,8 +48,8 @@ export function App() {
       if (shouldPreventKeyboardDefault(event)) {
         event.preventDefault();
       }
-      const mapped = mapKeyboardEventToDeviceInput(event);
-      if (mapped) dispatch(mapped);
+      const action = mapKeyboardEventToInputAction(event);
+      if (action) runtime.dispatchAction(action);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -56,6 +57,13 @@ export function App() {
 
   function dispatch(input: DeviceInput) {
     runtime.dispatch(input);
+  }
+
+  function turnWithAcceleration(id: DeviceInput["id"], delta: -1 | 1, magnitude: number) {
+    const turns = magnitude >= 90 ? 4 : magnitude >= 40 ? 2 : 1;
+    for (let i = 0; i < turns; i += 1) {
+      dispatch({ type: "encoder_turn", delta, id });
+    }
   }
 
   function cellAlive(index: number): boolean {
@@ -89,6 +97,10 @@ export function App() {
                 {oledLines.map((line, index) => (
                   <p key={`oled-${index}`}>{line}</p>
                 ))}
+                <div className={`transport-indicator ${snapshot.transportIndicator.flash}`}>
+                  <span>{snapshot.transportIndicator.icon === "play" ? "▶" : "■"}</span>
+                  <span className={`event-dot ${isEventBlip ? "on" : ""}`} />
+                </div>
               </div>
             </div>
             <p className="meta">{frame.transport.playing ? "Playing" : "Stopped"} • {frame.transport.bpm} BPM</p>
@@ -98,15 +110,15 @@ export function App() {
             {ENCODERS.map((encoder) => (
               <article key={encoder.id} className="encoder-card">
                 <h3>{encoder.label}</h3>
-                <div className="encoder-buttons">
-                  <button type="button" onClick={() => dispatch({ type: "encoder_turn", delta: -1, id: encoder.id })}>
-                    L
-                  </button>
-                  <button type="button" onClick={() => dispatch({ type: "encoder_press", id: encoder.id })}>
+                <div
+                  className="encoder-dial"
+                  onWheel={(event) => {
+                    event.preventDefault();
+                    turnWithAcceleration(encoder.id, event.deltaY > 0 ? 1 : -1, Math.abs(event.deltaY));
+                  }}
+                >
+                  <button type="button" className="encoder-center" onClick={() => dispatch({ type: "encoder_press", id: encoder.id })}>
                     Push
-                  </button>
-                  <button type="button" onClick={() => dispatch({ type: "encoder_turn", delta: 1, id: encoder.id })}>
-                    R
                   </button>
                 </div>
                 {!encoder.active ? <small>Reserved</small> : <small>Menu Control</small>}
@@ -116,7 +128,12 @@ export function App() {
 
           <section className="neokey-row">
             {NEOKEY_BUTTONS.map((button) => (
-              <button key={button.label} type="button" onClick={() => dispatch(button.input)} className={button.active ? "active" : "reserved"}>
+              <button
+                key={button.label}
+                type="button"
+                onClick={() => dispatch(button.input)}
+                className={`neokey-${button.key} ${snapshot.neoKeyLeds[button.key]}`}
+              >
                 {button.label}
               </button>
             ))}
@@ -153,7 +170,7 @@ export function App() {
         </section>
       </section>
 
-      <footer className="bar footer">Arrows: SW1 turn • Enter: SW1 press • A/Space mapped • Shift/Fn and SW2..SW5 reserved</footer>
+      <footer className="bar footer">Arrows/Wheel: SW1 turn • Enter: SW1 press • Backspace: Back • Space: Play/Stop • Shift+Space: Brake</footer>
     </main>
   );
 }

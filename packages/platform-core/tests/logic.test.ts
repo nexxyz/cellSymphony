@@ -81,12 +81,13 @@ test("menu navigation edits runtime config through hardware-parity inputs", () =
     state = routeInput(state, i, mockBehavior).state;
   };
 
+  input({ type: "encoder_turn", delta: 1 });
   input({ type: "encoder_press" });
   input({ type: "encoder_press" });
   input({ type: "encoder_turn", delta: -1 });
   input({ type: "encoder_press" });
 
-  assert.equal(state.runtimeConfig.populationMode, "grid");
+  assert.equal(state.runtimeConfig.masterVolume, 72);
   const frame = toSimulatorFrame(state, mockBehavior);
   assert.equal(frame.display.editing, false);
 });
