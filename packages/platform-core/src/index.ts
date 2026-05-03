@@ -179,14 +179,14 @@ export function tick<TState>(state: PlatformState<TState>, behavior: BehaviorEng
 
 export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>): SimulatorFrame {
   const model = behavior.renderModel(state.behaviorState);
-  const menuView = currentMenuView(state.runtimeConfig, state.menu);
+  const menuView = currentMenuView(state);
   const scanCursor = state.runtimeConfig.scanMode === "scanning" ? { axis: state.runtimeConfig.scanAxis, index: state.scanIndex } : null;
   return {
     display: {
       page: PAGES[0] as PageId,
-      title: menuView.path.split("/")[0] || "Menu",
+      title: menuView.path,
       editing: state.menu.editing,
-      lines: [menuView.line1, menuView.line2, state.transport.playing ? "State: Play" : "State: Stop"]
+      lines: menuView.lines
     },
     leds: { width: GRID_WIDTH, height: GRID_HEIGHT, cells: cellsToLeds(model.cells, scanCursor) },
     transport: state.transport,
@@ -273,7 +273,7 @@ function menuTree(): MenuNode {
           { kind: "enum", label: "Scan Unit", key: "scanUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.scanMode === "scanning" },
           { kind: "enum", label: "Scan Dir", key: "scanDirection", options: ["forward", "reverse"], visible: (c) => c.scanMode === "scanning" },
           { kind: "bool", label: "Event On", key: "eventEnabled" },
-          { kind: "enum", label: "Event Parity", key: "eventParity", options: ["none", "birth_even_death_odd"] },
+          { kind: "enum", label: "Event Filter", key: "eventParity", options: ["none", "birth_even_death_odd"] },
           { kind: "bool", label: "State On", key: "stateEnabled" },
           axisGroup("X Axis", "x", 1),
           axisGroup("Y Axis", "y", 3)
@@ -283,8 +283,8 @@ function menuTree(): MenuNode {
         kind: "group",
         label: "Mapping",
         children: [
-          { kind: "group", label: "X Axis", children: [axisGroup("X Axis", "x", 1)] },
-          { kind: "group", label: "Y Axis", children: [axisGroup("Y Axis", "y", 3)] },
+          axisGroup("X Axis", "x", 1),
+          axisGroup("Y Axis", "y", 3),
           { kind: "enum", label: "Birth Target", key: "mapping.birth.channel", options: ["0", "1", "2", "3"] },
           { kind: "enum", label: "Death Target", key: "mapping.death.channel", options: ["0", "1", "2", "3"] },
           { kind: "enum", label: "State Target", key: "mapping.state.channel", options: ["0", "1", "2", "3"] },
@@ -321,14 +321,19 @@ function axisGroup(label: string, prefix: "x" | "y", _defaultStep: number): Menu
   };
 }
 
-function currentMenuView(cfg: RuntimeConfig, menu: MenuState): { path: string; line1: string; line2: string } {
+function currentMenuView<TState>(state: PlatformState<TState>): { path: string; lines: string[] } {
+  const { runtimeConfig: cfg, menu } = state;
   const { node, siblings, path } = locate(menuTree(), cfg, menu);
-  if (!siblings.length) return { path, line1: "", line2: "" };
-  const selected = siblings[menu.cursor] ?? siblings[0];
-  const line1 = `${menu.editing ? "[EDIT] " : ""}${selected.label}`;
-  const value = selected.kind === "group" ? ">" : formatDisplayValue(selected.key, readValue(cfg, selected.key));
-  const line2 = `${value}  (${menu.cursor + 1}/${siblings.length})`;
-  return { path, line1, line2 };
+  if (!siblings.length) return { path, lines: ["", "", ""] };
+  const current = siblings[menu.cursor] ?? siblings[0];
+  const prev = siblings[Math.max(0, menu.cursor - 1)];
+  const next = siblings[Math.min(siblings.length - 1, menu.cursor + 1)];
+  const selectedValue = current.kind === "group" ? "->" : formatDisplayValue(current.key, readAnyValue(state, current.key));
+  const cursorMark = menu.editing ? "*" : ">";
+  const line1 = prev ? `  ${prev.label}` : "";
+  const line2 = `${cursorMark} ${current.label} ${selectedValue}`;
+  const line3 = next ? `  ${next.label}` : `${menu.cursor + 1}/${siblings.length}`;
+  return { path, lines: [line1, line2, line3] };
 }
 
 function locate(root: MenuNode, cfg: RuntimeConfig, menu: MenuState): { node: MenuNode; siblings: MenuNode[]; path: string } {
@@ -535,6 +540,7 @@ function formatDisplayValue(key: string, value: unknown): string {
   if (key === "scanAxis") return value === "columns" ? "Cols" : "Rows";
   if (key === "scanDirection") return value === "forward" ? "Fwd" : "Rev";
   if (key === "transport.playing") return value === true || value === "true" ? "Play" : "Stop";
+  if (key === "eventParity") return value === "none" ? "All" : "Odd/Even";
   if (typeof value === "boolean") return value ? "On" : "Off";
   return String(value);
 }

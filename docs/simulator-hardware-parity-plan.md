@@ -42,17 +42,21 @@ This plan captures the agreed UI/runtime behavior so simulator and hardware matc
 
 ## Transport / Safety
 
-- Space toggles Play/Stop.
+- Space toggles Play/Pause.
 - Shift+Space is emergency brake:
   - stop transport immediately
   - reset scan origin based on axis+direction
   - kill active notes/samples
   - keep transport icon in Stop until Play resumes
-- Startup transport state is Stop.
+- Startup transport state is Pause.
+
+- Pause (`||`) keeps position and does not panic.
+- Stop (`■`) is panic+reset semantics.
 
 ## OLED Status
 
 - Persistent bottom-right transport icon:
+  - Pause = `||`
   - Stop = `■`
   - Play = `▶`
 - Transport icon pulses while playing:
@@ -60,9 +64,15 @@ This plan captures the agreed UI/runtime behavior so simulator and hardware matc
   - other quarter beats = green pulse
 - A dot to the right blips on actual note/sample trigger events.
 
+## Shift / Back Controls
+
+- Back action is labeled `Back` (not `A`) and mapped to Backspace in simulator.
+- Back button color is red.
+- Holding Shift (button or key) lights Shift in yellow.
+
 ## NeoKey LED Behavior
 
-- Space key LED pulses:
+- Space key LED pulses with visible fill color:
   - beat 1 = strong green pulse
   - beats 2/3/4 = lighter green pulse
 - Pulses are transport-clock driven and active only while playing.

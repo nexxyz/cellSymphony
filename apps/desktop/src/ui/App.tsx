@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 import { OLED_HEIGHT, OLED_WIDTH } from "@cellsymphony/platform-core";
-import { mapKeyboardEventToInputAction, shouldPreventKeyboardDefault } from "../runtime/inputAdapters/keyboardAdapter";
+import { mapKeyboardEventToInputAction, mapKeyboardKeyupToInputAction, shouldPreventKeyboardDefault } from "../runtime/inputAdapters/keyboardAdapter";
 import { sendEventsToAudio } from "../runtime/outputAdapters/audioSink";
 import { createSimulatorRuntime } from "../runtime/simulatorRuntime";
 
@@ -51,9 +51,38 @@ export function App() {
       const action = mapKeyboardEventToInputAction(event);
       if (action) runtime.dispatchAction(action);
     };
+    const onKeyUp = (event: KeyboardEvent) => {
+      const action = mapKeyboardKeyupToInputAction(event);
+      if (action) runtime.dispatchAction(action);
+    };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+    };
   });
+
+  useEffect(() => {
+    if (!dialDrag) return;
+    const onMove = (event: MouseEvent) => {
+      const deltaY = dialDrag.y - event.clientY;
+      const nextAcc = dialDrag.acc + deltaY;
+      if (Math.abs(nextAcc) < 12) {
+        setDialDrag({ ...dialDrag, y: event.clientY, acc: nextAcc });
+        return;
+      }
+      turnWithAcceleration(dialDrag.id, nextAcc > 0 ? 1 : -1, Math.abs(nextAcc));
+      setDialDrag({ ...dialDrag, y: event.clientY, acc: 0 });
+    };
+    const onUp = () => setDialDrag(null);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dialDrag]);
 
   function dispatch(input: DeviceInput) {
     runtime.dispatch(input);
@@ -98,7 +127,7 @@ export function App() {
                   <p key={`oled-${index}`}>{line}</p>
                 ))}
                 <div className={`transport-indicator ${snapshot.transportIndicator.flash}`}>
-                  <span>{snapshot.transportIndicator.icon === "play" ? "▶" : "■"}</span>
+                  <span>{snapshot.transportIndicator.icon === "play" ? "▶" : snapshot.transportIndicator.icon === "pause" ? "||" : "■"}</span>
                   <span className={`event-dot ${isEventBlip ? "on" : ""}`} />
                 </div>
               </div>
@@ -112,6 +141,10 @@ export function App() {
                 <h3>{encoder.label}</h3>
                 <div
                   className="encoder-dial"
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                    setDialDrag({ id: encoder.id, y: event.clientY, acc: 0 });
+                  }}
                   onWheel={(event) => {
                     event.preventDefault();
                     turnWithAcceleration(encoder.id, event.deltaY > 0 ? 1 : -1, Math.abs(event.deltaY));
@@ -132,6 +165,15 @@ export function App() {
                 key={button.label}
                 type="button"
                 onClick={() => dispatch(button.input)}
+                onMouseDown={() => {
+                  if (button.key === "shift") runtime.dispatchAction({ type: "shift", active: true });
+                }}
+                onMouseUp={() => {
+                  if (button.key === "shift") runtime.dispatchAction({ type: "shift", active: false });
+                }}
+                onMouseLeave={() => {
+                  if (button.key === "shift") runtime.dispatchAction({ type: "shift", active: false });
+                }}
                 className={`neokey-${button.key} ${snapshot.neoKeyLeds[button.key]}`}
               >
                 {button.label}
@@ -174,3 +216,4 @@ export function App() {
     </main>
   );
 }
+  const [dialDrag, setDialDrag] = useState<{ id: DeviceInput["id"]; y: number; acc: number } | null>(null);

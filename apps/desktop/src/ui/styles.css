@@ -207,16 +207,25 @@ body {
 }
 
 .neokey-row .solid_red {
+  background: linear-gradient(180deg, #8a2f2f, #5e1f1f);
   box-shadow: 0 0 12px rgba(255, 92, 92, 0.45);
 }
 
 .neokey-row .beat {
+  background: linear-gradient(180deg, #3e7f4f, #285837);
   box-shadow: 0 0 14px rgba(114, 255, 139, 0.42);
 }
 
 .neokey-row .measure {
+  background: linear-gradient(180deg, #3f7682, #28535e);
   box-shadow: 0 0 18px rgba(84, 234, 255, 0.6);
   border-color: #5ec9d5;
+}
+
+.neokey-row .solid_yellow {
+  background: linear-gradient(180deg, #85702e, #62521d);
+  border-color: #baa14a;
+  box-shadow: 0 0 12px rgba(245, 220, 106, 0.6);
 }
 
 .matrix-chassis {
