@@ -41,7 +41,10 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
         space: !frame.transport.playing ? "off" : transportFlash === "measure" ? "measure" : transportFlash === "beat" ? "beat" : "off",
         shift: shiftActive ? "solid_yellow" : "off",
         fn: "off"
-      }
+      },
+      displayBrightness: (next as any).runtimeConfig.displayBrightness ?? 75,
+      buttonBrightness: (next as any).runtimeConfig.buttonBrightness ?? 75,
+      masterVolume: (next as any).runtimeConfig.masterVolume ?? 100
     };
   }
 

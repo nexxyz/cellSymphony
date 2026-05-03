@@ -2,7 +2,6 @@ import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import {
   GRID_HEIGHT,
   GRID_WIDTH,
-  PAGES,
   type DeviceInput,
   type DisplayFrame,
   type LedCell,
@@ -41,6 +40,9 @@ type AxisModConfig = {
 type RuntimeConfig = {
   populationMode: "grid" | "conway";
   masterVolume: number;
+  displayBrightness: number;
+  gridBrightness: number;
+  buttonBrightness: number;
   scanMode: ScanMode;
   scanAxis: ScanAxis;
   scanUnit: NoteUnit;
@@ -92,6 +94,9 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
     runtimeConfig: {
       populationMode: "conway",
       masterVolume: 73,
+      displayBrightness: 75,
+      gridBrightness: 75,
+      buttonBrightness: 75,
       scanMode: "immediate",
       scanAxis: "columns",
       scanUnit: "1/8",
@@ -171,7 +176,8 @@ export function tick<TState>(state: PlatformState<TState>, behavior: BehaviorEng
     const interpretationTick = next.runtimeConfig.scanMode === "scanning" ? next.scanIndex : next.transport.tick;
     const intents = interpretGrid(beforeGrid, afterGrid, interpretationTick, profile);
     const mapped = mapIntentsToMusicalEvents(intents, withScaleSteps(next.mappingConfig, next.runtimeConfig));
-    events.push(...dedupeSimultaneousNotes(mapped));
+    const modulated = applyModulation(intents, mapped, next.runtimeConfig);
+    events.push(...dedupeSimultaneousNotes(modulated));
     next.transport = { ...next.transport, tick: next.transport.tick + 1 };
   }
   return { state: next, events };
@@ -183,12 +189,12 @@ export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior:
   const scanCursor = state.runtimeConfig.scanMode === "scanning" ? { axis: state.runtimeConfig.scanAxis, index: state.scanIndex } : null;
   return {
     display: {
-      page: PAGES[0] as PageId,
+      page: menuView.path,
       title: menuView.path,
       editing: state.menu.editing,
       lines: menuView.lines
     },
-    leds: { width: GRID_WIDTH, height: GRID_HEIGHT, cells: cellsToLeds(model.cells, scanCursor) },
+    leds: { width: GRID_WIDTH, height: GRID_HEIGHT, cells: cellsToLeds(model.cells, scanCursor, state.runtimeConfig.gridBrightness / 100) },
     transport: state.transport,
     activeBehavior: model.name
   };
@@ -247,8 +253,7 @@ function menuTree(): MenuNode {
         label: "Transport",
         children: [
           { kind: "enum", label: "Play/Pause", key: "transport.playing", options: ["false", "true"] },
-          { kind: "number", label: "BPM", key: "transport.bpm", min: 40, max: 240, step: 1 },
-          { kind: "enum", label: "Time Sig", key: "timeSig", options: ["4/4"] }
+          { kind: "number", label: "BPM", key: "transport.bpm", min: 40, max: 240, step: 1 }
         ]
       },
       {
@@ -297,7 +302,8 @@ function menuTree(): MenuNode {
         label: "System",
         children: [
           { kind: "number", label: "Display Brightness", key: "displayBrightness", min: 10, max: 100, step: 5 },
-          { kind: "enum", label: "About", key: "about", options: ["CellSymphony v0.1"] }
+          { kind: "number", label: "Grid Brightness", key: "gridBrightness", min: 10, max: 100, step: 5 },
+          { kind: "number", label: "Button Brightness", key: "buttonBrightness", min: 10, max: 100, step: 5 }
         ]
       }
     ]
@@ -455,9 +461,6 @@ function turnMenu<TState>(state: PlatformState<TState>, delta: -1 | 1): Platform
 function readAnyValue<TState>(state: PlatformState<TState>, key: string): unknown {
   if (key.startsWith("transport.")) return readNestedValue(state.transport, key.slice("transport.".length));
   if (key.startsWith("mapping.")) return readNestedValue(state.mappingConfig, key.slice("mapping.".length));
-  if (key === "displayBrightness") return 100;
-  if (key === "about") return "CellSymphony v0.1";
-  if (key === "timeSig") return "4/4";
   return readValue(state.runtimeConfig, key);
 }
 
@@ -470,7 +473,6 @@ function writeAnyValue<TState>(state: PlatformState<TState>, key: string, value:
     const mappingConfig = writeNestedValue(state.mappingConfig, key.slice("mapping.".length), value) as MappingConfig;
     return { ...state, mappingConfig };
   }
-  if (key === "displayBrightness" || key === "about" || key === "timeSig") return state;
   return { ...state, runtimeConfig: writeValue(state.runtimeConfig, key, value) };
 }
 
@@ -533,7 +535,8 @@ function toGridSnapshot(model: { cells: boolean[] }): GridSnapshot {
   return { width: GRID_WIDTH, height: GRID_HEIGHT, cells: model.cells };
 }
 
-function cellsToLeds(cells: boolean[], scanCursor: { axis: ScanAxis; index: number } | null): LedCell[] {
+function cellsToLeds(cells: boolean[], scanCursor: { axis: ScanAxis; index: number } | null, brightness: number): LedCell[] {
+  const b = clamp(brightness, 0.1, 1);
   return cells.map((alive, i) => {
     const x = i % GRID_WIDTH;
     const y = Math.floor(i / GRID_WIDTH);
@@ -543,14 +546,22 @@ function cellsToLeds(cells: boolean[], scanCursor: { axis: ScanAxis; index: numb
         (scanCursor.axis === "rows" && y === scanCursor.index));
 
     if (!inCursor) {
-      return alive ? { r: 0, g: 255, b: 120 } : { r: 15, g: 15, b: 22 };
+      return alive ? scaleLed({ r: 0, g: 255, b: 120 }, b) : scaleLed({ r: 15, g: 15, b: 22 }, b);
     }
 
     if (alive) {
-      return { r: 90, g: 160, b: 120 };
+      return scaleLed({ r: 90, g: 160, b: 120 }, b);
     }
-    return { r: 70, g: 70, b: 76 };
+    return scaleLed({ r: 70, g: 70, b: 76 }, b);
   });
+}
+
+function scaleLed(cell: LedCell, brightness: number): LedCell {
+  return {
+    r: Math.round(cell.r * brightness),
+    g: Math.round(cell.g * brightness),
+    b: Math.round(cell.b * brightness)
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -563,10 +574,6 @@ function mod(value: number, base: number): number {
 
 const PPQN = 24;
 const FRAME_SECONDS = 0.15;
-
-export function toDisplayFrame(page: PageId, line1: string, editing: boolean): DisplayFrame {
-  return { page, title: "Cell Symphony", editing, lines: [line1, "A:Back Space:Play"] };
-}
 
 export function toOledLines(display: DisplayFrame): string[] {
   const title = fitOledText(display.title);
@@ -586,6 +593,9 @@ function isMainEncoderInput(id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | und
 
 function formatDisplayValue(key: string, value: unknown): string {
   if (key === "masterVolume") return `Vol: ${value}%`;
+  if (key === "displayBrightness") return `OLED ${value}%`;
+  if (key === "gridBrightness") return `Grid ${value}%`;
+  if (key === "buttonBrightness") return `Btn ${value}%`;
   if (key === "populationMode") return value === "grid" ? "Sequencer" : "Conway";
   if (key === "scanMode") return value === "immediate" ? "Immediate" : "Scanning";
   if (key === "scanAxis") return value === "columns" ? "Cols" : "Rows";
@@ -594,6 +604,48 @@ function formatDisplayValue(key: string, value: unknown): string {
   if (key === "eventParity") return value === "none" ? "All" : "Odd/Even";
   if (typeof value === "boolean") return value ? "On" : "Off";
   return String(value);
+}
+
+function applyModulation(intents: { x: number; y: number; degree: number; kind: any }[], events: MusicalEvent[], cfg: RuntimeConfig): MusicalEvent[] {
+  const out: MusicalEvent[] = [];
+  for (let i = 0; i < events.length; i += 1) {
+    const event = events[i];
+    const intent = intents[i] ?? intents[intents.length - 1];
+    out.push(event);
+    if (!intent) continue;
+    if (event.type === "note_on") {
+      const vel = velocityFromIntent(intent, cfg);
+      if (vel !== null) {
+        out[out.length - 1] = { ...event, velocity: vel };
+      }
+    }
+    const ccs = ccFromIntent(intent, cfg);
+    out.push(...ccs);
+  }
+  return out;
+}
+
+function velocityFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig): number | null {
+  if (cfg.x.mode !== "velocity" && cfg.y.mode !== "velocity") return null;
+  const src = cfg.x.mode === "velocity" ? intent.x / Math.max(1, GRID_WIDTH - 1) : intent.y / Math.max(1, GRID_HEIGHT - 1);
+  const min = cfg.x.mode === "velocity" ? cfg.x.min : cfg.y.min;
+  const max = cfg.x.mode === "velocity" ? cfg.x.max : cfg.y.max;
+  return clamp(Math.round(min + src * (max - min)), 1, 127);
+}
+
+function ccFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig): MusicalEvent[] {
+  const events: MusicalEvent[] = [];
+  const pushCc = (controller: number, source: number, min: number, max: number) => {
+    const scaled = clamp(Math.round(min + source * (max - min)), 0, 127);
+    events.push({ type: "cc", channel: 0, controller, value: scaled });
+  };
+  const xNorm = intent.x / Math.max(1, GRID_WIDTH - 1);
+  const yNorm = intent.y / Math.max(1, GRID_HEIGHT - 1);
+  if (cfg.x.mode === "filter_cutoff") pushCc(74, xNorm, cfg.x.min, cfg.x.max);
+  if (cfg.y.mode === "filter_cutoff") pushCc(74, yNorm, cfg.y.min, cfg.y.max);
+  if (cfg.x.mode === "filter_resonance") pushCc(71, xNorm, cfg.x.min, cfg.x.max);
+  if (cfg.y.mode === "filter_resonance") pushCc(71, yNorm, cfg.y.min, cfg.y.max);
+  return events;
 }
 
 export function emergencyBrake<TState>(state: PlatformState<TState>): { state: PlatformState<TState>; events: MusicalEvent[] } {

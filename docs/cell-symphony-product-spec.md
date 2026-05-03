@@ -133,21 +133,17 @@ Design rule: behavior modules can be replaced or added without rewriting platfor
 
 ### 5.2 Input mapping requirements
 
-- `ArrowLeft` -> `EncoderTurn(-1)`
-- `ArrowRight` -> `EncoderTurn(+1)`
+- `ArrowLeft` / `ArrowUp` -> `EncoderTurn(-1)`
+- `ArrowRight` / `ArrowDown` -> `EncoderTurn(+1)`
 - `Enter` -> `EncoderPress`
-- `A` -> `ButtonA`
-- `S` -> `ButtonS`
+- `Backspace` -> `ButtonA` (Back)
+- `Space` -> `ButtonS` (Play/Pause)
+- `Shift+Space` -> emergency stop (panic + reset)
 - Matrix click -> `GridPress(x, y)`
 
-### 5.3 Initial page model
+### 5.3 Initial menu model
 
-- Transport
-- Rule
-- Mapping
-- Sound
-- Samples
-- Project
+See the authoritative, implementation-locked tree in `docs/menu-and-controls-spec.md`.
 
 ### 5.4 UX behavior rules
 

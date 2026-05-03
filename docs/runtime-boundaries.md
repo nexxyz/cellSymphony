@@ -2,6 +2,8 @@
 
 This project keeps UI/hardware emulation separate from logic and processing.
 
+Authoritative menu/control behavior spec: `docs/menu-and-controls-spec.md`.
+
 ## Layer Responsibilities
 
 - UI layer (`apps/desktop/src/ui`)
