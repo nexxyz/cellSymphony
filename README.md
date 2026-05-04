@@ -161,14 +161,14 @@ cellSymphony/
 
 The long-term goal is a standalone hardware device:
 
-- **Compute**: Raspberry Pi 5 (Pi 4 acceptable)
-- **Display**: 128×128 OLED (RGB565)
-- **Controls**: 1 rotary encoder + press, 2 dedicated buttons
-- **Grid**: 8×8 LED matrix with pushbuttons
-- **Audio**: Native synth engine (no computer needed)
-- **I/O**: MIDI in/out (DIN or USB)
-
-A **4-encoder expansion** is planned for direct modulation control (X/Y pitch, velocity, filter, plus mapping of the four extra push-encoders).
+- **Compute**: Raspberry Zero 2 W
+- **Display**: 128×128 OLED (RGB565) via Adafruit 128x128 OLED Breakout Board
+- **Controls**: 5 clickable rotary encoders (4 of them will be freely mappable), 4 dedicated buttons viy Adafruit Neokeys
+- **Grid**: 8×8 LED matrix with pushbuttons via Adafruit Neotrellis
+- **DAC**: High-quality audio out via Adafruit PCM5102 I2S DAC
+- **Power**: USB-C via Adafruit USB Type C Breakout Board
+- **Sound generation**: Native synth& sample  engine (no computer needed)
+- **I/O**: MIDI in/out (via RPi MicroUSB)
 
 ---
 
