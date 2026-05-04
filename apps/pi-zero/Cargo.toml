@@ -1,0 +1,15 @@
+[package]
+name = "cellsymphony-pi"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "cellsymphony-pi"
+path = "src/main.rs"
+
+[dependencies]
+cellsymphony-hal = { path = "../../crates/hal", features = ["pi-zero"] }
+realtime-engine = { path = "../../crates/realtime-engine" }
+
+# Logging
+simple_logger = "1.16"
