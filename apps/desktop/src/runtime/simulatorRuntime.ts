@@ -282,28 +282,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
     publishSnapshot();
   });
 
-  const isMidiSmoketest = (import.meta as any).env?.VITE_MIDI_SMOKETEST === "1";
-  if (isMidiSmoketest) {
-    // Auto-configure MIDI out to loopMIDI and start playback briefly.
-    setTimeout(async () => {
-      const outputs = await midi.listOutputs();
-      const loopOut = outputs.find((p) => p.name.toLowerCase().includes("loopmidi")) ?? outputs[0];
-      if (!loopOut) return;
 
-      // Write config via core input path by direct state mutation (dev-only).
-      state.runtimeConfig.midi.enabled = true;
-      state.runtimeConfig.midi.outId = loopOut.id;
-      state.runtimeConfig.midi.clockOutEnabled = true;
-      state.runtimeConfig.midi.syncMode = "internal";
-      void midi.selectOutput(loopOut.id);
-      publishSnapshot();
-
-      // Start playback.
-      applyInput({ type: "button_s" });
-      // Stop after 800ms.
-      setTimeout(() => applyInput({ type: "button_s" }), 800);
-    }, 200);
-  }
 
   function execEffect(effect: PlatformEffect): StoreResult {
     try {
