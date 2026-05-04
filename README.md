@@ -175,9 +175,9 @@ This project is currently unlicensed and for personal/hobby use. A license will 
 - [ ] Hardware prototype (PCB design in `hardware/KiCAD/`)
 - [ ] Complete coverage & regression tests
 - [ ] Packaging & distribution builds
-- [ ] More playful UI
 - [ ] Additional generative algorithms (stars, bounces, rotations)
 - [ ] More versatile synths
 - [ ] Mapping of the four extra push-encoders
+- [ ] More playful UI
 - [ ] Effects suite (reverb, delay, chorus, more filter types)
 - [ ] Sample management, mapping and triggering
