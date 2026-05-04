@@ -37,16 +37,7 @@ Cell Symphony combines a generative cellular automaton (Game of Life) with a mus
 ### In Progress
 - [ ] Hardware prototype (Raspberry Pi + custom PCB) — design in `hardware/KiCAD/`
 
-### Not Implemented Yet
-- [ ] Sample triggering
-- [ ] Effects suite (reverb, delay, chorus, more filter types)
-- [ ] More versatile synths
-- [ ] Additional generative algorithms (stars, bounces, rotations)
-
-### Future Roadmap
-- [ ] Hardware prototype (PCB design in `hardware/KiCAD/`)
-- [ ] Complete coverage & regression tests
-- [ ] Packaging & distribution builds
+### Next on the Roadmap
 - [ ] Additional generative algorithms (stars, bounces, rotations)
 - [ ] More versatile synths
 - [ ] Mapping of the four extra push-encoders
@@ -174,7 +165,7 @@ The long-term goal is a standalone hardware device:
 
 ## License:
 
-Copyright (c) 2026 Thomas Steirer.
+Copyright (c) 2026 nexxyz (Thomas Steirer).
 
 **Free for personal/non-commercial use**: you may use, copy, modify, and build this software for personal purposes.
 
