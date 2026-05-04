@@ -1,10 +1,10 @@
 export type DeviceInput =
   | { type: "encoder_turn"; delta: -1 | 1; id?: "main" | "aux1" | "aux2" | "aux3" | "aux4" }
   | { type: "encoder_press"; id?: "main" | "aux1" | "aux2" | "aux3" | "aux4" }
-  | { type: "button_a" }
-  | { type: "button_s" }
-  | { type: "button_shift" }
-  | { type: "button_fn" }
+  | { type: "button_a"; pressed?: boolean }
+  | { type: "button_s"; pressed?: boolean }
+  | { type: "button_shift"; pressed?: boolean }
+  | { type: "button_fn"; pressed?: boolean }
   | { type: "grid_press"; x: number; y: number };
 
 export type PageId = string;
@@ -14,6 +14,13 @@ export type DisplayFrame = {
   title: string;
   lines: string[];
   editing: boolean;
+};
+
+export type OledFrame = {
+  width: 128;
+  height: 128;
+  format: "rgb565be";
+  pixels: Uint8Array;
 };
 
 export type LedCell = { r: number; g: number; b: number };
@@ -34,6 +41,7 @@ export type TransportFrame = {
 
 export type SimulatorFrame = {
   display: DisplayFrame;
+  oled?: OledFrame;
   leds: LedMatrixFrame;
   transport: TransportFrame;
   activeBehavior: string;

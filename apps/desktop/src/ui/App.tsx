@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 import { OLED_HEIGHT, OLED_WIDTH } from "@cellsymphony/platform-core";
 import { mapKeyboardEventToInputAction, mapKeyboardKeyupToInputAction, shouldPreventKeyboardDefault } from "../runtime/inputAdapters/keyboardAdapter";
@@ -30,7 +30,30 @@ export function App() {
   const [dialDrag, setDialDrag] = useState<{ id: EncoderId; y: number; acc: number } | null>(null);
   const [dialPhase, setDialPhase] = useState<Record<string, number>>({ main: 0, aux1: 0, aux2: 0, aux3: 0, aux4: 0 });
   const frame = snapshot.frame;
-  const isEventBlip = snapshot.transportIndicator.eventBlipUntilMs > Date.now();
+  const oledCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const oledFrame = frame.oled;
+  const oledImage = useMemo(() => {
+    if (!oledFrame || oledFrame.format !== "rgb565be") return null;
+    const w = oledFrame.width;
+    const h = oledFrame.height;
+    const data = new Uint8ClampedArray(w * h * 4);
+    const px = oledFrame.pixels;
+    for (let i = 0, j = 0; i < px.length; i += 2, j += 4) {
+      const v = (px[i]! << 8) | px[i + 1]!;
+      const r5 = (v >> 11) & 0x1f;
+      const g6 = (v >> 5) & 0x3f;
+      const b5 = v & 0x1f;
+      const r = (r5 << 3) | (r5 >> 2);
+      const g = (g6 << 2) | (g6 >> 4);
+      const b = (b5 << 3) | (b5 >> 2);
+      data[j] = r;
+      data[j + 1] = g;
+      data[j + 2] = b;
+      data[j + 3] = 255;
+    }
+    return new ImageData(data, w, h);
+  }, [oledFrame]);
 
   useEffect(() => {
     const unsubscribeState = runtime.subscribe(setSnapshot);
@@ -66,6 +89,17 @@ export function App() {
       window.removeEventListener("keyup", onKeyUp);
     };
   });
+
+  useEffect(() => {
+    if (!oledImage) return;
+    const canvas = oledCanvasRef.current;
+    if (!canvas) return;
+    canvas.width = oledImage.width;
+    canvas.height = oledImage.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.putImageData(oledImage, 0, 0);
+  }, [oledImage]);
 
   useEffect(() => {
     if (!dialDrag) return;
@@ -160,22 +194,9 @@ export function App() {
           <section className="oled-wrap">
             <div className="oled-bezel">
               <div className="oled-panel" style={{ width: OLED_WIDTH, height: OLED_HEIGHT, opacity: Math.max(0.2, snapshot.displayBrightness / 100) }}>
-                {snapshot.oledLines.map((line, index) => {
-                  const selected = line.startsWith("@@");
-                  const text = selected ? line.slice(2) : line;
-                  return (
-                    <p key={`oled-${index}`} className={selected ? "oled-selected" : ""}>
-                      {text}
-                    </p>
-                  );
-                })}
-                <div className={`transport-indicator ${snapshot.transportIndicator.flash}`}>
-                  {snapshot.transportIndicator.icon === "play" ? <span>▶</span> : snapshot.transportIndicator.icon === "stop" ? <span>■</span> : <span>⏸</span>}
-                  <span className={`event-dot ${isEventBlip ? "on" : ""}`} />
-                </div>
+                <canvas ref={oledCanvasRef} className="oled-canvas" />
               </div>
             </div>
-            <p className="meta">{frame.transport.playing ? "Playing" : "Paused"} • {frame.transport.bpm} BPM</p>
           </section>
 
           <article className="encoder-card sw2">
@@ -299,7 +320,13 @@ function NeoKey({
   return (
     <button
       type="button"
-      onClick={() => dispatch(button.input)}
+      onClick={(event) => {
+        if (button.key === "shift") {
+          event.preventDefault();
+          return;
+        }
+        dispatch(button.input);
+      }}
       onMouseDown={() => {
         if (button.key === "shift") runtime.dispatchAction({ type: "shift", active: true });
       }}
