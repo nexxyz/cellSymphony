@@ -1,6 +1,6 @@
 # Cell Symphony
 
-A desktop-first cellular music instrument that turns Conway’s Game of Life into a playable, performable synthesizer.
+A desktop-first cellular music instrument that turns Conway's Game of Life into a playable, performable synthesizer. Inspired by the Tenori-On, it combines cellular automata with real-time music generation.
 
 > **Work in Progress.** This is an active hobby project. Things change, break, and improve rapidly. The MVP is not yet complete.
 
@@ -10,8 +10,8 @@ A desktop-first cellular music instrument that turns Conway’s Game of Life int
 
 Cell Symphony combines a generative cellular automaton (Game of Life) with a musical interpretation engine:
 
-- An **8×8 grid** evolves over time (Conway’s Game of Life or manual sequencing)
-- A **musical interpretation layer** turns cell births/deaths into MIDI notes and internal synth sounds
+- An **8×8 grid** evolves over time (Conway's Game of Life or manual sequencing)
+- A **musical interpretation layer** turns cell births, deaths, and live cells into MIDI notes and internal synth sounds
 - A **hardware-style control surface**: rotary encoder, two buttons, and the grid itself
 - A **desktop app** (Tauri + React) that acts as a simulator and development harness
 
@@ -34,6 +34,10 @@ Cell Symphony combines a generative cellular automaton (Game of Life) with a mus
 | Scan mode (immediate / scanning sequencer) | ✅ Functional |
 | External MIDI sync (clock in, start/stop) | ✅ Functional |
 | Hardware build (Raspberry Pi + custom PCB) | 🚧 In progress |
+| Sample triggering | ⏳ Not implemented |
+| Effects suite (reverb, delay, chorus, more filter types) | ⏳ Not implemented |
+| More versatile synths | ⏳ Not implemented |
+| Additional generative algorithms (stars, bounces, rotations) | ⏳ Not implemented |
 
 ---
 
@@ -149,7 +153,7 @@ The long-term goal is a standalone hardware device:
 - **Audio**: Native synth engine (no computer needed)
 - **I/O**: MIDI in/out (DIN or USB)
 
-A **4-encoder expansion** is planned for direct modulation control (X/Y pitch, velocity, filter).
+A **4-encoder expansion** is planned for direct modulation control (X/Y pitch, velocity, filter, plus mapping of the four extra push-encoders).
 
 ---
 
@@ -171,3 +175,9 @@ This project is currently unlicensed and for personal/hobby use. A license will 
 - [ ] Hardware prototype (PCB design in `hardware/KiCAD/`)
 - [ ] Complete coverage & regression tests
 - [ ] Packaging & distribution builds
+- [ ] More playful UI
+- [ ] Additional generative algorithms (stars, bounces, rotations)
+- [ ] More versatile synths
+- [ ] Mapping of the four extra push-encoders
+- [ ] Effects suite (reverb, delay, chorus, more filter types)
+- [ ] Sample management, mapping and triggering
