@@ -59,16 +59,6 @@ The desktop simulator mirrors the planned hardware controls 1:1:
 | Space button | Space | Play / Pause |
 | Shift + Space | Shift+Space | Emergency stop (panic + reset) |
 
-### Transport States
-
-- **Play** (`▶`): Engine running, music playing
-- **Pause** (`⏸`): Engine paused, position kept
-- **Stop** (`■`): Engine stopped, position reset, red indicator
-
-> The **Space button LED** pulses with the music:
-> - Red flash = start of a musical measure
-> - Green flash = each quarter note beat
-
 ---
 
 ## Menu Overview
