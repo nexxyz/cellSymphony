@@ -319,7 +319,7 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
       confirm: null,
       toast: null,
       eventBlipUntilMs: 0,
-      stopLatched: false,
+      stopLatched: true,
       transportFlash: "none",
       transportFlashUntilMs: 0,
       textEdit: null,
@@ -482,8 +482,9 @@ export function routeInput<TState>(
     }
 
     if (playing) {
-      // Only a STOP->PLAY transition forces a new bar.
-      if (nextState.system.stopLatched) {
+      const isStopToPlay = nextState.system.stopLatched || (nextState.transport.ppqnPulse === 0 && nextState.transport.tick === 0);
+      if (isStopToPlay) {
+        // STOP->PLAY (or fresh startup) forces a new bar and measure flash.
         nextState.transport = { ...nextState.transport, ppqnPulse: 0, tick: 0 };
         nextState.scanPulseAccumulator = 0;
         nextState.conwayPulseAccumulator = 0;

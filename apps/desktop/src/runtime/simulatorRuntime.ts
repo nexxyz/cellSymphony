@@ -43,10 +43,7 @@ type ScheduledMidi = {
 
 export function createSimulatorRuntime(scheduler: RuntimeScheduler = createIntervalRuntimeScheduler(8)): SimulatorRuntime {
   let state: PlatformState<ReturnType<typeof behavior.init>> = createInitialState(behavior);
-  let transportFlash: "none" | "beat" | "measure" = "none";
-  let transportFlashUntilMs = 0;
   let shiftActive = false;
-  let stopLatched = false;
   let prevPlaying = state.transport.playing;
   let prevStopLatched = state.system.stopLatched;
   let prevPpqnPulse = state.transport.ppqnPulse;
@@ -57,11 +54,12 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
 
   function snapshotFromState(next: typeof state): SimulatorSnapshot {
     const frame = toSimulatorFrame(next, behavior);
+    const flash = next.system.transportFlash; // read from core state, same as OLED
     return {
       frame,
       neoKeyLeds: {
         back: "solid_red",
-        space: !frame.transport.playing ? "off" : transportFlash === "measure" ? "measure" : transportFlash === "beat" ? "beat" : "off",
+        space: !frame.transport.playing ? "off" : flash === "measure" ? "measure" : flash === "beat" ? "beat" : "off",
         shift: shiftActive ? "solid_yellow" : "off",
         fn: "off"
       },
@@ -178,39 +176,21 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
     prevPpqnPulse = state.transport.ppqnPulse;
   }
 
-  function applyBeatFlash(prevPulse: number, nextPulse: number) {
-    if (nextPulse <= prevPulse) return;
-    for (let pulse = prevPulse + 1; pulse <= nextPulse; pulse += 1) {
-      if (pulse % 96 === 0) {
-        transportFlash = "measure";
-        transportFlashUntilMs = Date.now() + 220;
-      } else if (pulse % 24 === 0 && transportFlash !== "measure") {
-        transportFlash = "beat";
-        transportFlashUntilMs = Date.now() + 220;
-      }
-    }
-  }
-
   function applyInput(input: DeviceInput) {
     if (input.type === "button_s" && shiftActive) {
       if (state.runtimeConfig.midi.syncMode === "external") {
         // In external sync mode, Shift+S is reserved for resync (handled in core).
       } else {
-      const result = emergencyBrake(state);
-      state = result.state;
-      transportFlash = "none";
-      stopLatched = true;
-      midiStopOnly(performance.now());
-      prevPlaying = state.transport.playing;
-      prevStopLatched = state.system.stopLatched;
-      prevPpqnPulse = state.transport.ppqnPulse;
-      publishEvents(result.events);
-      publishSnapshot();
-      return;
+        const result = emergencyBrake(state);
+        state = result.state;
+        midiStopOnly(performance.now());
+        prevPlaying = state.transport.playing;
+        prevStopLatched = state.system.stopLatched;
+        prevPpqnPulse = state.transport.ppqnPulse;
+        publishEvents(result.events);
+        publishSnapshot();
+        return;
       }
-    }
-    if (input.type === "button_s") {
-      stopLatched = false;
     }
     const result = routeInput(state, input, behavior);
     state = result.state;
@@ -376,8 +356,6 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       if (action.type === "emergency_brake") {
         const result = emergencyBrake(state);
         state = result.state;
-        transportFlash = "none";
-        stopLatched = true;
         enqueueEvents(result.events, performance.now());
         flushDueEvents(performance.now());
         publishSnapshot();
@@ -404,10 +382,6 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
           }
         }
 
-        if (transportFlashUntilMs > 0 && Date.now() > transportFlashUntilMs) {
-          transportFlashUntilMs = 0;
-          transportFlash = "none";
-        }
         const safeElapsedMs = Math.min(elapsedMs, MAX_CATCHUP_MS);
         const prevPulse = state.transport.ppqnPulse;
 
@@ -436,7 +410,6 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
           applyEffects(result.effects);
         }
 
-        applyBeatFlash(prevPulse, state.transport.ppqnPulse);
         sendMidiTransportIfNeeded(nowMs);
         flushDueEvents(nowMs);
         flushDueMidi(nowMs);
