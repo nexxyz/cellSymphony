@@ -1,3 +1,9 @@
 [workspace]
-members = ["crates/realtime-engine", "apps/desktop/src-tauri", "tools/midi-io-sidecar"]
+members = [
+    "crates/realtime-engine",
+    "crates/hal",
+    "apps/desktop/src-tauri",
+    "apps/pi-zero",
+    "tools/midi-io-sidecar"
+]
 resolver = "2"

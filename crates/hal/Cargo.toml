@@ -1,0 +1,25 @@
+[package]
+name = "cellsymphony-hal"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Pi-specific crates (only available on Linux/ARM)
+# These crates only compile on Linux targets
+rppal = { version = "0.14", optional = true }           # Raspberry Pi GPIO abstraction
+linux-embedded-hal = { version = "0.4", optional = true } # Linux I2C/SPI
+spidev = { version = "0.7", optional = true }              # SPI via /dev/spidev
+i2cdev = { version = "0.6", optional = true }             # I2C via /dev/i2c-*
+
+# Async runtime (for Pi binary main loop)
+tokio = { version = "1", optional = true, features = ["full"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rppal = { version = "0.14", optional = true }
+linux-embedded-hal = { version = "0.4", optional = true }
+spidev = { version = "0.7", optional = true }
+i2cdev = { version = "0.6", optional = true }
+
+[features]
+default = []
+pi-zero = ["dep:rppal", "dep:linux-embedded-hal", "dep:spidev", "dep:i2cdev", "dep:tokio"]
