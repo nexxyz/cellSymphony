@@ -17,27 +17,42 @@ Cell Symphony combines a generative cellular automaton (Game of Life) with a mus
 
 ---
 
-## Current MVP Scope
+## Status & Roadmap
 
-| Area | Status |
-|---|---|
-| OLED 128×128 display (simulated) | ✅ Functional |
-| Grid LED feedback (NeoKey-style) | ✅ Functional |
-| Transport (Play / Pause / Stop) | ✅ Functional |
-| Internal synth (rodio + realtime-engine) | ✅ Functional |
-| MIDI out (note on/off, CC) | ✅ Functional |
-| MIDI in (clock, start/stop/continue) | ✅ Functional |
-| Preset storage (save/load/delete) | ✅ Functional |
-| Menu system (encoder-driven) | ✅ Functional |
-| Scale-based note mapping (pentatonic, major, minor, etc.) | ✅ Functional |
-| Modulation lanes (velocity, filter cutoff/resonance) | ✅ Functional |
-| Scan mode (immediate / scanning sequencer) | ✅ Functional |
-| External MIDI sync (clock in, start/stop) | ✅ Functional |
-| Hardware build (Raspberry Pi + custom PCB) | 🚧 In progress |
-| Sample triggering | ⏳ Not implemented |
-| Effects suite (reverb, delay, chorus, more filter types) | ⏳ Not implemented |
-| More versatile synths | ⏳ Not implemented |
-| Additional generative algorithms (stars, bounces, rotations) | ⏳ Not implemented |
+### Done / Functional
+- [x] Core cellular engine (Conway)
+- [x] Musical interpretation & mapping
+- [x] Internal synth (rodio + realtime-engine)
+- [x] Desktop simulator (Tauri + React)
+- [x] MIDI output (Tauri/midir)
+- [x] MIDI input & external sync
+- [x] Preset storage
+- [x] OLED 128×128 display (simulated)
+- [x] Grid LED feedback (NeoKey-style)
+- [x] Transport (Play / Pause / Stop)
+- [x] Menu system (encoder-driven)
+- [x] Scale-based note mapping
+- [x] Modulation lanes (velocity, filter)
+
+### In Progress
+- [ ] Hardware prototype (Raspberry Pi + custom PCB) — design in `hardware/KiCAD/`
+
+### Not Implemented Yet
+- [ ] Sample triggering
+- [ ] Effects suite (reverb, delay, chorus, more filter types)
+- [ ] More versatile synths
+- [ ] Additional generative algorithms (stars, bounces, rotations)
+
+### Future Roadmap
+- [ ] Hardware prototype (PCB design in `hardware/KiCAD/`)
+- [ ] Complete coverage & regression tests
+- [ ] Packaging & distribution builds
+- [ ] Additional generative algorithms (stars, bounces, rotations)
+- [ ] More versatile synths
+- [ ] Mapping of the four extra push-encoders
+- [ ] More playful UI
+- [ ] Effects suite (reverb, delay, chorus, more filter types)
+- [ ] Sample management, mapping and triggering
 
 ---
 
@@ -157,27 +172,6 @@ A **4-encoder expansion** is planned for direct modulation control (X/Y pitch, v
 
 ---
 
-## License
+## License:
 
 This project is currently unlicensed and for personal/hobby use. A license will be added when the MVP stabilizes.
-
----
-
-## Status & Roadmap
-
-- [x] Core cellular engine (Conway)
-- [x] Musical interpretation & mapping
-- [x] Internal synth (rodio + realtime-engine)
-- [x] Desktop simulator (Tauri + React)
-- [x] MIDI output (Tauri/midir)
-- [x] MIDI input & external sync
-- [x] Preset storage
-- [ ] Hardware prototype (PCB design in `hardware/KiCAD/`)
-- [ ] Complete coverage & regression tests
-- [ ] Packaging & distribution builds
-- [ ] Additional generative algorithms (stars, bounces, rotations)
-- [ ] More versatile synths
-- [ ] Mapping of the four extra push-encoders
-- [ ] More playful UI
-- [ ] Effects suite (reverb, delay, chorus, more filter types)
-- [ ] Sample management, mapping and triggering
