@@ -8,7 +8,7 @@ These principles preserve the core intent of Cell Symphony as the project grows.
 
 - Hardware-first interaction parity: simulator controls must map to physical-device controls.
 - Native audio truth: desktop UI is a control surface; realtime audio behavior belongs to native engine paths.
-- Internal engines first: synth and ROMpler are built in; plugin hosting is out of scope.
+- Internal engines first: keep core self-contained; plugin hosting is out of scope.
 - Project portability: runtime assets are local to project folders; avoid brittle absolute-path dependencies.
 
 ## Architectural Principles

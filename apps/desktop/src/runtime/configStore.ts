@@ -5,13 +5,25 @@ type PresetsV1 = {
   presets: Record<string, ConfigPayload>;
 };
 
+type PresetsV2 = {
+  schemaVersion: 2;
+  presets: Record<string, ConfigPayload>;
+};
+
 type DefaultV1 = {
   schemaVersion: 1;
   payload: ConfigPayload;
 };
 
-const PRESETS_KEY = "cellsymphony.presets.v1";
-const DEFAULT_KEY = "cellsymphony.default.v1";
+type DefaultV2 = {
+  schemaVersion: 2;
+  payload: ConfigPayload;
+};
+
+const PRESETS_KEY = "cellsymphony.presets.v2";
+const DEFAULT_KEY = "cellsymphony.default.v2";
+const PRESETS_KEY_V1 = "cellsymphony.presets.v1";
+const DEFAULT_KEY_V1 = "cellsymphony.default.v1";
 
 function safeParseJson(raw: string | null): unknown {
   if (!raw) return null;
@@ -22,35 +34,58 @@ function safeParseJson(raw: string | null): unknown {
   }
 }
 
-function readPresets(): PresetsV1 {
+function readPresets(): PresetsV2 {
   const parsed = safeParseJson(localStorage.getItem(PRESETS_KEY));
-  if (parsed && typeof parsed === "object" && (parsed as any).schemaVersion === 1 && typeof (parsed as any).presets === "object") {
-    return { schemaVersion: 1, presets: { ...(parsed as any).presets } };
+  if (parsed && typeof parsed === "object" && (parsed as any).schemaVersion === 2 && typeof (parsed as any).presets === "object") {
+    return { schemaVersion: 2, presets: { ...(parsed as any).presets } };
+  }
+
+  // Migrate from v1 key if present.
+  const v1 = safeParseJson(localStorage.getItem(PRESETS_KEY_V1));
+  if (v1 && typeof v1 === "object" && (v1 as any).schemaVersion === 1 && typeof (v1 as any).presets === "object") {
+    const migrated: PresetsV2 = { schemaVersion: 2, presets: { ...(v1 as any).presets } };
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(migrated));
+    return migrated;
   }
   // Back-compat: tolerate a bare map of name -> payload.
-  if (parsed && typeof parsed === "object" && !(parsed as any).schemaVersion) {
-    return { schemaVersion: 1, presets: { ...(parsed as any) } };
+  if (v1 && typeof v1 === "object" && !(v1 as any).schemaVersion) {
+    const migrated: PresetsV2 = { schemaVersion: 2, presets: { ...(v1 as any) } };
+    localStorage.setItem(PRESETS_KEY, JSON.stringify(migrated));
+    return migrated;
   }
-  return { schemaVersion: 1, presets: {} };
+
+  return { schemaVersion: 2, presets: {} };
 }
 
-function writePresets(next: PresetsV1) {
+function writePresets(next: PresetsV2) {
   localStorage.setItem(PRESETS_KEY, JSON.stringify(next));
 }
 
-function readDefault(): DefaultV1 | null {
+function readDefault(): DefaultV2 | null {
   const parsed = safeParseJson(localStorage.getItem(DEFAULT_KEY));
-  if (parsed && typeof parsed === "object" && (parsed as any).schemaVersion === 1 && (parsed as any).payload) {
-    return parsed as DefaultV1;
+  if (parsed && typeof parsed === "object" && (parsed as any).schemaVersion === 2 && (parsed as any).payload) {
+    return parsed as DefaultV2;
   }
+
+  // Migrate from v1 key if present.
+  const v1 = safeParseJson(localStorage.getItem(DEFAULT_KEY_V1));
+  if (v1 && typeof v1 === "object" && (v1 as any).schemaVersion === 1 && (v1 as any).payload) {
+    const migrated: DefaultV2 = { schemaVersion: 2, payload: (v1 as any).payload as ConfigPayload };
+    localStorage.setItem(DEFAULT_KEY, JSON.stringify(migrated));
+    return migrated;
+  }
+
   // Back-compat: tolerate direct payload.
-  if (parsed && typeof parsed === "object" && !(parsed as any).schemaVersion) {
-    return { schemaVersion: 1, payload: parsed as ConfigPayload };
+  if (v1 && typeof v1 === "object" && !(v1 as any).schemaVersion) {
+    const migrated: DefaultV2 = { schemaVersion: 2, payload: v1 as ConfigPayload };
+    localStorage.setItem(DEFAULT_KEY, JSON.stringify(migrated));
+    return migrated;
   }
+
   return null;
 }
 
-function writeDefault(next: DefaultV1) {
+function writeDefault(next: DefaultV2) {
   localStorage.setItem(DEFAULT_KEY, JSON.stringify(next));
 }
 
@@ -93,7 +128,7 @@ export function createLocalStorageConfigStore(): ConfigStore {
       return cur?.payload ?? null;
     },
     saveDefault(payload) {
-      writeDefault({ schemaVersion: 1, payload });
+      writeDefault({ schemaVersion: 2, payload });
     }
   };
 }

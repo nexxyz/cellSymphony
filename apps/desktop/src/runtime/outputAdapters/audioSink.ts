@@ -8,10 +8,6 @@ export async function sendEventsToAudio(events: MusicalEvent[], masterVolume: nu
       await nativeAudioBridge.trigger({ ...event, velocity: Math.max(1, Math.min(127, Math.round(event.velocity * gain))) });
       continue;
     }
-    if (event.type === "sample_trigger") {
-      await nativeAudioBridge.trigger({ ...event, velocity: Math.max(1, Math.min(127, Math.round(event.velocity * gain))) });
-      continue;
-    }
     await nativeAudioBridge.trigger(event);
   }
 }

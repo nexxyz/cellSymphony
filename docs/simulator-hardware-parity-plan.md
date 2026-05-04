@@ -48,7 +48,7 @@ This plan captures the agreed UI/runtime behavior so simulator and hardware matc
 - Shift+Space is emergency brake:
   - stop transport immediately
   - reset scan origin based on axis+direction
-  - kill active notes/samples
+  - kill active notes
   - keep transport icon in Stop until Play resumes
 - Startup transport state is Pause.
 

@@ -82,6 +82,12 @@ importers:
 
   packages/device-contracts:
     devDependencies:
+      c8:
+        specifier: ^11.0.0
+        version: 11.0.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
@@ -117,8 +123,30 @@ importers:
         specifier: ^5.6.3
         version: 5.9.3
 
+  packages/midi-headless-runner:
+    dependencies:
+      '@cellsymphony/behaviors-life':
+        specifier: workspace:*
+        version: link:../behaviors-life
+      '@cellsymphony/platform-core':
+        specifier: workspace:*
+        version: link:../platform-core
+    devDependencies:
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
   packages/musical-events:
     devDependencies:
+      c8:
+        specifier: ^11.0.0
+        version: 11.0.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
       typescript:
         specifier: ^5.6.3
         version: 5.9.3

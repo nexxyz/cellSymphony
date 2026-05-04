@@ -1,5 +1,7 @@
 # Sprint 1 Backlog (Foundation + Simulator Skeleton)
 
+NOTE: Historical planning document. Kept for reference; not current roadmap.
+
 ## Sprint Goal
 
 Establish the modular foundation and desktop simulator skeleton with strict hardware-style controls, while keeping platform/navigation/transport decoupled from generative behavior logic.
@@ -140,7 +142,7 @@ Acceptance:
 - MIDI runtime implementation
 - Internal synth DSP implementation
 - FLAC import conversion pipeline implementation
-- ROMpler playback engine implementation
+- MIDI out implementation
 
 ## Risks and Mitigation
 

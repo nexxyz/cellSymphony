@@ -76,16 +76,34 @@ test("mapping routes trigger kinds to configured targets", () => {
 
 test("menu navigation edits runtime config through hardware-parity inputs", () => {
   let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
 
-  const input = (i: DeviceInput) => {
-    state = routeInput(state, i, mockBehavior).state;
+  const turn = (delta: number) => {
+    state = routeInput(state, { type: "encoder_turn", delta }, mockBehavior).state;
   };
 
-  input({ type: "encoder_turn", delta: 1 });
-  input({ type: "encoder_press" });
-  input({ type: "encoder_press" });
-  input({ type: "encoder_turn", delta: -1 });
-  input({ type: "encoder_press" });
+  const press = () => {
+    state = routeInput(state, { type: "encoder_press" }, mockBehavior).state;
+  };
+
+  const selectLabel = (label: string) => {
+    for (let i = 0; i < 80; i += 1) {
+      const frame = toSimulatorFrame(state, mockBehavior);
+      const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+      if (selected.includes(label)) return;
+      turn(1);
+    }
+    assert.fail(`failed to select label: ${label}`);
+  };
+
+  // System -> Audio -> Master Vol
+  selectLabel("System");
+  press();
+  selectLabel("Audio");
+  press();
+  press();
+  turn(-1);
+  press();
 
   assert.equal(state.runtimeConfig.masterVolume, 72);
   const frame = toSimulatorFrame(state, mockBehavior);
@@ -178,6 +196,7 @@ test("filter modulation mode emits cutoff/resonance CC", () => {
 
 test("aux encoder inputs are reserved and do not navigate menu", () => {
   let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
   state = routeInput(state, { type: "encoder_turn", delta: 1, id: "aux1" }, mockBehavior).state;
   assert.equal(state.menu.cursor, 0);
 
@@ -200,9 +219,32 @@ test("OLED formatter clamps display lines and width", () => {
 
 test("edit marker uses compact star prefix", () => {
   let state = createInitialState(mockBehavior);
-  state = routeInput(state, { type: "encoder_turn", delta: 1 }, mockBehavior).state;
-  state = routeInput(state, { type: "encoder_press" }, mockBehavior).state;
-  state = routeInput(state, { type: "encoder_press" }, mockBehavior).state;
+  state.system.oledMode = "normal";
+
+  const turn = (delta: number) => {
+    state = routeInput(state, { type: "encoder_turn", delta }, mockBehavior).state;
+  };
+
+  const press = () => {
+    state = routeInput(state, { type: "encoder_press" }, mockBehavior).state;
+  };
+
+  const selectLabel = (label: string) => {
+    for (let i = 0; i < 80; i += 1) {
+      const frame = toSimulatorFrame(state, mockBehavior);
+      const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+      if (selected.includes(label)) return;
+      turn(1);
+    }
+    assert.fail(`failed to select label: ${label}`);
+  };
+
+  selectLabel("System");
+  press();
+  selectLabel("Audio");
+  press();
+  // Master Vol
+  press();
   const frame = toSimulatorFrame(state, mockBehavior);
   const hasStarEdit = frame.display.lines.some((line) => line.includes("*Vol:"));
   assert.equal(hasStarEdit, true);
@@ -248,51 +290,205 @@ test("default note mapping range is C2 to C6 with C3 start", () => {
 
 test("config save default requires confirmation before emitting effect", () => {
   let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
 
-  const input = (i: DeviceInput) => {
-    const result = routeInput(state, i, mockBehavior);
-    state = result.state;
-    return result;
+  const turn = (delta: number) => {
+    state = routeInput(state, { type: "encoder_turn", delta }, mockBehavior).state;
   };
 
-  // Root -> System
-  for (let i = 0; i < 5; i += 1) input({ type: "encoder_turn", delta: 1 });
-  input({ type: "encoder_press" }); // enter System
-  input({ type: "encoder_press" }); // enter Config
-  input({ type: "encoder_turn", delta: 1 });
-  input({ type: "encoder_press" }); // enter Default
+  const press = (): { effects: any[] } => {
+    const r = routeInput(state, { type: "encoder_press" }, mockBehavior);
+    state = r.state;
+    return r as any;
+  };
+
+  const selectLabel = (label: string) => {
+    for (let i = 0; i < 80; i += 1) {
+      const frame = toSimulatorFrame(state, mockBehavior);
+      const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+      if (selected.includes(label)) return;
+      turn(1);
+    }
+    assert.fail(`failed to select label: ${label}`);
+  };
+
+  selectLabel("System");
+  press();
+  selectLabel("Presets");
+  press();
+  selectLabel("Default");
+  press();
 
   // Cursor 0 should be Save Default.
-  const before = input({ type: "encoder_press" });
+  const before = press();
   assert.equal(before.effects.length, 0);
   assert.ok(state.system.confirm);
 
   // Choose Yes and confirm.
-  input({ type: "encoder_turn", delta: 1 });
-  const confirmed = input({ type: "encoder_press" });
+  turn(1);
+  const confirmed = press();
   assert.ok(confirmed.effects.some((e) => e.type === "store_save_default"));
+});
+
+test("entering MIDI Out/In menu requests port lists", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+
+  const turn = (delta: number) => {
+    state = routeInput(state, { type: "encoder_turn", delta }, mockBehavior).state;
+  };
+
+  const press = (): { effects: any[] } => {
+    const r = routeInput(state, { type: "encoder_press" }, mockBehavior);
+    state = r.state;
+    return r as any;
+  };
+
+  const selectLabel = (label: string) => {
+    for (let i = 0; i < 80; i += 1) {
+      const frame = toSimulatorFrame(state, mockBehavior);
+      const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+      if (selected.includes(label)) return;
+      turn(1);
+    }
+    assert.fail(`failed to select label: ${label}`);
+  };
+
+  // System -> MIDI -> MIDI Out
+  selectLabel("System");
+  press();
+  selectLabel("MIDI");
+  press();
+  selectLabel("MIDI Out");
+  const out = press();
+  assert.ok(out.effects.some((e) => e.type === "midi_list_outputs_request"));
+
+  // Back to MIDI group and enter MIDI In
+  state = routeInput(state, { type: "button_a" }, mockBehavior).state;
+  selectLabel("MIDI In");
+  const inn = press();
+  assert.ok(inn.effects.some((e) => e.type === "midi_list_inputs_request"));
 });
 
 test("shift+back deletes character when editing draft name", () => {
   let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
 
-  // Navigate into Save As and focus Name.
-  const step = (i: DeviceInput) => {
-    state = routeInput(state, i, mockBehavior).state;
+  const turn = (delta: number) => {
+    state = routeInput(state, { type: "encoder_turn", delta }, mockBehavior).state;
   };
 
-  for (let i = 0; i < 5; i += 1) step({ type: "encoder_turn", delta: 1 });
-  step({ type: "encoder_press" }); // System
-  step({ type: "encoder_press" }); // Config
-  step({ type: "encoder_press" }); // Presets
-  step({ type: "encoder_press" }); // Save As
-  step({ type: "encoder_press" }); // Name (enter editing)
+  const press = () => {
+    state = routeInput(state, { type: "encoder_press" }, mockBehavior).state;
+  };
+
+  const selectLabel = (label: string) => {
+    for (let i = 0; i < 80; i += 1) {
+      const frame = toSimulatorFrame(state, mockBehavior);
+      const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+      if (selected.includes(label)) return;
+      turn(1);
+    }
+    assert.fail(`failed to select label: ${label}`);
+  };
+
+  selectLabel("System");
+  press();
+  selectLabel("Presets");
+  press();
+  selectLabel("Library");
+  press();
+  selectLabel("Save As");
+  press();
+  selectLabel("Name");
+  press(); // enter editing
 
   state.system.draftName = "AB";
   state.system.nameCursor = 2;
 
   // Hold shift then press back.
-  step({ type: "button_shift", pressed: true });
-  step({ type: "button_a" });
+  state = routeInput(state, { type: "button_shift", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "button_a" }, mockBehavior).state;
   assert.equal(state.system.draftName, "A");
+});
+
+test("external MIDI Start resets engine and clears pending resync", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.runtimeConfig.midi.syncMode = "external";
+  state.runtimeConfig.midi.clockInEnabled = true;
+  state.runtimeConfig.midi.respondToStartStop = true;
+
+  state.transport.playing = false;
+  state.transport.ppqnPulse = 123;
+  state.transport.tick = 77;
+  state.scanIndex = 5;
+  state.system.externalPpqnPulse = 999;
+  state.system.pendingResync = true;
+
+  state = routeInput(state, { type: "midi_start" }, mockBehavior).state;
+  assert.equal(state.transport.playing, true);
+  assert.equal(state.transport.ppqnPulse, 0);
+  assert.equal(state.transport.tick, 0);
+  assert.equal(state.scanIndex, 0);
+  assert.equal(state.system.externalPpqnPulse, 0);
+  assert.equal(state.system.pendingResync, false);
+});
+
+test("external MIDI Continue resumes without resetting position", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.runtimeConfig.midi.syncMode = "external";
+  state.runtimeConfig.midi.clockInEnabled = true;
+  state.runtimeConfig.midi.respondToStartStop = true;
+
+  state.transport.playing = false;
+  state.transport.ppqnPulse = 55;
+  state.transport.tick = 10;
+  state.scanIndex = 3;
+  state.system.externalPpqnPulse = 222;
+  state.system.pendingResync = true;
+
+  state = routeInput(state, { type: "midi_continue" }, mockBehavior).state;
+  assert.equal(state.transport.playing, true);
+  assert.equal(state.transport.ppqnPulse, 55);
+  assert.equal(state.transport.tick, 10);
+  assert.equal(state.scanIndex, 3);
+  assert.equal(state.system.externalPpqnPulse, 222);
+  assert.equal(state.system.pendingResync, true);
+});
+
+test("external MIDI Start does nothing while pausedByUser is set", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.runtimeConfig.midi.syncMode = "external";
+  state.runtimeConfig.midi.clockInEnabled = true;
+  state.runtimeConfig.midi.respondToStartStop = true;
+
+  state.transport.playing = false;
+  state.transport.ppqnPulse = 44;
+  state.scanIndex = 2;
+  state.system.externalPpqnPulse = 88;
+  state.system.pendingResync = true;
+  state.system.pausedByUser = true;
+
+  state = routeInput(state, { type: "midi_start" }, mockBehavior).state;
+  assert.equal(state.transport.playing, false);
+  assert.equal(state.transport.ppqnPulse, 44);
+  assert.equal(state.scanIndex, 2);
+  assert.equal(state.system.externalPpqnPulse, 88);
+  assert.equal(state.system.pendingResync, true);
+});
+
+test("external MIDI clock advances external position even when locally paused", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.runtimeConfig.midi.syncMode = "external";
+  state.runtimeConfig.midi.clockInEnabled = true;
+  state.transport.playing = false;
+  state.system.externalPpqnPulse = 0;
+
+  const result = routeInput(state, { type: "midi_clock", pulses: 24 }, mockBehavior);
+  assert.equal(result.events.length, 0);
+  assert.equal(result.state.system.externalPpqnPulse, 24);
 });
