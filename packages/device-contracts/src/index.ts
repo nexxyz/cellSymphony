@@ -18,6 +18,7 @@ export type DisplayFrame = {
   title: string;
   lines: string[];
   editing: boolean;
+  colors?: number[]; // RGB565 colors per line (optional, for OLED rendering)
 };
 
 export type OledFrame = {

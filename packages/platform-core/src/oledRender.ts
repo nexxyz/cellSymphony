@@ -2,6 +2,7 @@ import type { OledFrame } from "@cellsymphony/device-contracts";
 
 export type OledRenderState = {
   lines: string[]; // already clamped to OLED_TEXT_LINES
+  lineColors?: number[]; // RGB565 color per line (non-selected items)
   splash?: { pixelsRgb565be: Uint8Array; topText: string; bottomText: string | null };
   off?: boolean;
   transportIcon?: "play" | "pause" | "stop";
@@ -240,10 +241,12 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
     // Clamp to 20 cols.
     const clipped = text.padEnd(OLED_TEXT_COLUMNS, " ").slice(0, OLED_TEXT_COLUMNS);
     if (selected) {
-      fillRect(buf, 0, i * lineHeight, OLED_W, lineHeight, invBg);
-      drawText(buf, xStart, y, clipped, invFg, null);
+      const bgColor = state.lineColors?.[i] ?? invBg; // Use section color as bg
+      fillRect(buf, 0, i * lineHeight, OLED_W, lineHeight, bgColor);
+      drawText(buf, xStart, y, clipped, invFg, null); // Black text
     } else {
-      drawText(buf, xStart, y, clipped, fg, null);
+      const lineColor = state.lineColors?.[i] ?? fg;
+      drawText(buf, xStart, y, clipped, lineColor, null);
     }
   }
 

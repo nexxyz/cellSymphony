@@ -21,6 +21,7 @@ import type { MusicalEvent } from "@cellsymphony/musical-events";
 
 import { renderOledFrame } from "./oledRender";
 import { logoSepia128Rgb565be } from "./oledAssets/logoSepia128_rgb565be";
+import { logo128Rgb565be } from "./oledAssets/logo128_rgb565be";
 
 type ScanMode = "immediate" | "scanning";
 type ScanAxis = "rows" | "columns";
@@ -101,7 +102,9 @@ type MenuNode =
   | { kind: "number"; label: string; key: string; min: number; max: number; step: number; visible?: (c: RuntimeConfig) => boolean }
   | { kind: "bool"; label: string; key: string; visible?: (c: RuntimeConfig) => boolean }
   | { kind: "action"; label: string; action: ActionSpec }
-  | { kind: "text"; label: string; key: string; maxLen: number; onExitSaveAction?: ActionSpec };
+  | { kind: "text"; label: string; key: string; maxLen: number; onExitSaveAction?: ActionSpec }
+  | { kind: "spacer" }
+;
 
 type ActionSpec =
   | { type: "refresh_presets" }
@@ -944,25 +947,27 @@ export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior:
     page: menuView.path,
     title: menuView.path,
     editing: state.menu.editing,
-    lines: menuView.lines
+    lines: menuView.lines,
+    colors: menuView.colors
   };
   const oledLines = toOledLines(baseDisplay);
   const now = Date.now();
   const toast = state.system.toast && state.system.toast.untilMs > now ? state.system.toast.message : null;
   const transportIcon: "play" | "pause" | "stop" = state.transport.playing ? "play" : state.system.stopLatched ? "stop" : "pause";
   const oled = renderOledFrame({
-    lines: oledLines,
+    lines: oledLines.lines,
     off: state.system.oledMode === "off",
     splash:
       state.system.oledMode === "splash"
         ? state.system.oledSplashText === "Starting up"
-          ? { pixelsRgb565be: logoSepia128Rgb565be, topText: "", bottomText: "Starting up" }
+          ? { pixelsRgb565be: logo128Rgb565be, topText: "", bottomText: "Starting up" }
           : { pixelsRgb565be: logoSepia128Rgb565be, topText: state.system.oledSplashText, bottomText: null }
         : undefined,
     transportIcon,
     transportFlash: state.system.transportFlash,
     eventDotOn: state.system.eventBlipUntilMs > now,
-    toast
+    toast,
+    lineColors: oledLines.colors
   });
   return {
     display: baseDisplay,
@@ -1027,15 +1032,7 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
     children: [
       {
         kind: "group",
-        label: "Transport",
-        children: [
-          { kind: "enum", label: "Play/Pause", key: "transport.playing", options: ["false", "true"] },
-          { kind: "number", label: "BPM", key: "transport.bpm", min: 40, max: 240, step: 1 }
-        ]
-      },
-      {
-        kind: "group",
-        label: "Engine",
+        label: "L1: Life",
         children: [
           { kind: "enum", label: "Population Mode", key: "populationMode", options: ["grid", "conway"] },
           { kind: "enum", label: "Conway Step", key: "conwayStepUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.populationMode === "conway" }
@@ -1043,7 +1040,7 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
       },
       {
         kind: "group",
-        label: "Interpretation",
+        label: "L2: Sense",
         children: [
           { kind: "enum", label: "Scan Mode", key: "scanMode", options: ["immediate", "scanning"] },
           { kind: "enum", label: "Scan Axis", key: "scanAxis", options: ["rows", "columns"], visible: (c) => c.scanMode === "scanning" },
@@ -1058,7 +1055,7 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
       },
       {
         kind: "group",
-        label: "Mapping",
+        label: "L3: Voice",
         children: [
           {
             kind: "group",
@@ -1077,6 +1074,14 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
           { kind: "enum", label: "State Target", key: "mapping.state.channel", options: ["0", "1", "2", "3"] },
           axisGroup("X Axis", "x", 1),
           axisGroup("Y Axis", "y", 3)
+        ]
+      },
+      { kind: "spacer" },
+      {
+        kind: "group",
+        label: "Playback",
+        children: [
+          { kind: "number", label: "BPM", key: "transport.bpm", min: 40, max: 240, step: 1 }
         ]
       },
       {
@@ -1265,14 +1270,16 @@ function laneGroup(label: string, prefix: string, offsetLimit: number): MenuNode
   };
 }
 
-function currentMenuView<TState>(state: PlatformState<TState>): { path: string; lines: string[] } {
+function currentMenuView<TState>(state: PlatformState<TState>): { path: string; lines: string[]; colors: number[] } {
   if (state.system.confirm) {
-    return confirmView(state);
+    const view = confirmView(state);
+    return { ...view, colors: Array(view.lines.length).fill(0xffff) };
   }
   const { menu } = state;
   const { siblings, path } = locate(menuTree(state), state, menu);
   const shortPath = abbreviatePath(path);
-  if (!siblings.length) return { path: shortPath, lines: [] };
+  if (!siblings.length) return { path: shortPath, lines: [], colors: [] };
+
   const cursor = clamp(menu.cursor, 0, siblings.length - 1);
   const bodyBudget = Math.max(1, OLED_TEXT_LINES - 1);
   let start = cursor;
@@ -1302,10 +1309,32 @@ function currentMenuView<TState>(state: PlatformState<TState>): { path: string; 
   }
 
   const lines: string[] = [];
+  const colors: number[] = [];
+  const sectionColor = getSectionColorFromPath(path);
+
   for (let i = start; i < end; i += 1) {
-    lines.push(...formatMenuItemLines(siblings[i], state, i === cursor, i === cursor && menu.editing));
+    const item = siblings[i];
+    const isSelected = i === cursor && menu.editing;
+    const itemLines = formatMenuItemLines(item, state, i === cursor, isSelected);
+
+    // Skip spacers - they add empty lines
+    if (item.kind === "spacer") {
+      lines.push(...itemLines);
+      colors.push(...Array(itemLines.length).fill(0x0000)); // Dummy to maintain alignment
+      continue;
+    }
+
+    lines.push(...itemLines);
+
+    // Determine color for this item
+    let itemColor = sectionColor;
+    if (path === "Menu" || path === "") {
+      // Root menu: color by item label
+      itemColor = getSectionColor(item.label);
+    }
+    colors.push(...Array(itemLines.length).fill(itemColor));
   }
-  return { path: shortPath, lines: lines.slice(0, bodyBudget) };
+  return { path: shortPath, lines: lines.slice(0, bodyBudget), colors: colors.slice(0, bodyBudget) };
 }
 
 function confirmView<TState>(state: PlatformState<TState>): { path: string; lines: string[] } {
@@ -1341,11 +1370,11 @@ function confirmDetails<TState>(state: PlatformState<TState>, confirm: ConfirmSt
 
 function abbreviatePath(path: string): string {
   const map: Record<string, string> = {
-    Transport: "TRN",
-    Audio: "AUD",
-    Engine: "ENG",
-    Interpretation: "INT",
-    Mapping: "MAP",
+    Menu: "MENU",
+    L1: "L1",
+    L2: "L2",
+    L3: "L3",
+    Playback: "PLAY",
     System: "SYS"
   };
   if (!path || path === "Menu") return "MENU";
@@ -1355,9 +1384,37 @@ function abbreviatePath(path: string): string {
     .join("/");
 }
 
+// Pastel colors for menu sections (Plants + Water -> Flowers)
+const COLOR_LIFE = 0x8ED1;      // Pastel Green (R=140, G=220, B=140)
+const COLOR_SENSE = 0x8D5C;     // Pastel Blue (R=140, G=170, B=230)
+const COLOR_VOICE = 0xC59B;     // Pastel Lavender (R=200, G=180, B=220)
+const COLOR_SEPIA = 0xB50D;     // Sepia (R=180, G=160, B=110)
+
+function getSectionColorFromPath(path: string): number {
+  if (path.startsWith("L1") || path.includes("L1:")) return COLOR_LIFE;
+  if (path.startsWith("L2") || path.includes("L2:")) return COLOR_SENSE;
+  if (path.startsWith("L3") || path.includes("L3:")) return COLOR_VOICE;
+  // Sepia section (handles "Playback", "PLAY", "System", "SYS", "Menu", "MENU")
+  if (path.includes("Playback") || path.includes("PLAY")) return COLOR_SEPIA;
+  if (path.includes("System") || path.includes("SYS")) return COLOR_SEPIA;
+  if (path.includes("Menu") || path.includes("MENU")) return COLOR_SEPIA;
+  return 0xffff; // White default
+}
+
+function getSectionColor(nodeLabel: string): number {
+  if (nodeLabel.startsWith("L1:") || nodeLabel === "L1: Life") return COLOR_LIFE;
+  if (nodeLabel.startsWith("L2:") || nodeLabel === "L2: Sense") return COLOR_SENSE;
+  if (nodeLabel.startsWith("L3:") || nodeLabel === "L3: Voice") return COLOR_VOICE;
+  if (nodeLabel === "Playback") return COLOR_SEPIA;
+  if (nodeLabel === "System") return COLOR_SEPIA;
+  return 0xffff; // White default
+}
+
 function formatMenuItemLines<TState>(item: MenuNode, state: PlatformState<TState>, selected: boolean, editing: boolean): string[] {
-  const selectedPrefix = "@@";
-  const mark = selected ? selectedPrefix : "";
+  if (item.kind === "spacer") {
+    return [""]; // Spacer = empty line
+  }
+  const mark = selected ? "@@" : "";
   if (item.kind === "group") {
     return [`${mark}> ${item.label}`];
   }
@@ -1374,7 +1431,7 @@ function formatMenuItemLines<TState>(item: MenuNode, state: PlatformState<TState
   }
   const value = formatDisplayValue(item.key, readAnyValue(state, item.key));
   if (selected) {
-    return [`${mark}> ${item.label}:`, `${mark}${editing ? " *" : "  "}${value}`];
+    return [`${mark}> ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitOledText(value)}`];
   }
   return [`  ${item.label}`];
 }
@@ -1409,20 +1466,24 @@ function pressMenu<TState>(state: PlatformState<TState>, effects: PlatformEffect
   const selected = view.siblings[state.menu.cursor];
   if (!selected) return state;
 
+  // Ignore spacers
+  if (selected.kind === "spacer") return state;
+
   if (selected.kind === "group") {
     const nextMenu = { ...state.menu, stack: [...state.menu.stack, state.menu.cursor], cursor: 0 };
     let nextState: PlatformState<TState> = { ...state, menu: nextMenu };
-    if (selected.label === "Presets" || selected.label === "Load" || selected.label === "Delete" || selected.label === "Rename") {
+    const label = selected.label ?? "";
+    if (label === "Presets" || label === "Load" || label === "Delete" || label === "Rename") {
       effects.push({ type: "store_list_presets" });
     }
-    if (selected.label === "MIDI Out") {
+    if (label === "MIDI Out") {
       effects.push({ type: "midi_list_outputs_request" });
     }
-    if (selected.label === "MIDI In") {
+    if (label === "MIDI In") {
       effects.push({ type: "midi_list_inputs_request" });
     }
     // Entering Save As primes a human-readable timestamp.
-    if (selected.label === "Save As") {
+    if (label === "Save As") {
       const suggested = formatTimestamp(Date.now());
       nextState = {
         ...nextState,
@@ -1467,20 +1528,30 @@ function pressMenu<TState>(state: PlatformState<TState>, effects: PlatformEffect
 function turnMenu<TState>(state: PlatformState<TState>, delta: -1 | 1, effects: PlatformEffect[]): PlatformState<TState> {
   const view = locate(menuTree(state), state, state.menu);
   if (!state.menu.editing) {
-    const max = Math.max(0, view.siblings.length - 1);
-    return { ...state, menu: { ...state.menu, cursor: clamp(state.menu.cursor + delta, 0, max) } };
+    const siblings = view.siblings;
+    const max = Math.max(0, siblings.length - 1);
+    let cursor = state.menu.cursor;
+    // Skip spacers when turning
+    let attempts = 0;
+    do {
+      cursor = clamp(cursor + delta, 0, max);
+      attempts++;
+    } while (siblings[cursor] && siblings[cursor].kind === "spacer" && attempts < siblings.length);
+    return { ...state, menu: { ...state.menu, cursor } };
   }
   const selected = view.siblings[state.menu.cursor];
-  if (!selected || selected.kind === "group" || selected.kind === "bool") return state;
+  if (!selected || selected.kind === "group" || selected.kind === "bool" || selected.kind === "spacer") return state;
   if (selected.kind === "action") return state;
   if (selected.kind === "text") {
     return textEditTurn(state, selected, delta);
   }
-  const current = readAnyValue(state, selected.key);
   if (selected.kind === "number") {
+    const current = readAnyValue(state, selected.key);
     const nextValue = clamp(Number(current) + delta * selected.step, selected.min, selected.max);
     return writeAnyValue(state, selected.key, nextValue);
   }
+  // Must be "enum" kind
+  const current = readAnyValue(state, selected.key);
   const idx = selected.options.indexOf(String(current));
   const nextIdx = clamp(idx + delta, 0, selected.options.length - 1);
   const raw = selected.options[nextIdx];
@@ -1718,10 +1789,20 @@ function mod(value: number, base: number): number {
 const PPQN = 24;
 const FRAME_SECONDS = 0.15;
 
-export function toOledLines(display: DisplayFrame): string[] {
+export function toOledLines(display: DisplayFrame): { lines: string[]; colors: number[] } {
   const title = fitOledText(display.title);
-  const body = display.lines.filter((line) => line.trim().length > 0).slice(0, OLED_TEXT_LINES - 1).map(fitOledText);
-  return [title, ...body];
+  const titleColor = getSectionColorFromPath(display.title);
+  const body = display.lines
+    .slice(0, OLED_TEXT_LINES - 1)
+    .map((line, idx) => ({
+      line: line.trim().length === 0 ? "" : fitOledText(line),
+      color: display.colors?.[idx] ?? 0xffff
+    }));
+  // Keep empty lines - they render as blank spacer lines
+  return {
+    lines: [title, ...body.map(b => b.line)].slice(0, OLED_TEXT_LINES),
+    colors: [titleColor, ...body.map(b => b.color)].slice(0, OLED_TEXT_LINES)
+  };
 }
 
 function fitOledText(text: string): string {
