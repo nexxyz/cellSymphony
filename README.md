@@ -91,6 +91,9 @@ pnpm install
 
 # Start the desktop app (simulator mode)
 pnpm --filter @cellsymphony/desktop tauri:dev
+
+# Or alternatively run the .bat file afer installing the dependencies
+cellSymphony.bet
 ```
 
 This opens the Cell Symphony simulator: an OLED display, grid visualization, and encoder/button controls.
