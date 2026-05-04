@@ -1,9 +1,12 @@
 use std::sync::mpsc::{self, Sender};
+use std::sync::Mutex;
 use std::thread;
 
+use midir::{Ignore, MidiInput, MidiInputConnection, MidiOutput};
 use realtime_engine::synth::{render_note_preview, NoteTrigger, Waveform};
 use rodio::{buffer::SamplesBuffer, OutputStream, OutputStreamHandle, Sink};
 use serde::Deserialize;
+use tauri::Emitter;
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -98,6 +101,135 @@ impl AudioRuntime {
 
 struct AppState {
     trigger_tx: Sender<QueuedAudioEvent>,
+    midi_out: Mutex<Option<midir::MidiOutputConnection>>,
+    midi_in: Mutex<Option<MidiInputConnection<()>>>,
+}
+
+#[derive(serde::Serialize)]
+struct MidiPortInfo {
+    id: String,
+    name: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+struct MidiInMessage {
+    bytes: Vec<u8>,
+}
+
+#[tauri::command]
+fn midi_list_outputs() -> Result<Vec<MidiPortInfo>, String> {
+    let out = MidiOutput::new("cellsymphony-midi-out").map_err(|e| e.to_string())?;
+    let ports = out.ports();
+    let mut res = Vec::new();
+    for (idx, port) in ports.iter().enumerate() {
+        let name = out
+            .port_name(port)
+            .unwrap_or_else(|_| "<unknown>".to_string());
+        res.push(MidiPortInfo {
+            id: idx.to_string(),
+            name,
+        });
+    }
+    Ok(res)
+}
+
+#[tauri::command]
+fn midi_list_inputs() -> Result<Vec<MidiPortInfo>, String> {
+    let mut input = MidiInput::new("cellsymphony-midi-in").map_err(|e| e.to_string())?;
+    input.ignore(Ignore::None);
+    let ports = input.ports();
+    let mut res = Vec::new();
+    for (idx, port) in ports.iter().enumerate() {
+        let name = input
+            .port_name(port)
+            .unwrap_or_else(|_| "<unknown>".to_string());
+        res.push(MidiPortInfo {
+            id: idx.to_string(),
+            name,
+        });
+    }
+    Ok(res)
+}
+
+#[tauri::command]
+fn midi_select_output(id: Option<String>, state: tauri::State<AppState>) -> Result<(), String> {
+    let mut guard = state
+        .midi_out
+        .lock()
+        .map_err(|_| "midi mutex poisoned".to_string())?;
+    *guard = None;
+    let Some(id) = id else {
+        return Ok(());
+    };
+    let idx: usize = id
+        .parse()
+        .map_err(|_| "invalid midi output id".to_string())?;
+    let out = MidiOutput::new("cellsymphony-midi-out").map_err(|e| e.to_string())?;
+    let ports = out.ports();
+    let port = ports
+        .get(idx)
+        .ok_or_else(|| "midi output id out of range".to_string())?;
+    let conn = out
+        .connect(port, "cellsymphony-midi-out-conn")
+        .map_err(|e| e.to_string())?;
+    *guard = Some(conn);
+    Ok(())
+}
+
+#[tauri::command]
+fn midi_select_input(
+    id: Option<String>,
+    state: tauri::State<AppState>,
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    let mut guard = state
+        .midi_in
+        .lock()
+        .map_err(|_| "midi mutex poisoned".to_string())?;
+    *guard = None;
+    let Some(id) = id else {
+        return Ok(());
+    };
+    let idx: usize = id
+        .parse()
+        .map_err(|_| "invalid midi input id".to_string())?;
+
+    let mut input = MidiInput::new("cellsymphony-midi-in").map_err(|e| e.to_string())?;
+    input.ignore(Ignore::None);
+    let ports = input.ports();
+    let port = ports
+        .get(idx)
+        .ok_or_else(|| "midi input id out of range".to_string())?;
+    let app2 = app.clone();
+    let conn = input
+        .connect(
+            port,
+            "cellsymphony-midi-in-conn",
+            move |_stamp, msg, _| {
+                let _ = app2.emit(
+                    "midi_in",
+                    MidiInMessage {
+                        bytes: msg.to_vec(),
+                    },
+                );
+            },
+            (),
+        )
+        .map_err(|e| e.to_string())?;
+    *guard = Some(conn);
+    Ok(())
+}
+
+#[tauri::command]
+fn midi_send(bytes: Vec<u8>, state: tauri::State<AppState>) -> Result<(), String> {
+    let mut guard = state
+        .midi_out
+        .lock()
+        .map_err(|_| "midi mutex poisoned".to_string())?;
+    let Some(conn) = guard.as_mut() else {
+        return Ok(());
+    };
+    conn.send(&bytes).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -194,8 +326,19 @@ pub fn run() {
     });
 
     tauri::Builder::default()
-        .manage(AppState { trigger_tx })
-        .invoke_handler(tauri::generate_handler![trigger_musical_event])
+        .manage(AppState {
+            trigger_tx,
+            midi_out: Mutex::new(None),
+            midi_in: Mutex::new(None),
+        })
+        .invoke_handler(tauri::generate_handler![
+            trigger_musical_event,
+            midi_list_outputs,
+            midi_list_inputs,
+            midi_select_output,
+            midi_select_input,
+            midi_send
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

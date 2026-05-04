@@ -39,7 +39,7 @@ Must depend only on:
 Owns:
 
 - Internal synth engine(s)
-- ROMpler one-shot engine
+- MIDI out adapter
 - Voice allocation and mix bus
 
 Must be independent of:
@@ -76,7 +76,7 @@ No direct coupling allowed between:
 - `packages/musical-events`
   - common note/trigger/cc event schema
 - `crates/realtime-engine`
-  - scheduler, MIDI, synth, ROMpler
+  - scheduler, MIDI
 - `apps/desktop`
   - simulator UI shell, diagnostics UI, adapter bindings
 

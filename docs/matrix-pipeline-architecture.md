@@ -62,7 +62,7 @@ Output:
 - Executes mapped events in native runtime targets.
 - Examples:
   - internal synth trigger
-  - ROMpler/sample trigger
+  - MIDI note/CC output
 - MIDI output
 
 ## Scanning Visual Cursor

@@ -68,6 +68,20 @@ type RuntimeConfig = {
   gridBrightness: number;
   buttonBrightness: number;
   screenSleepSeconds: number;
+  midi: {
+    enabled: boolean;
+    outId: string | null;
+    clockOutEnabled: boolean;
+    inId: string | null;
+    clockInEnabled: boolean;
+    syncMode: "internal" | "external";
+    respondToStartStop: boolean;
+  };
+  sound: {
+    noteLengthMs: number;
+    velocityScalePct: number;
+    velocityCurve: "linear" | "soft" | "hard";
+  };
   scanMode: ScanMode;
   scanAxis: ScanAxis;
   scanUnit: NoteUnit;
@@ -87,7 +101,7 @@ type MenuNode =
   | { kind: "number"; label: string; key: string; min: number; max: number; step: number; visible?: (c: RuntimeConfig) => boolean }
   | { kind: "bool"; label: string; key: string; visible?: (c: RuntimeConfig) => boolean }
   | { kind: "action"; label: string; action: ActionSpec }
-  | { kind: "text"; label: string; key: string; maxLen: number };
+  | { kind: "text"; label: string; key: string; maxLen: number; onExitSaveAction?: ActionSpec };
 
 type ActionSpec =
   | { type: "refresh_presets" }
@@ -98,7 +112,10 @@ type ActionSpec =
   | { type: "preset_rename_apply" }
   | { type: "default_save" }
   | { type: "default_load" }
-  | { type: "factory_load" };
+  | { type: "factory_load" }
+  | { type: "midi_select_output"; id: string | null }
+  | { type: "midi_select_input"; id: string | null }
+  | { type: "midi_panic" };
 
 type MenuState = {
   stack: number[];
@@ -119,7 +136,12 @@ type ConfirmKind =
   | "load_preset"
   | "load_default"
   | "load_factory"
-  | "save_default";
+  | "save_default"
+  | "text_dirty_exit"
+  | "midi_panic";
+  
+
+type TextConfirmMode = "save" | "discard";
 
 type PendingAction =
   | { kind: "preset_save"; name: string }
@@ -128,12 +150,27 @@ type PendingAction =
   | { kind: "preset_rename"; from: string; to: string }
   | { kind: "default_save" }
   | { kind: "default_load" }
-  | { kind: "factory_load" };
+  | { kind: "factory_load" }
+  | { kind: "midi_panic" }
+  | {
+      kind: "text_dirty_exit";
+      key: string;
+      original: string;
+      saveAction?: ActionSpec;
+      backAfter: boolean;
+      mode: TextConfirmMode;
+    };
 
 type ConfirmState = {
   kind: ConfirmKind;
   action: PendingAction;
   cursor: 0 | 1; // 0 = No, 1 = Yes
+};
+
+type TextEditSession = {
+  key: string;
+  original: string;
+  saveAction?: ActionSpec;
 };
 
 type ToastState = {
@@ -154,13 +191,20 @@ type SystemState = {
   stopLatched: boolean;
   transportFlash: "none" | "beat" | "measure";
   transportFlashUntilMs: number;
+  textEdit: TextEditSession | null;
+  midiOutputs: MidiPortInfo[];
+  midiInputs: MidiPortInfo[];
+  midiStatus: string | null;
+  externalPpqnPulse: number;
+  pendingResync: boolean;
+  pausedByUser: boolean;
   oledMode: "normal" | "splash" | "off";
   oledSplashText: string;
   oledSplashUntilMs: number;
   lastInteractionMs: number;
 };
 
-export type PlatformEffect =
+export type PlatformEffectBase =
   | { type: "store_list_presets" }
   | { type: "store_load_preset"; name: string }
   | { type: "store_save_preset"; name: string; payload: ConfigPayload }
@@ -168,7 +212,18 @@ export type PlatformEffect =
   | { type: "store_load_default" }
   | { type: "store_save_default"; payload: ConfigPayload };
 
-export type StoreResult =
+export type MidiPortInfo = { id: string; name: string };
+
+export type MidiEffect =
+  | { type: "midi_list_outputs_request" }
+  | { type: "midi_list_inputs_request" }
+  | { type: "midi_select_output"; id: string | null }
+  | { type: "midi_select_input"; id: string | null }
+  | { type: "midi_panic" };
+
+export type PlatformEffect = PlatformEffectBase | MidiEffect;
+
+export type StoreResultBase =
   | { type: "list_presets_result"; names: string[] }
   | { type: "load_preset_result"; name: string; payload: ConfigPayload | null }
   | { type: "save_preset_result"; name: string; outcome: "created" | "overwritten" }
@@ -176,6 +231,13 @@ export type StoreResult =
   | { type: "load_default_result"; payload: ConfigPayload | null }
   | { type: "save_default_result"; ok: boolean }
   | { type: "store_error"; message: string };
+
+export type MidiResult =
+  | { type: "midi_list_outputs_result"; outputs: MidiPortInfo[] }
+  | { type: "midi_list_inputs_result"; inputs: MidiPortInfo[] }
+  | { type: "midi_status"; ok: boolean; message?: string; selectedOutId?: string | null; selectedInId?: string | null };
+
+export type StoreResult = StoreResultBase | MidiResult;
 
 export type PlatformState<TState> = {
   transport: TransportFrame;
@@ -204,6 +266,20 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
     gridBrightness: 75,
     buttonBrightness: 75,
     screenSleepSeconds: 60,
+    midi: {
+      enabled: false,
+      outId: null,
+      clockOutEnabled: false,
+      inId: null,
+      clockInEnabled: false,
+      syncMode: "internal",
+      respondToStartStop: true
+    },
+    sound: {
+      noteLengthMs: 120,
+      velocityScalePct: 100,
+      velocityCurve: "linear"
+    },
     scanMode: "immediate",
     scanAxis: "columns",
     scanUnit: "1/8",
@@ -246,6 +322,13 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
       stopLatched: false,
       transportFlash: "none",
       transportFlashUntilMs: 0,
+      textEdit: null,
+      midiOutputs: [],
+      midiInputs: [],
+      midiStatus: null,
+      externalPpqnPulse: 0,
+      pendingResync: false,
+      pausedByUser: false,
       oledMode: "splash",
       oledSplashText: "Starting up",
       oledSplashUntilMs: Date.now() + 3000,
@@ -271,14 +354,21 @@ export function routeInput<TState>(
   const pressed = (i: any): boolean => (typeof i.pressed === "boolean" ? i.pressed : true);
 
   // Any interaction wakes the OLED and resets idle timer.
+  // If we were asleep/splashing, swallow the waking input (wake only).
   {
     const now = Date.now();
     const sys = nextState.system;
+    const isMidiRealtime =
+      input.type === "midi_clock" || input.type === "midi_start" || input.type === "midi_continue" || input.type === "midi_stop";
+    const wasAsleep = sys.oledMode === "off" || sys.oledMode === "splash";
     nextState.system = {
       ...sys,
-      lastInteractionMs: now,
-      oledMode: sys.oledMode === "off" || sys.oledMode === "splash" ? "normal" : sys.oledMode
+      lastInteractionMs: isMidiRealtime ? sys.lastInteractionMs : now,
+      oledMode: !isMidiRealtime && wasAsleep ? "normal" : sys.oledMode
     };
+    if (!isMidiRealtime && wasAsleep) {
+      return { state: nextState, events, effects };
+    }
   }
 
   // Confirmation overlay intercepts menu controls and must not fall through.
@@ -288,11 +378,28 @@ export function routeInput<TState>(
       const nextCursor = clamp(c.cursor + input.delta, 0, 1) as 0 | 1;
       nextState.system = { ...nextState.system, confirm: { ...c, cursor: nextCursor } };
     } else if (input.type === "encoder_press" && isMainEncoderInput(input.id)) {
-      if (c.cursor === 1) {
-        nextState = executeConfirmed(nextState, c.action, effects, behavior);
+      const opts = confirmOptions(c);
+      const choice = opts[c.cursor];
+      if (c.kind === "text_dirty_exit") {
+        if (choice === "Save") {
+          nextState = executeConfirmed(nextState, c.action, effects, behavior);
+        } else {
+          // Discard
+          if (c.action.kind === "text_dirty_exit") {
+            nextState = writeAnyValue(nextState, c.action.key, c.action.original);
+            nextState.system = { ...nextState.system, textEdit: null };
+            nextState.menu = { ...nextState.menu, editing: false };
+            if (c.action.backAfter) nextState.menu = backMenu(nextState.menu);
+          }
+        }
+      } else {
+        if (choice === "Yes") {
+          nextState = executeConfirmed(nextState, c.action, effects, behavior);
+        }
       }
       nextState.system = { ...nextState.system, confirm: null };
     } else if (input.type === "button_a" && pressed(input)) {
+      // Back cancels confirm and returns to editing.
       nextState.system = { ...nextState.system, confirm: null };
     }
 
@@ -307,13 +414,72 @@ export function routeInput<TState>(
     nextState.system = { ...nextState.system, shiftHeld: pressed(input) };
   }
 
+  // External MIDI clock / transport.
+  if (input.type === "midi_clock") {
+    if (nextState.runtimeConfig.midi.syncMode === "external" && nextState.runtimeConfig.midi.clockInEnabled) {
+      const pulses = Math.max(0, Math.floor((input as any).pulses ?? 0));
+      const advanced = applyExternalClockPulses(nextState, behavior, pulses);
+      nextState = advanced.state;
+      events.push(...advanced.events);
+      if (advanced.events.some((e) => e.type === "note_on")) {
+        nextState.system = { ...nextState.system, eventBlipUntilMs: Date.now() + 100 };
+      }
+    }
+    return { state: nextState, events, effects };
+  }
+  if (input.type === "midi_start" || input.type === "midi_continue" || input.type === "midi_stop") {
+    if (nextState.runtimeConfig.midi.syncMode === "external" && nextState.runtimeConfig.midi.clockInEnabled) {
+      if (nextState.runtimeConfig.midi.respondToStartStop) {
+        if (input.type === "midi_stop") {
+          nextState.transport = { ...nextState.transport, playing: false };
+          nextState.system = { ...nextState.system, stopLatched: true };
+        } else {
+          // Local pause wins.
+          if (!nextState.system.pausedByUser) {
+            if (input.type === "midi_start") {
+              // External Start resets our local engine position and clears any queued resync.
+              nextState.transport = { ...nextState.transport, playing: true, ppqnPulse: 0, tick: 0 };
+              nextState.scanIndex = 0;
+              nextState.scanPulseAccumulator = 0;
+              nextState.conwayPulseAccumulator = 0;
+              nextState.ppqnPulseRemainder = 0;
+              nextState.system = {
+                ...nextState.system,
+                stopLatched: false,
+                pendingResync: false,
+                externalPpqnPulse: 0
+              };
+            } else {
+              // External Continue resumes without resetting position.
+              nextState.transport = { ...nextState.transport, playing: true };
+              nextState.system = { ...nextState.system, stopLatched: false };
+            }
+          }
+        }
+      }
+    }
+    return { state: nextState, events, effects };
+  }
+
   if (input.type === "button_s" && pressed(input)) {
+    // External sync: Shift+S triggers resync (no transport control).
+    if (nextState.runtimeConfig.midi.syncMode === "external" && nextState.system.shiftHeld) {
+      nextState.system = { ...nextState.system, pendingResync: true };
+      return { state: nextState, events, effects };
+    }
+
     const wasPlaying = nextState.transport.playing;
     const now = Date.now();
     const playing = !wasPlaying;
 
     // Toggle transport.
     nextState.transport = { ...nextState.transport, playing };
+
+    if (nextState.runtimeConfig.midi.syncMode === "external") {
+      // In external mode, S gates the local engine (pause/resume) but does not affect external clock.
+      nextState.system = { ...nextState.system, pausedByUser: !playing };
+      return { state: nextState, events, effects };
+    }
 
     if (playing) {
       // Only a STOP->PLAY transition forces a new bar.
@@ -341,7 +507,33 @@ export function routeInput<TState>(
     if (nextState.menu.editing && selected && selected.kind === "text" && nextState.system.shiftHeld) {
       nextState = textBackspace(nextState, selected.key);
     } else {
-      nextState.menu = backMenu(nextState.menu);
+      if (nextState.menu.editing && selected && selected.kind === "text") {
+        const current = String(readAnyValue(nextState, selected.key) ?? "");
+        const sess = nextState.system.textEdit;
+        const dirty = sess && sess.key === selected.key ? current !== sess.original : false;
+        if (dirty && sess) {
+          nextState.system = {
+            ...nextState.system,
+            confirm: {
+              kind: "text_dirty_exit",
+              action: {
+                kind: "text_dirty_exit",
+                key: sess.key,
+                original: sess.original,
+                saveAction: sess.saveAction,
+                backAfter: true,
+                mode: "save"
+              },
+              cursor: 0
+            }
+          };
+        } else {
+          nextState.system = { ...nextState.system, textEdit: null };
+          nextState.menu = backMenu(nextState.menu);
+        }
+      } else {
+        nextState.menu = backMenu(nextState.menu);
+      }
     }
   } else if (input.type === "encoder_press" && isMainEncoderInput(input.id)) {
     nextState = pressMenu(nextState, effects);
@@ -354,7 +546,7 @@ export function routeInput<TState>(
     emit: (event) => events.push(event)
   });
 
-  if (events.some((e) => e.type === "note_on" || e.type === "sample_trigger")) {
+  if (events.some((e) => e.type === "note_on")) {
     nextState.system = { ...nextState.system, eventBlipUntilMs: Date.now() + 100 };
   }
   return { state: nextState, events, effects };
@@ -393,6 +585,26 @@ function executeConfirmed<TState>(
   if (action.kind === "preset_rename") {
     effects.push({ type: "store_load_preset", name: action.from });
     return { ...state, system: { ...state.system, pendingRename: { from: action.from, to: action.to } } };
+  }
+  if (action.kind === "midi_panic") {
+    effects.push({ type: "midi_panic" });
+    return state;
+  }
+  if (action.kind === "text_dirty_exit") {
+    // Save path for a text exit prompt.
+    // Clear edit session and exit editing, then optionally run configured action.
+    let next: PlatformState<TState> = {
+      ...state,
+      system: { ...state.system, textEdit: null },
+      menu: { ...state.menu, editing: false }
+    };
+    if (action.saveAction) {
+      next = handleAction(next, action.saveAction, effects);
+    }
+    if (action.backAfter) {
+      next = { ...next, menu: backMenu(next.menu) };
+    }
+    return next;
   }
   return state;
 }
@@ -441,6 +653,10 @@ export function tick<TState>(
   }
 
   const prevPulse = next.transport.ppqnPulse;
+  if (next.runtimeConfig.midi.syncMode === "external") {
+    // External sync mode: transport advancement is driven by incoming MIDI clock pulses.
+    return { state: next, events, effects };
+  }
   if (next.transport.playing) {
     const elapsedPulses = pulsesPerSecond(next.transport.bpm) * elapsedSeconds;
     next.scanPulseAccumulator += elapsedPulses;
@@ -502,7 +718,7 @@ export function tick<TState>(
     }
   }
 
-  if (events.some((e) => e.type === "note_on" || e.type === "sample_trigger")) {
+  if (events.some((e) => e.type === "note_on")) {
     next.system = { ...next.system, eventBlipUntilMs: nowMs + 100 };
   }
   return { state: next, events, effects };
@@ -542,6 +758,8 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
   const mergedRuntime: RuntimeConfig = {
     ...(factory.runtimeConfig as any),
     ...(rt as any),
+    midi: { ...(factory.runtimeConfig as any).midi, ...(rt.midi ?? {}) },
+    sound: { ...(factory.runtimeConfig as any).sound, ...(rt.sound ?? {}) },
     pitch: { ...(factory.runtimeConfig.pitch as any), ...(rt.pitch ?? {}) },
     x: {
       ...(factory.runtimeConfig.x as any),
@@ -579,6 +797,17 @@ export function applyStoreResult<TState>(
     ...s,
     system: { ...s.system, toast: { message, untilMs: Date.now() + 3000 } }
   });
+
+  if (result.type === "midi_list_outputs_result") {
+    return { state: { ...state, system: { ...state.system, midiOutputs: result.outputs } }, effects };
+  }
+  if (result.type === "midi_list_inputs_result") {
+    return { state: { ...state, system: { ...state.system, midiInputs: result.inputs } }, effects };
+  }
+  if (result.type === "midi_status") {
+    const msg = result.ok ? "MIDI ok" : result.message ?? "MIDI error";
+    return { state: { ...state, system: { ...state.system, midiStatus: msg } }, effects };
+  }
 
   if (result.type === "list_presets_result") {
     const names = [...result.names].sort((a, b) => a.localeCompare(b));
@@ -622,6 +851,88 @@ export function applyStoreResult<TState>(
     return { state: setToast(state, result.message.slice(0, 18)), effects };
   }
   return { state, effects };
+}
+
+function applyExternalClockPulses<TState>(
+  state: PlatformState<TState>,
+  behavior: BehaviorEngine<TState, unknown>,
+  pulses: number
+): { state: PlatformState<TState>; events: MusicalEvent[] } {
+  const events: MusicalEvent[] = [];
+  if (pulses <= 0) return { state, events };
+  let next = { ...state };
+  const prevExt = next.system.externalPpqnPulse;
+  const nextExt = prevExt + pulses;
+  next.system = { ...next.system, externalPpqnPulse: nextExt };
+
+  // Pending resync snaps engine position at next bar boundary (96 pulses).
+  if (next.system.pendingResync) {
+    const target = prevExt + (96 - (prevExt % 96 || 96));
+    if (nextExt >= target) {
+      next.transport = { ...next.transport, ppqnPulse: target, tick: 0 };
+      next.scanPulseAccumulator = 0;
+      next.conwayPulseAccumulator = 0;
+      next.ppqnPulseRemainder = 0;
+      next.scanIndex = 0;
+      next.system = { ...next.system, pendingResync: false };
+    }
+  }
+
+  if (!next.transport.playing) {
+    return { state: next, events };
+  }
+
+  // Advance local engine by the incoming pulses.
+  const advanced = advanceEngineByPulses(next, behavior, pulses);
+  return { state: advanced.state, events: advanced.events };
+}
+
+function advanceEngineByPulses<TState>(
+  state: PlatformState<TState>,
+  behavior: BehaviorEngine<TState, unknown>,
+  pulses: number
+): { state: PlatformState<TState>; events: MusicalEvent[] } {
+  const events: MusicalEvent[] = [];
+  let next = { ...state };
+  next.scanPulseAccumulator += pulses;
+  next.conwayPulseAccumulator += pulses;
+  next.transport = { ...next.transport, ppqnPulse: next.transport.ppqnPulse + pulses };
+
+  let scanAdvanced = false;
+  if (next.runtimeConfig.scanMode === "scanning") {
+    const scanStepPulses = noteUnitToPulses(next.runtimeConfig.scanUnit);
+    while (next.scanPulseAccumulator >= scanStepPulses) {
+      next.scanPulseAccumulator -= scanStepPulses;
+      next.scanIndex = advanceScanIndex(
+        next.scanIndex,
+        next.runtimeConfig.scanDirection,
+        next.runtimeConfig.scanAxis === "columns" ? GRID_WIDTH : GRID_HEIGHT
+      );
+      scanAdvanced = true;
+    }
+  }
+
+  const beforeGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
+  if (next.runtimeConfig.populationMode === "conway") {
+    const conwayStepPulses = noteUnitToPulses(next.runtimeConfig.conwayStepUnit);
+    while (next.conwayPulseAccumulator >= conwayStepPulses) {
+      next.conwayPulseAccumulator -= conwayStepPulses;
+      next.behaviorState = behavior.onTick(next.behaviorState, { bpm: next.transport.bpm, emit: () => {} });
+    }
+  }
+  const afterGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
+  const shouldInterpret = next.runtimeConfig.scanMode === "immediate" || scanAdvanced;
+  if (shouldInterpret) {
+    const profile = profileFromConfig(next.runtimeConfig);
+    const interpretationTick = next.runtimeConfig.scanMode === "scanning" ? next.scanIndex : next.transport.tick;
+    const intents = interpretGrid(beforeGrid, afterGrid, interpretationTick, profile);
+    const mapped = mapIntentsToMusicalEvents(intents, withScaleSteps(next.mappingConfig, next.runtimeConfig));
+    const modulated = applyModulation(intents, mapped, next.runtimeConfig);
+    events.push(...dedupeSimultaneousNotes(modulated));
+  }
+
+  next.transport = { ...next.transport, tick: next.transport.tick + 1 };
+  return { state: next, events };
 }
 
 export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>): SimulatorFrame {
@@ -723,11 +1034,6 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
       },
       {
         kind: "group",
-        label: "Audio",
-        children: [{ kind: "number", label: "Master Vol", key: "masterVolume", min: 0, max: 100, step: 1 }]
-      },
-      {
-        kind: "group",
         label: "Engine",
         children: [
           { kind: "enum", label: "Population Mode", key: "populationMode", options: ["grid", "conway"] },
@@ -778,6 +1084,11 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
         children: [
           {
             kind: "group",
+            label: "Audio",
+            children: [{ kind: "number", label: "Master Vol", key: "masterVolume", min: 0, max: 100, step: 1 }]
+          },
+          {
+            kind: "group",
             label: "Presets",
             children: [
               {
@@ -788,7 +1099,7 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
                     kind: "group",
                     label: "Save As",
                     children: [
-                      { kind: "text", label: "Name", key: "system.draftName", maxLen: 32 },
+                      { kind: "text", label: "Name", key: "system.draftName", maxLen: 32, onExitSaveAction: { type: "preset_save" } },
                       { kind: "action", label: "Save", action: { type: "preset_save" } }
                     ]
                   },
@@ -825,10 +1136,47 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
               }
             ]
           },
-          { kind: "number", label: "Screen Sleep", key: "screenSleepSeconds", min: 0, max: 600, step: 10 },
-          { kind: "number", label: "Display Brightness", key: "displayBrightness", min: 10, max: 100, step: 5 },
-          { kind: "number", label: "Grid Brightness", key: "gridBrightness", min: 10, max: 100, step: 5 },
-          { kind: "number", label: "Button Brightness", key: "buttonBrightness", min: 10, max: 100, step: 5 }
+          {
+            kind: "group",
+            label: "MIDI",
+            children: [
+              { kind: "bool", label: "Enabled", key: "midi.enabled" },
+              { kind: "enum", label: "Sync Mode", key: "midi.syncMode", options: ["internal", "external"] },
+              {
+                kind: "group",
+                label: "MIDI Out",
+                children: (s) => midiOutputNodes(s)
+              },
+              {
+                kind: "group",
+                label: "MIDI In",
+                children: (s) => midiInputNodes(s)
+              },
+              { kind: "bool", label: "Clock Out", key: "midi.clockOutEnabled" },
+              { kind: "bool", label: "Clock In", key: "midi.clockInEnabled" },
+              { kind: "bool", label: "Respond Start/Stop", key: "midi.respondToStartStop" },
+              { kind: "action", label: "Panic", action: { type: "midi_panic" } }
+            ]
+          },
+          {
+            kind: "group",
+            label: "Sound",
+            children: [
+              { kind: "number", label: "Note Length", key: "sound.noteLengthMs", min: 30, max: 2000, step: 10 },
+              { kind: "number", label: "Velocity Scale", key: "sound.velocityScalePct", min: 0, max: 200, step: 5 },
+              { kind: "enum", label: "Velocity Curve", key: "sound.velocityCurve", options: ["linear", "soft", "hard"] }
+            ]
+          },
+          {
+            kind: "group",
+            label: "UI Settings",
+            children: [
+              { kind: "number", label: "Screen Sleep", key: "screenSleepSeconds", min: 0, max: 600, step: 10 },
+              { kind: "number", label: "Display Brightness", key: "displayBrightness", min: 10, max: 100, step: 5 },
+              { kind: "number", label: "Grid Brightness", key: "gridBrightness", min: 10, max: 100, step: 5 },
+              { kind: "number", label: "Button Brightness", key: "buttonBrightness", min: 10, max: 100, step: 5 }
+            ]
+          }
         ]
       }
     ]
@@ -856,8 +1204,28 @@ function presetRenameNodes<TState>(state: PlatformState<TState>): MenuNode[] {
     return names.map((name) => ({ kind: "action", label: name, action: { type: "preset_rename_pick", name } }));
   }
   out.push({ kind: "action", label: `From: ${picked}`, action: { type: "refresh_presets" } });
-  out.push({ kind: "text", label: "New Name", key: "system.draftName", maxLen: 32 });
+  out.push({ kind: "text", label: "New Name", key: "system.draftName", maxLen: 32, onExitSaveAction: { type: "preset_rename_apply" } });
   out.push({ kind: "action", label: "Apply", action: { type: "preset_rename_apply" } });
+  return out;
+}
+
+function midiOutputNodes<TState>(state: PlatformState<TState>): MenuNode[] {
+  const out: MenuNode[] = [];
+  out.push({ kind: "action", label: "(none)", action: { type: "midi_select_output", id: null } });
+  for (const p of state.system.midiOutputs) {
+    out.push({ kind: "action", label: p.name.slice(0, 20), action: { type: "midi_select_output", id: p.id } });
+  }
+  if (out.length === 1) out.push({ kind: "action", label: "(no outputs)", action: { type: "midi_select_output", id: null } });
+  return out;
+}
+
+function midiInputNodes<TState>(state: PlatformState<TState>): MenuNode[] {
+  const out: MenuNode[] = [];
+  out.push({ kind: "action", label: "(none)", action: { type: "midi_select_input", id: null } });
+  for (const p of state.system.midiInputs) {
+    out.push({ kind: "action", label: p.name.slice(0, 20), action: { type: "midi_select_input", id: p.id } });
+  }
+  if (out.length === 1) out.push({ kind: "action", label: "(no inputs)", action: { type: "midi_select_input", id: null } });
   return out;
 }
 
@@ -942,12 +1310,18 @@ function currentMenuView<TState>(state: PlatformState<TState>): { path: string; 
 function confirmView<TState>(state: PlatformState<TState>): { path: string; lines: string[] } {
   const c = state.system.confirm;
   if (!c) return { path: "CONF", lines: [] };
-  const no = c.cursor === 0 ? "@@> No" : "  No";
-  const yes = c.cursor === 1 ? "@@> Yes" : "  Yes";
-  const title = "CONFIRM";
+  const title = c.kind === "text_dirty_exit" ? "TEXT" : "CONFIRM";
   const details = confirmDetails(state, c);
-  const lines = [fitOledText(details), "", no, yes].filter((l) => l.length > 0);
+  const [opt0, opt1] = confirmOptions(c);
+  const a = c.cursor === 0 ? `@@> ${opt0}` : `  ${opt0}`;
+  const b = c.cursor === 1 ? `@@> ${opt1}` : `  ${opt1}`;
+  const lines = [fitOledText(details), "", a, b].filter((l) => l.length > 0);
   return { path: title, lines: lines.slice(0, OLED_TEXT_LINES - 1) };
+}
+
+function confirmOptions(confirm: ConfirmState): [string, string] {
+  if (confirm.kind === "text_dirty_exit") return ["Save", "Discard"];
+  return ["No", "Yes"];
 }
 
 function confirmDetails<TState>(state: PlatformState<TState>, confirm: ConfirmState): string {
@@ -959,6 +1333,8 @@ function confirmDetails<TState>(state: PlatformState<TState>, confirm: ConfirmSt
   if (a.kind === "default_save") return "Save default?";
   if (a.kind === "default_load") return "Load default?";
   if (a.kind === "factory_load") return "Load factory?";
+  if (a.kind === "text_dirty_exit") return "Save changes?";
+  if (a.kind === "midi_panic") return "MIDI panic?";
   return "Confirm";
 }
 
@@ -1038,6 +1414,12 @@ function pressMenu<TState>(state: PlatformState<TState>, effects: PlatformEffect
     if (selected.label === "Presets" || selected.label === "Load" || selected.label === "Delete" || selected.label === "Rename") {
       effects.push({ type: "store_list_presets" });
     }
+    if (selected.label === "MIDI Out") {
+      effects.push({ type: "midi_list_outputs_request" });
+    }
+    if (selected.label === "MIDI In") {
+      effects.push({ type: "midi_list_inputs_request" });
+    }
     // Entering Save As primes a human-readable timestamp.
     if (selected.label === "Save As") {
       const suggested = formatTimestamp(Date.now());
@@ -1066,7 +1448,11 @@ function pressMenu<TState>(state: PlatformState<TState>, effects: PlatformEffect
       return {
         ...state,
         menu: { ...state.menu, editing: true },
-        system: { ...state.system, nameCursor: clamp(current.length, 0, selected.maxLen) }
+        system: {
+          ...state.system,
+          nameCursor: clamp(current.length, 0, selected.maxLen),
+          textEdit: { key: selected.key, original: current, saveAction: selected.onExitSaveAction }
+        }
       };
     }
     // While editing text, encoder press advances the cursor.
@@ -1158,6 +1544,19 @@ function handleAction<TState>(state: PlatformState<TState>, action: ActionSpec, 
   }
   if (action.type === "factory_load") {
     return openConfirm("load_factory", { kind: "factory_load" });
+  }
+  if (action.type === "midi_select_output") {
+    const nextCfg = writeValue(state.runtimeConfig, "midi.outId", action.id);
+    effects.push({ type: "midi_select_output", id: action.id });
+    return { ...state, runtimeConfig: nextCfg };
+  }
+  if (action.type === "midi_select_input") {
+    const nextCfg = writeValue(state.runtimeConfig, "midi.inId", action.id);
+    effects.push({ type: "midi_select_input", id: action.id });
+    return { ...state, runtimeConfig: nextCfg };
+  }
+  if (action.type === "midi_panic") {
+    return openConfirm("midi_panic", { kind: "midi_panic" });
   }
   return state;
 }
@@ -1380,7 +1779,23 @@ function applyModulation(intents: { x: number; y: number; degree: number; kind: 
     }
     out.push(event);
   }
-  return out;
+  return applyGlobalSound(out, cfg);
+}
+
+function applyGlobalSound(events: MusicalEvent[], cfg: RuntimeConfig): MusicalEvent[] {
+  const sound = (cfg as any).sound;
+  const scale = Math.max(0, Math.min(2, Number(sound?.velocityScalePct ?? 100) / 100));
+  const curve: "linear" | "soft" | "hard" = sound?.velocityCurve ?? "linear";
+  const noteLen = Math.max(1, Math.min(10_000, Number(sound?.noteLengthMs ?? 120)));
+
+  return events.map((e) => {
+    if (e.type !== "note_on") return e;
+    const v0 = Math.max(1, Math.min(127, e.velocity));
+    const n = v0 / 127;
+    const shaped = curve === "soft" ? Math.sqrt(n) : curve === "hard" ? n * n : n;
+    const v1 = Math.max(1, Math.min(127, Math.round(shaped * 127 * scale)));
+    return { ...e, velocity: v1, durationMs: e.durationMs ?? noteLen };
+  });
 }
 
 function pitchFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig, fallbackNote: number): number {
