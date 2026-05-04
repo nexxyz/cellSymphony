@@ -1,9 +1,20 @@
 import { lifeBehavior } from "@cellsymphony/behaviors-life";
 import type { DeviceInput } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
-import { createInitialState, emergencyBrake, routeInput, tick, toOledLines, toSimulatorFrame, type PlatformState } from "@cellsymphony/platform-core";
+import {
+  applyStoreResult,
+  createInitialState,
+  emergencyBrake,
+  routeInput,
+  tick,
+  toSimulatorFrame,
+  type PlatformEffect,
+  type PlatformState,
+  type StoreResult
+} from "@cellsymphony/platform-core";
 import { createIntervalRuntimeScheduler, type RuntimeScheduler } from "./runtimeScheduler";
 import type { EventsListener, InputAction, RuntimeListener, SimulatorSnapshot } from "./types";
+import { createLocalStorageConfigStore } from "./configStore";
 
 type SimulatorRuntime = {
   dispatch(input: DeviceInput): void;
@@ -26,7 +37,6 @@ type ScheduledEvents = {
 
 export function createSimulatorRuntime(scheduler: RuntimeScheduler = createIntervalRuntimeScheduler(8)): SimulatorRuntime {
   let state: PlatformState<ReturnType<typeof behavior.init>> = createInitialState(behavior);
-  let eventBlipUntilMs = 0;
   let transportFlash: "none" | "beat" | "measure" = "none";
   let transportFlashUntilMs = 0;
   let shiftActive = false;
@@ -39,12 +49,6 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
     const frame = toSimulatorFrame(next, behavior);
     return {
       frame,
-      oledLines: toOledLines(frame.display),
-      transportIndicator: {
-        icon: frame.transport.playing ? "play" : stopLatched ? "stop" : "pause",
-        flash: transportFlash,
-        eventBlipUntilMs
-      },
       neoKeyLeds: {
         back: "solid_red",
         space: !frame.transport.playing ? "off" : transportFlash === "measure" ? "measure" : transportFlash === "beat" ? "beat" : "off",
@@ -66,9 +70,6 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
 
   function publishEvents(events: MusicalEvent[]) {
     if (events.length === 0) return;
-    if (events.some((event) => event.type === "note_on" || event.type === "sample_trigger")) {
-      eventBlipUntilMs = Date.now() + 100;
-    }
     for (const listener of eventListeners) {
       listener(events);
     }
@@ -118,8 +119,52 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
     const result = routeInput(state, input, behavior);
     state = result.state;
     enqueueEvents(result.events, performance.now());
+    applyEffects(result.effects);
     flushDueEvents(performance.now());
     publishSnapshot();
+  }
+
+  const store = createLocalStorageConfigStore();
+
+  function execEffect(effect: PlatformEffect): StoreResult {
+    try {
+      if (effect.type === "store_list_presets") {
+        return { type: "list_presets_result", names: store.listPresets() };
+      }
+      if (effect.type === "store_load_preset") {
+        return { type: "load_preset_result", name: effect.name, payload: store.loadPreset(effect.name) };
+      }
+      if (effect.type === "store_save_preset") {
+        const outcome = store.savePreset(effect.name, effect.payload);
+        return { type: "save_preset_result", name: effect.name, outcome };
+      }
+      if (effect.type === "store_delete_preset") {
+        const ok = store.deletePreset(effect.name);
+        return { type: "delete_preset_result", name: effect.name, ok };
+      }
+      if (effect.type === "store_load_default") {
+        return { type: "load_default_result", payload: store.loadDefault() };
+      }
+      if (effect.type === "store_save_default") {
+        store.saveDefault(effect.payload);
+        return { type: "save_default_result", ok: true };
+      }
+      return { type: "store_error", message: "Unknown effect" };
+    } catch (err) {
+      return { type: "store_error", message: err instanceof Error ? err.message : "Store error" };
+    }
+  }
+
+  function applyEffects(initial: PlatformEffect[]) {
+    const queue = initial.slice();
+    while (queue.length > 0) {
+      const effect = queue.shift();
+      if (!effect) break;
+      const result = execEffect(effect);
+      const applied = applyStoreResult(state, result, behavior);
+      state = applied.state;
+      queue.push(...applied.effects);
+    }
   }
 
   return {
@@ -139,7 +184,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       }
       if (action.type === "shift") {
         shiftActive = action.active;
-        publishSnapshot();
+        applyInput({ type: "button_shift", pressed: action.active });
         return;
       }
       applyInput(action.input);
@@ -150,15 +195,13 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
           transportFlashUntilMs = 0;
           transportFlash = "none";
         }
-        if (eventBlipUntilMs < Date.now()) {
-          eventBlipUntilMs = 0;
-        }
         const safeElapsedMs = Math.min(elapsedMs, MAX_CATCHUP_MS);
         const prevPulse = state.transport.ppqnPulse;
         const result = tick(state, behavior, safeElapsedMs / 1000);
         state = result.state;
         applyBeatFlash(prevPulse, state.transport.ppqnPulse);
         enqueueEvents(result.events, nowMs + LOOKAHEAD_MS);
+        applyEffects(result.effects);
         flushDueEvents(nowMs);
         publishSnapshot();
       });

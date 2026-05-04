@@ -19,6 +19,9 @@ import {
 import { loadDefaultMappingConfig, mapIntentsToMusicalEvents, type MappingConfig } from "@cellsymphony/mapping-core";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 
+import { renderOledFrame } from "./oledRender";
+import { logoSepia128Rgb565be } from "./oledAssets/logoSepia128_rgb565be";
+
 type ScanMode = "immediate" | "scanning";
 type ScanAxis = "rows" | "columns";
 type Direction = "forward" | "reverse";
@@ -64,6 +67,7 @@ type RuntimeConfig = {
   displayBrightness: number;
   gridBrightness: number;
   buttonBrightness: number;
+  screenSleepSeconds: number;
   scanMode: ScanMode;
   scanAxis: ScanAxis;
   scanUnit: NoteUnit;
@@ -78,16 +82,100 @@ type RuntimeConfig = {
 };
 
 type MenuNode =
-  | { kind: "group"; label: string; children: MenuNode[]; visible?: (c: RuntimeConfig) => boolean }
+  | { kind: "group"; label: string; children: MenuNode[] | ((state: PlatformState<any>) => MenuNode[]); visible?: (c: RuntimeConfig) => boolean }
   | { kind: "enum"; label: string; key: string; options: string[]; visible?: (c: RuntimeConfig) => boolean }
   | { kind: "number"; label: string; key: string; min: number; max: number; step: number; visible?: (c: RuntimeConfig) => boolean }
-  | { kind: "bool"; label: string; key: string; visible?: (c: RuntimeConfig) => boolean };
+  | { kind: "bool"; label: string; key: string; visible?: (c: RuntimeConfig) => boolean }
+  | { kind: "action"; label: string; action: ActionSpec }
+  | { kind: "text"; label: string; key: string; maxLen: number };
+
+type ActionSpec =
+  | { type: "refresh_presets" }
+  | { type: "preset_save" }
+  | { type: "preset_load"; name: string }
+  | { type: "preset_delete"; name: string }
+  | { type: "preset_rename_pick"; name: string }
+  | { type: "preset_rename_apply" }
+  | { type: "default_save" }
+  | { type: "default_load" }
+  | { type: "factory_load" };
 
 type MenuState = {
   stack: number[];
   cursor: number;
   editing: boolean;
 };
+
+export type ConfigPayload = {
+  activeBehavior: string;
+  runtimeConfig: RuntimeConfig;
+  mappingConfig: MappingConfig;
+};
+
+type ConfirmKind =
+  | "overwrite_preset"
+  | "delete_preset"
+  | "rename_preset"
+  | "load_preset"
+  | "load_default"
+  | "load_factory"
+  | "save_default";
+
+type PendingAction =
+  | { kind: "preset_save"; name: string }
+  | { kind: "preset_delete"; name: string }
+  | { kind: "preset_load"; name: string }
+  | { kind: "preset_rename"; from: string; to: string }
+  | { kind: "default_save" }
+  | { kind: "default_load" }
+  | { kind: "factory_load" };
+
+type ConfirmState = {
+  kind: ConfirmKind;
+  action: PendingAction;
+  cursor: 0 | 1; // 0 = No, 1 = Yes
+};
+
+type ToastState = {
+  message: string;
+  untilMs: number;
+};
+
+type SystemState = {
+  shiftHeld: boolean;
+  presetNames: string[];
+  selectedPreset: string | null;
+  draftName: string;
+  nameCursor: number;
+  pendingRename: { from: string; to: string } | null;
+  confirm: ConfirmState | null;
+  toast: ToastState | null;
+  eventBlipUntilMs: number;
+  stopLatched: boolean;
+  transportFlash: "none" | "beat" | "measure";
+  transportFlashUntilMs: number;
+  oledMode: "normal" | "splash" | "off";
+  oledSplashText: string;
+  oledSplashUntilMs: number;
+  lastInteractionMs: number;
+};
+
+export type PlatformEffect =
+  | { type: "store_list_presets" }
+  | { type: "store_load_preset"; name: string }
+  | { type: "store_save_preset"; name: string; payload: ConfigPayload }
+  | { type: "store_delete_preset"; name: string }
+  | { type: "store_load_default" }
+  | { type: "store_save_default"; payload: ConfigPayload };
+
+export type StoreResult =
+  | { type: "list_presets_result"; names: string[] }
+  | { type: "load_preset_result"; name: string; payload: ConfigPayload | null }
+  | { type: "save_preset_result"; name: string; outcome: "created" | "overwritten" }
+  | { type: "delete_preset_result"; name: string; ok: boolean }
+  | { type: "load_default_result"; payload: ConfigPayload | null }
+  | { type: "save_default_result"; ok: boolean }
+  | { type: "store_error"; message: string };
 
 export type PlatformState<TState> = {
   transport: TransportFrame;
@@ -96,6 +184,7 @@ export type PlatformState<TState> = {
   mappingConfig: MappingConfig;
   runtimeConfig: RuntimeConfig;
   menu: MenuState;
+  system: SystemState;
   scanIndex: number;
   scanPulseAccumulator: number;
   conwayPulseAccumulator: number;
@@ -108,40 +197,60 @@ export const OLED_TEXT_COLUMNS = 20;
 export const OLED_TEXT_LINES = 8;
 
 export function createInitialState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
+  const runtimeConfig: RuntimeConfig = {
+    populationMode: "conway",
+    masterVolume: 73,
+    displayBrightness: 75,
+    gridBrightness: 75,
+    buttonBrightness: 75,
+    screenSleepSeconds: 60,
+    scanMode: "immediate",
+    scanAxis: "columns",
+    scanUnit: "1/8",
+    scanDirection: "forward",
+    conwayStepUnit: "1/8",
+    eventEnabled: true,
+    eventParity: "birth_even_death_odd",
+    stateEnabled: true,
+    pitch: { startingNote: 48, lowestNote: 36, highestNote: 84, outOfRange: "clamp", scale: "major_pentatonic", root: "C" },
+    x: {
+      pitch: { enabled: true, steps: 1 },
+      velocity: { enabled: false, from: 20, to: 100, gridOffset: 0, curve: "linear" },
+      filterCutoff: { enabled: false, from: 20, to: 127, gridOffset: 0, curve: "linear" },
+      filterResonance: { enabled: false, from: 10, to: 90, gridOffset: 0, curve: "linear" }
+    },
+    y: {
+      pitch: { enabled: true, steps: 8 },
+      velocity: { enabled: false, from: 20, to: 100, gridOffset: 0, curve: "linear" },
+      filterCutoff: { enabled: false, from: 20, to: 127, gridOffset: 0, curve: "linear" },
+      filterResonance: { enabled: false, from: 10, to: 90, gridOffset: 0, curve: "linear" }
+    }
+  };
   return {
     transport: { playing: false, bpm: 120, tick: 0, ppqnPulse: 0 },
     behaviorState: behavior.init({}),
     activeBehavior: behavior.id,
     mappingConfig: loadDefaultMappingConfig(),
-    runtimeConfig: {
-      populationMode: "conway",
-      masterVolume: 73,
-      displayBrightness: 75,
-      gridBrightness: 75,
-      buttonBrightness: 75,
-      scanMode: "immediate",
-      scanAxis: "columns",
-      scanUnit: "1/8",
-      scanDirection: "forward",
-      conwayStepUnit: "1/8",
-      eventEnabled: true,
-      eventParity: "birth_even_death_odd",
-      stateEnabled: true,
-      pitch: { startingNote: 48, lowestNote: 36, highestNote: 84, outOfRange: "clamp", scale: "major_pentatonic", root: "C" },
-      x: {
-        pitch: { enabled: true, steps: 1 },
-        velocity: { enabled: false, from: 20, to: 100, gridOffset: 0, curve: "linear" },
-        filterCutoff: { enabled: false, from: 20, to: 127, gridOffset: 0, curve: "linear" },
-        filterResonance: { enabled: false, from: 10, to: 90, gridOffset: 0, curve: "linear" }
-      },
-      y: {
-        pitch: { enabled: true, steps: 8 },
-        velocity: { enabled: false, from: 20, to: 100, gridOffset: 0, curve: "linear" },
-        filterCutoff: { enabled: false, from: 20, to: 127, gridOffset: 0, curve: "linear" },
-        filterResonance: { enabled: false, from: 10, to: 90, gridOffset: 0, curve: "linear" }
-      }
-    },
+    runtimeConfig,
     menu: { stack: [], cursor: 0, editing: false },
+    system: {
+      shiftHeld: false,
+      presetNames: [],
+      selectedPreset: null,
+      draftName: "",
+      nameCursor: 0,
+      pendingRename: null,
+      confirm: null,
+      toast: null,
+      eventBlipUntilMs: 0,
+      stopLatched: false,
+      transportFlash: "none",
+      transportFlashUntilMs: 0,
+      oledMode: "splash",
+      oledSplashText: "Starting up",
+      oledSplashUntilMs: Date.now() + 3000,
+      lastInteractionMs: Date.now()
+    },
     scanIndex: 0,
     scanPulseAccumulator: 0,
     conwayPulseAccumulator: 0,
@@ -149,34 +258,189 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
   };
 }
 
-export function routeInput<TState>(state: PlatformState<TState>, input: DeviceInput, behavior: BehaviorEngine<TState, unknown>): { state: PlatformState<TState>; events: MusicalEvent[] } {
+export function routeInput<TState>(
+  state: PlatformState<TState>,
+  input: DeviceInput,
+  behavior: BehaviorEngine<TState, unknown>
+): { state: PlatformState<TState>; events: MusicalEvent[]; effects: PlatformEffect[] } {
   const events: MusicalEvent[] = [];
+  const effects: PlatformEffect[] = [];
   let nextState = { ...state };
 
-  if (input.type === "button_s") {
-    nextState.transport = { ...nextState.transport, playing: !nextState.transport.playing };
-  } else if (input.type === "button_a") {
-    nextState.menu = backMenu(nextState.menu);
+  // Normalize optional button pressed field for backward compatibility.
+  const pressed = (i: any): boolean => (typeof i.pressed === "boolean" ? i.pressed : true);
+
+  // Any interaction wakes the OLED and resets idle timer.
+  {
+    const now = Date.now();
+    const sys = nextState.system;
+    nextState.system = {
+      ...sys,
+      lastInteractionMs: now,
+      oledMode: sys.oledMode === "off" || sys.oledMode === "splash" ? "normal" : sys.oledMode
+    };
+  }
+
+  // Confirmation overlay intercepts menu controls and must not fall through.
+  if (nextState.system.confirm) {
+    const c = nextState.system.confirm;
+    if (input.type === "encoder_turn" && isMainEncoderInput(input.id)) {
+      const nextCursor = clamp(c.cursor + input.delta, 0, 1) as 0 | 1;
+      nextState.system = { ...nextState.system, confirm: { ...c, cursor: nextCursor } };
+    } else if (input.type === "encoder_press" && isMainEncoderInput(input.id)) {
+      if (c.cursor === 1) {
+        nextState = executeConfirmed(nextState, c.action, effects, behavior);
+      }
+      nextState.system = { ...nextState.system, confirm: null };
+    } else if (input.type === "button_a" && pressed(input)) {
+      nextState.system = { ...nextState.system, confirm: null };
+    }
+
+    nextState.behaviorState = behavior.onInput(nextState.behaviorState, input, {
+      bpm: nextState.transport.bpm,
+      emit: (event) => events.push(event)
+    });
+    return { state: nextState, events, effects };
+  }
+
+  if (input.type === "button_shift") {
+    nextState.system = { ...nextState.system, shiftHeld: pressed(input) };
+  }
+
+  if (input.type === "button_s" && pressed(input)) {
+    const wasPlaying = nextState.transport.playing;
+    const now = Date.now();
+    const playing = !wasPlaying;
+
+    // Toggle transport.
+    nextState.transport = { ...nextState.transport, playing };
+
+    if (playing) {
+      // Only a STOP->PLAY transition forces a new bar.
+      if (nextState.system.stopLatched) {
+        nextState.transport = { ...nextState.transport, ppqnPulse: 0, tick: 0 };
+        nextState.scanPulseAccumulator = 0;
+        nextState.conwayPulseAccumulator = 0;
+        nextState.ppqnPulseRemainder = 0;
+        nextState.scanIndex = 0;
+        nextState.system = {
+          ...nextState.system,
+          stopLatched: false,
+          transportFlash: "measure",
+          transportFlashUntilMs: now + 220
+        };
+      } else {
+        // PAUSE->PLAY resumes timeline; do not reset flash state.
+        nextState.system = { ...nextState.system, stopLatched: false };
+      }
+    }
+  } else if (input.type === "button_a" && pressed(input)) {
+    // Shift+Backspace in text editing mode.
+    const view = locate(menuTree(nextState), nextState, nextState.menu);
+    const selected = view.siblings[nextState.menu.cursor];
+    if (nextState.menu.editing && selected && selected.kind === "text" && nextState.system.shiftHeld) {
+      nextState = textBackspace(nextState, selected.key);
+    } else {
+      nextState.menu = backMenu(nextState.menu);
+    }
   } else if (input.type === "encoder_press" && isMainEncoderInput(input.id)) {
-    nextState = pressMenu(nextState);
+    nextState = pressMenu(nextState, effects);
   } else if (input.type === "encoder_turn" && isMainEncoderInput(input.id)) {
-    nextState = turnMenu(nextState, input.delta);
+    nextState = turnMenu(nextState, input.delta, effects);
   }
 
   nextState.behaviorState = behavior.onInput(nextState.behaviorState, input, {
     bpm: nextState.transport.bpm,
     emit: (event) => events.push(event)
   });
-  return { state: nextState, events };
+
+  if (events.some((e) => e.type === "note_on" || e.type === "sample_trigger")) {
+    nextState.system = { ...nextState.system, eventBlipUntilMs: Date.now() + 100 };
+  }
+  return { state: nextState, events, effects };
+}
+
+function executeConfirmed<TState>(
+  state: PlatformState<TState>,
+  action: PendingAction,
+  effects: PlatformEffect[],
+  behavior: BehaviorEngine<TState, unknown>
+): PlatformState<TState> {
+  if (action.kind === "factory_load") {
+    const factory = factoryPayload(behavior);
+    return applyConfigPayload(state, factory, behavior);
+  }
+  if (action.kind === "default_load") {
+    effects.push({ type: "store_load_default" });
+    return state;
+  }
+  if (action.kind === "default_save") {
+    effects.push({ type: "store_save_default", payload: extractConfigPayload(state) });
+    return state;
+  }
+  if (action.kind === "preset_load") {
+    effects.push({ type: "store_load_preset", name: action.name });
+    return state;
+  }
+  if (action.kind === "preset_delete") {
+    effects.push({ type: "store_delete_preset", name: action.name });
+    return state;
+  }
+  if (action.kind === "preset_save") {
+    effects.push({ type: "store_save_preset", name: action.name, payload: extractConfigPayload(state) });
+    return state;
+  }
+  if (action.kind === "preset_rename") {
+    effects.push({ type: "store_load_preset", name: action.from });
+    return { ...state, system: { ...state.system, pendingRename: { from: action.from, to: action.to } } };
+  }
+  return state;
+}
+
+function textBackspace<TState>(state: PlatformState<TState>, key: string): PlatformState<TState> {
+  const raw = String(readAnyValue(state, key) ?? "");
+  const cursor = clamp(state.system.nameCursor, 0, raw.length);
+  if (cursor <= 0) return state;
+  const next = raw.slice(0, cursor - 1) + raw.slice(cursor);
+  return {
+    ...state,
+    system: { ...state.system, draftName: next, nameCursor: cursor - 1 }
+  };
 }
 
 export function tick<TState>(
   state: PlatformState<TState>,
   behavior: BehaviorEngine<TState, unknown>,
   elapsedSeconds: number = FRAME_SECONDS
-): { state: PlatformState<TState>; events: MusicalEvent[] } {
+): { state: PlatformState<TState>; events: MusicalEvent[]; effects: PlatformEffect[] } {
   const events: MusicalEvent[] = [];
+  const effects: PlatformEffect[] = [];
   let next = { ...state };
+  const nowMs = Date.now();
+
+  // OLED sleep/splash timing.
+  {
+    const sleepMs = Math.max(0, Math.floor(next.runtimeConfig.screenSleepSeconds * 1000));
+    if (next.system.oledMode === "normal" && sleepMs > 0 && nowMs - next.system.lastInteractionMs >= sleepMs) {
+      next.system = {
+        ...next.system,
+        oledMode: "splash",
+        oledSplashText: "Going to sleep",
+        oledSplashUntilMs: nowMs + 3000
+      };
+    } else if (next.system.oledMode === "splash" && nowMs >= next.system.oledSplashUntilMs) {
+      // Startup splash returns to normal; sleep splash turns OLED off.
+      const nextMode = next.system.oledSplashText === "Starting up" ? "normal" : "off";
+      next.system = { ...next.system, oledMode: nextMode };
+    }
+  }
+
+  // Transport flash decay.
+  if (next.system.transportFlashUntilMs > 0 && nowMs > next.system.transportFlashUntilMs) {
+    next.system = { ...next.system, transportFlashUntilMs: 0, transportFlash: "none" };
+  }
+
+  const prevPulse = next.transport.ppqnPulse;
   if (next.transport.playing) {
     const elapsedPulses = pulsesPerSecond(next.transport.bpm) * elapsedSeconds;
     next.scanPulseAccumulator += elapsedPulses;
@@ -222,20 +486,175 @@ export function tick<TState>(
     }
     next.transport = { ...next.transport, tick: next.transport.tick + 1 };
   }
-  return { state: next, events };
+
+  // Beat/measure flash (match space button colors).
+  if (next.transport.playing && next.transport.ppqnPulse > prevPulse) {
+    let sawBeat = false;
+    let sawMeasure = false;
+    for (let pulse = prevPulse + 1; pulse <= next.transport.ppqnPulse; pulse += 1) {
+      if (pulse % 96 === 0) sawMeasure = true;
+      else if (pulse % 24 === 0) sawBeat = true;
+    }
+    if (sawMeasure) {
+      next.system = { ...next.system, transportFlash: "measure", transportFlashUntilMs: nowMs + 220 };
+    } else if (sawBeat) {
+      next.system = { ...next.system, transportFlash: "beat", transportFlashUntilMs: nowMs + 220 };
+    }
+  }
+
+  if (events.some((e) => e.type === "note_on" || e.type === "sample_trigger")) {
+    next.system = { ...next.system, eventBlipUntilMs: nowMs + 100 };
+  }
+  return { state: next, events, effects };
+}
+
+export function extractConfigPayload<TState>(state: PlatformState<TState>): ConfigPayload {
+  return {
+    activeBehavior: state.activeBehavior,
+    runtimeConfig: state.runtimeConfig,
+    mappingConfig: state.mappingConfig
+  };
+}
+
+export function applyConfigPayload<TState>(
+  state: PlatformState<TState>,
+  payload: ConfigPayload,
+  behavior: BehaviorEngine<TState, unknown>
+): PlatformState<TState> {
+  const safe = sanitizePayload(payload, behavior);
+  const next = { ...state };
+  next.activeBehavior = safe.activeBehavior;
+  next.runtimeConfig = safe.runtimeConfig;
+  next.mappingConfig = safe.mappingConfig;
+
+  // Reset transient timing accumulators to avoid discontinuities.
+  next.scanPulseAccumulator = 0;
+  next.conwayPulseAccumulator = 0;
+  next.ppqnPulseRemainder = 0;
+  next.scanIndex = 0;
+  return next;
+}
+
+function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngine<TState, unknown>): ConfigPayload {
+  const factory = factoryPayload(behavior);
+  const p: any = payload ?? {};
+  const rt: any = p.runtimeConfig ?? {};
+  const mergedRuntime: RuntimeConfig = {
+    ...(factory.runtimeConfig as any),
+    ...(rt as any),
+    pitch: { ...(factory.runtimeConfig.pitch as any), ...(rt.pitch ?? {}) },
+    x: {
+      ...(factory.runtimeConfig.x as any),
+      ...(rt.x ?? {}),
+      pitch: { ...(factory.runtimeConfig.x.pitch as any), ...(rt.x?.pitch ?? {}) },
+      velocity: { ...(factory.runtimeConfig.x.velocity as any), ...(rt.x?.velocity ?? {}) },
+      filterCutoff: { ...(factory.runtimeConfig.x.filterCutoff as any), ...(rt.x?.filterCutoff ?? {}) },
+      filterResonance: { ...(factory.runtimeConfig.x.filterResonance as any), ...(rt.x?.filterResonance ?? {}) }
+    },
+    y: {
+      ...(factory.runtimeConfig.y as any),
+      ...(rt.y ?? {}),
+      pitch: { ...(factory.runtimeConfig.y.pitch as any), ...(rt.y?.pitch ?? {}) },
+      velocity: { ...(factory.runtimeConfig.y.velocity as any), ...(rt.y?.velocity ?? {}) },
+      filterCutoff: { ...(factory.runtimeConfig.y.filterCutoff as any), ...(rt.y?.filterCutoff ?? {}) },
+      filterResonance: { ...(factory.runtimeConfig.y.filterResonance as any), ...(rt.y?.filterResonance ?? {}) }
+    }
+  };
+
+  const merged: ConfigPayload = {
+    activeBehavior: typeof p.activeBehavior === "string" ? p.activeBehavior : factory.activeBehavior,
+    runtimeConfig: mergedRuntime,
+    mappingConfig: p.mappingConfig ? (p.mappingConfig as MappingConfig) : factory.mappingConfig
+  };
+  return merged;
+}
+
+export function applyStoreResult<TState>(
+  state: PlatformState<TState>,
+  result: StoreResult,
+  behavior: BehaviorEngine<TState, unknown>
+): { state: PlatformState<TState>; effects: PlatformEffect[] } {
+  const effects: PlatformEffect[] = [];
+  const setToast = (s: PlatformState<TState>, message: string): PlatformState<TState> => ({
+    ...s,
+    system: { ...s.system, toast: { message, untilMs: Date.now() + 3000 } }
+  });
+
+  if (result.type === "list_presets_result") {
+    const names = [...result.names].sort((a, b) => a.localeCompare(b));
+    return { state: { ...state, system: { ...state.system, presetNames: names } }, effects };
+  }
+  if (result.type === "load_preset_result") {
+    const pending = state.system.pendingRename;
+    if (pending && pending.from === result.name) {
+      if (!result.payload) {
+        const cleared = { ...state, system: { ...state.system, pendingRename: null } };
+        return { state: setToast(cleared, "Rename failed"), effects };
+      }
+      effects.push({ type: "store_save_preset", name: pending.to, payload: result.payload });
+      effects.push({ type: "store_delete_preset", name: pending.from });
+      const cleared = { ...state, system: { ...state.system, pendingRename: null, selectedPreset: null } };
+      return { state: setToast(cleared, "Renaming..."), effects };
+    }
+
+    if (!result.payload) return { state: setToast(state, "Preset not found"), effects };
+    const next = applyConfigPayload(state, result.payload, behavior);
+    return { state: setToast(next, `Loaded: ${result.name}`), effects };
+  }
+  if (result.type === "save_preset_result") {
+    const msg = result.outcome === "overwritten" ? `Overwrote: ${result.name}` : `Saved: ${result.name}`;
+    effects.push({ type: "store_list_presets" });
+    return { state: setToast(state, msg), effects };
+  }
+  if (result.type === "delete_preset_result") {
+    effects.push({ type: "store_list_presets" });
+    return { state: setToast(state, result.ok ? `Deleted: ${result.name}` : "Delete failed"), effects };
+  }
+  if (result.type === "load_default_result") {
+    if (!result.payload) return { state: setToast(state, "No default saved"), effects };
+    const next = applyConfigPayload(state, result.payload, behavior);
+    return { state: setToast(next, "Loaded default"), effects };
+  }
+  if (result.type === "save_default_result") {
+    return { state: setToast(state, result.ok ? "Save ok." : "Save failed"), effects };
+  }
+  if (result.type === "store_error") {
+    return { state: setToast(state, result.message.slice(0, 18)), effects };
+  }
+  return { state, effects };
 }
 
 export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>): SimulatorFrame {
   const model = behavior.renderModel(state.behaviorState);
   const menuView = currentMenuView(state);
   const scanCursor = state.runtimeConfig.scanMode === "scanning" ? { axis: state.runtimeConfig.scanAxis, index: state.scanIndex } : null;
+  const baseDisplay: DisplayFrame = {
+    page: menuView.path,
+    title: menuView.path,
+    editing: state.menu.editing,
+    lines: menuView.lines
+  };
+  const oledLines = toOledLines(baseDisplay);
+  const now = Date.now();
+  const toast = state.system.toast && state.system.toast.untilMs > now ? state.system.toast.message : null;
+  const transportIcon: "play" | "pause" | "stop" = state.transport.playing ? "play" : state.system.stopLatched ? "stop" : "pause";
+  const oled = renderOledFrame({
+    lines: oledLines,
+    off: state.system.oledMode === "off",
+    splash:
+      state.system.oledMode === "splash"
+        ? state.system.oledSplashText === "Starting up"
+          ? { pixelsRgb565be: logoSepia128Rgb565be, topText: "", bottomText: "Starting up" }
+          : { pixelsRgb565be: logoSepia128Rgb565be, topText: state.system.oledSplashText, bottomText: null }
+        : undefined,
+    transportIcon,
+    transportFlash: state.system.transportFlash,
+    eventDotOn: state.system.eventBlipUntilMs > now,
+    toast
+  });
   return {
-    display: {
-      page: menuView.path,
-      title: menuView.path,
-      editing: state.menu.editing,
-      lines: menuView.lines
-    },
+    display: baseDisplay,
+    oled,
     leds: { width: GRID_WIDTH, height: GRID_HEIGHT, cells: cellsToLeds(model.cells, scanCursor, state.runtimeConfig.gridBrightness / 100) },
     transport: state.transport,
     activeBehavior: model.name
@@ -289,7 +708,7 @@ function profileFromConfig(cfg: RuntimeConfig): InterpretationProfile {
   };
 }
 
-function menuTree(): MenuNode {
+function menuTree<TState>(state: PlatformState<TState>): MenuNode {
   return {
     kind: "group",
     label: "Root",
@@ -357,6 +776,56 @@ function menuTree(): MenuNode {
         kind: "group",
         label: "System",
         children: [
+          {
+            kind: "group",
+            label: "Presets",
+            children: [
+              {
+                kind: "group",
+                label: "Library",
+                children: [
+                  {
+                    kind: "group",
+                    label: "Save As",
+                    children: [
+                      { kind: "text", label: "Name", key: "system.draftName", maxLen: 32 },
+                      { kind: "action", label: "Save", action: { type: "preset_save" } }
+                    ]
+                  },
+                  {
+                    kind: "group",
+                    label: "Load",
+                    children: (s) => presetListNodes(s, "load")
+                  },
+                  {
+                    kind: "group",
+                    label: "Rename",
+                    children: (s) => presetRenameNodes(s)
+                  },
+                  {
+                    kind: "group",
+                    label: "Delete",
+                    children: (s) => presetListNodes(s, "delete")
+                  },
+                  { kind: "action", label: "Refresh", action: { type: "refresh_presets" } }
+                ]
+              },
+              {
+                kind: "group",
+                label: "Default",
+                children: [
+                  { kind: "action", label: "Save Default", action: { type: "default_save" } },
+                  { kind: "action", label: "Load Default", action: { type: "default_load" } }
+                ]
+              },
+              {
+                kind: "group",
+                label: "Factory",
+                children: [{ kind: "action", label: "Revert Factory", action: { type: "factory_load" } }]
+              }
+            ]
+          },
+          { kind: "number", label: "Screen Sleep", key: "screenSleepSeconds", min: 0, max: 600, step: 10 },
           { kind: "number", label: "Display Brightness", key: "displayBrightness", min: 10, max: 100, step: 5 },
           { kind: "number", label: "Grid Brightness", key: "gridBrightness", min: 10, max: 100, step: 5 },
           { kind: "number", label: "Button Brightness", key: "buttonBrightness", min: 10, max: 100, step: 5 }
@@ -364,6 +833,32 @@ function menuTree(): MenuNode {
       }
     ]
   };
+}
+
+function presetListNodes<TState>(state: PlatformState<TState>, mode: "load" | "delete"): MenuNode[] {
+  const names = state.system.presetNames;
+  if (names.length === 0) {
+    return [{ kind: "action", label: "(none)", action: { type: "refresh_presets" } }];
+  }
+  return names.map((name) => ({
+    kind: "action",
+    label: name,
+    action: mode === "load" ? { type: "preset_load", name } : { type: "preset_delete", name }
+  }));
+}
+
+function presetRenameNodes<TState>(state: PlatformState<TState>): MenuNode[] {
+  const names = state.system.presetNames;
+  const picked = state.system.selectedPreset;
+  const out: MenuNode[] = [];
+  if (!picked) {
+    if (names.length === 0) return [{ kind: "action", label: "(none)", action: { type: "refresh_presets" } }];
+    return names.map((name) => ({ kind: "action", label: name, action: { type: "preset_rename_pick", name } }));
+  }
+  out.push({ kind: "action", label: `From: ${picked}`, action: { type: "refresh_presets" } });
+  out.push({ kind: "text", label: "New Name", key: "system.draftName", maxLen: 32 });
+  out.push({ kind: "action", label: "Apply", action: { type: "preset_rename_apply" } });
+  return out;
 }
 
 function axisGroup(label: string, prefix: "x" | "y", _defaultStep: number): MenuNode {
@@ -402,8 +897,11 @@ function laneGroup(label: string, prefix: string, offsetLimit: number): MenuNode
 }
 
 function currentMenuView<TState>(state: PlatformState<TState>): { path: string; lines: string[] } {
-  const { runtimeConfig: cfg, menu } = state;
-  const { siblings, path } = locate(menuTree(), cfg, menu);
+  if (state.system.confirm) {
+    return confirmView(state);
+  }
+  const { menu } = state;
+  const { siblings, path } = locate(menuTree(state), state, menu);
   const shortPath = abbreviatePath(path);
   if (!siblings.length) return { path: shortPath, lines: [] };
   const cursor = clamp(menu.cursor, 0, siblings.length - 1);
@@ -441,6 +939,29 @@ function currentMenuView<TState>(state: PlatformState<TState>): { path: string; 
   return { path: shortPath, lines: lines.slice(0, bodyBudget) };
 }
 
+function confirmView<TState>(state: PlatformState<TState>): { path: string; lines: string[] } {
+  const c = state.system.confirm;
+  if (!c) return { path: "CONF", lines: [] };
+  const no = c.cursor === 0 ? "@@> No" : "  No";
+  const yes = c.cursor === 1 ? "@@> Yes" : "  Yes";
+  const title = "CONFIRM";
+  const details = confirmDetails(state, c);
+  const lines = [fitOledText(details), "", no, yes].filter((l) => l.length > 0);
+  return { path: title, lines: lines.slice(0, OLED_TEXT_LINES - 1) };
+}
+
+function confirmDetails<TState>(state: PlatformState<TState>, confirm: ConfirmState): string {
+  const a = confirm.action;
+  if (a.kind === "preset_save") return `Overwrite? ${a.name}`;
+  if (a.kind === "preset_delete") return `Delete? ${a.name}`;
+  if (a.kind === "preset_load") return `Load? ${a.name}`;
+  if (a.kind === "preset_rename") return `Rename? ${a.from}`;
+  if (a.kind === "default_save") return "Save default?";
+  if (a.kind === "default_load") return "Load default?";
+  if (a.kind === "factory_load") return "Load factory?";
+  return "Confirm";
+}
+
 function abbreviatePath(path: string): string {
   const map: Record<string, string> = {
     Transport: "TRN",
@@ -463,6 +984,17 @@ function formatMenuItemLines<TState>(item: MenuNode, state: PlatformState<TState
   if (item.kind === "group") {
     return [`${mark}> ${item.label}`];
   }
+  if (item.kind === "action") {
+    return [`${mark}> ${item.label}`];
+  }
+  if (item.kind === "text") {
+    const value = String(readAnyValue(state, item.key) ?? "");
+    const display = value.length === 0 ? "(empty)" : value;
+    if (selected) {
+      return [`${mark}> ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitOledText(display)}`];
+    }
+    return [`  ${item.label}`];
+  }
   const value = formatDisplayValue(item.key, readAnyValue(state, item.key));
   if (selected) {
     return [`${mark}> ${item.label}:`, `${mark}${editing ? " *" : "  "}${value}`];
@@ -470,22 +1002,23 @@ function formatMenuItemLines<TState>(item: MenuNode, state: PlatformState<TState
   return [`  ${item.label}`];
 }
 
-function locate(root: MenuNode, cfg: RuntimeConfig, menu: MenuState): { node: MenuNode; siblings: MenuNode[]; path: string } {
+function locate<TState>(root: MenuNode, state: PlatformState<TState>, menu: MenuState): { node: MenuNode; siblings: MenuNode[]; path: string } {
   let node = root;
   const labels: string[] = [];
   for (const idx of menu.stack) {
-    const kids = visibleChildren(node, cfg);
+    const kids = visibleChildren(node, state);
     const next = kids[idx] ?? kids[0];
     if (!next || next.kind !== "group") break;
     labels.push(next.label);
     node = next;
   }
-  return { node, siblings: visibleChildren(node, cfg), path: labels.join("/") || "Menu" };
+  return { node, siblings: visibleChildren(node, state), path: labels.join("/") || "Menu" };
 }
 
-function visibleChildren(node: MenuNode, cfg: RuntimeConfig): MenuNode[] {
+function visibleChildren<TState>(node: MenuNode, state: PlatformState<TState>): MenuNode[] {
   if (node.kind !== "group") return [];
-  return node.children.filter((n) => (n.visible ? n.visible(cfg) : true));
+  const kids = typeof node.children === "function" ? node.children(state) : node.children;
+  return kids.filter((n) => ("visible" in n && typeof (n as any).visible === "function" ? (n as any).visible(state.runtimeConfig) : true));
 }
 
 function backMenu(menu: MenuState): MenuState {
@@ -494,30 +1027,68 @@ function backMenu(menu: MenuState): MenuState {
   return { ...menu, stack: menu.stack.slice(0, -1), cursor: 0 };
 }
 
-function pressMenu<TState>(state: PlatformState<TState>): PlatformState<TState> {
-  const view = locate(menuTree(), state.runtimeConfig, state.menu);
+function pressMenu<TState>(state: PlatformState<TState>, effects: PlatformEffect[]): PlatformState<TState> {
+  const view = locate(menuTree(state), state, state.menu);
   const selected = view.siblings[state.menu.cursor];
   if (!selected) return state;
+
   if (selected.kind === "group") {
-    return { ...state, menu: { ...state.menu, stack: [...state.menu.stack, state.menu.cursor], cursor: 0 } };
+    const nextMenu = { ...state.menu, stack: [...state.menu.stack, state.menu.cursor], cursor: 0 };
+    let nextState: PlatformState<TState> = { ...state, menu: nextMenu };
+    if (selected.label === "Presets" || selected.label === "Load" || selected.label === "Delete" || selected.label === "Rename") {
+      effects.push({ type: "store_list_presets" });
+    }
+    // Entering Save As primes a human-readable timestamp.
+    if (selected.label === "Save As") {
+      const suggested = formatTimestamp(Date.now());
+      nextState = {
+        ...nextState,
+        system: { ...nextState.system, draftName: suggested, nameCursor: suggested.length }
+      };
+    }
+    return nextState;
   }
+
+  if (selected.kind === "action") {
+    return handleAction(state, selected.action, effects);
+  }
+
   if (selected.kind === "enum" && selected.key === "transport.playing") {
     return { ...state, transport: { ...state.transport, playing: !state.transport.playing } };
   }
   if (selected.kind === "bool") {
     return { ...state, runtimeConfig: writeValue(state.runtimeConfig, selected.key, !readValue(state.runtimeConfig, selected.key)) };
   }
+
+  if (selected.kind === "text") {
+    const current = String(readAnyValue(state, selected.key) ?? "");
+    if (!state.menu.editing) {
+      return {
+        ...state,
+        menu: { ...state.menu, editing: true },
+        system: { ...state.system, nameCursor: clamp(current.length, 0, selected.maxLen) }
+      };
+    }
+    // While editing text, encoder press advances the cursor.
+    const nextCursor = clamp(state.system.nameCursor + 1, 0, selected.maxLen);
+    return { ...state, system: { ...state.system, nameCursor: nextCursor } };
+  }
+
   return { ...state, menu: { ...state.menu, editing: !state.menu.editing } };
 }
 
-function turnMenu<TState>(state: PlatformState<TState>, delta: -1 | 1): PlatformState<TState> {
-  const view = locate(menuTree(), state.runtimeConfig, state.menu);
+function turnMenu<TState>(state: PlatformState<TState>, delta: -1 | 1, effects: PlatformEffect[]): PlatformState<TState> {
+  const view = locate(menuTree(state), state, state.menu);
   if (!state.menu.editing) {
     const max = Math.max(0, view.siblings.length - 1);
     return { ...state, menu: { ...state.menu, cursor: clamp(state.menu.cursor + delta, 0, max) } };
   }
   const selected = view.siblings[state.menu.cursor];
   if (!selected || selected.kind === "group" || selected.kind === "bool") return state;
+  if (selected.kind === "action") return state;
+  if (selected.kind === "text") {
+    return textEditTurn(state, selected, delta);
+  }
   const current = readAnyValue(state, selected.key);
   if (selected.kind === "number") {
     const nextValue = clamp(Number(current) + delta * selected.step, selected.min, selected.max);
@@ -532,9 +1103,103 @@ function turnMenu<TState>(state: PlatformState<TState>, delta: -1 | 1): Platform
   return writeAnyValue(state, selected.key, raw);
 }
 
+function handleAction<TState>(state: PlatformState<TState>, action: ActionSpec, effects: PlatformEffect[]): PlatformState<TState> {
+  const openConfirm = (kind: ConfirmKind, pending: PendingAction): PlatformState<TState> => ({
+    ...state,
+    system: { ...state.system, confirm: { kind, action: pending, cursor: 0 } }
+  });
+  const toast = (message: string): PlatformState<TState> => ({
+    ...state,
+    system: { ...state.system, toast: { message, untilMs: Date.now() + 3000 } }
+  });
+
+  if (action.type === "refresh_presets") {
+    effects.push({ type: "store_list_presets" });
+    return state;
+  }
+  if (action.type === "preset_load") {
+    return openConfirm("load_preset", { kind: "preset_load", name: action.name });
+  }
+  if (action.type === "preset_delete") {
+    return openConfirm("delete_preset", { kind: "preset_delete", name: action.name });
+  }
+  if (action.type === "preset_save") {
+    const name = state.system.draftName.trim();
+    if (name.length === 0) return toast("Name required");
+    if (state.system.presetNames.includes(name)) {
+      return openConfirm("overwrite_preset", { kind: "preset_save", name });
+    }
+    effects.push({ type: "store_save_preset", name, payload: extractConfigPayload(state) });
+    return state;
+  }
+  if (action.type === "preset_rename_pick") {
+    const picked = action.name;
+    return {
+      ...state,
+      system: { ...state.system, selectedPreset: picked, draftName: picked, nameCursor: picked.length }
+    };
+  }
+  if (action.type === "preset_rename_apply") {
+    const from = state.system.selectedPreset;
+    const to = state.system.draftName.trim();
+    if (!from) return toast("Pick preset");
+    if (to.length === 0) return toast("Name required");
+    if (from === to) return toast("Same name");
+    if (state.system.presetNames.includes(to)) {
+      return openConfirm("overwrite_preset", { kind: "preset_rename", from, to });
+    }
+    return openConfirm("rename_preset", { kind: "preset_rename", from, to });
+  }
+  if (action.type === "default_save") {
+    return openConfirm("save_default", { kind: "default_save" });
+  }
+  if (action.type === "default_load") {
+    return openConfirm("load_default", { kind: "default_load" });
+  }
+  if (action.type === "factory_load") {
+    return openConfirm("load_factory", { kind: "factory_load" });
+  }
+  return state;
+}
+
+function textEditTurn<TState>(state: PlatformState<TState>, node: Extract<MenuNode, { kind: "text" }>, delta: -1 | 1): PlatformState<TState> {
+  const raw = String(readAnyValue(state, node.key) ?? "");
+  const cursor = clamp(state.system.nameCursor, 0, Math.max(0, node.maxLen));
+  const safe = raw.slice(0, node.maxLen);
+  const curPos = clamp(cursor, 0, safe.length);
+  const charset = " ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-";
+  const chars = safe.split("");
+  while (chars.length <= curPos) chars.push(" ");
+  const current = chars[curPos] ?? " ";
+  const idx = Math.max(0, charset.indexOf(current));
+  const nextIdx = mod(idx + delta, charset.length);
+  chars[curPos] = charset[nextIdx] ?? " ";
+  const next = chars.join("").replace(/\s+$/g, "");
+  return {
+    ...state,
+    system: { ...state.system, draftName: next, nameCursor: curPos }
+  };
+}
+
+function formatTimestamp(nowMs: number): string {
+  const d = new Date(nowMs);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd} ${hh}${min}`;
+}
+
+function factoryPayload<TState>(behavior: BehaviorEngine<TState, unknown>): ConfigPayload {
+  const s = createInitialState(behavior);
+  return extractConfigPayload(s);
+}
+
 function readAnyValue<TState>(state: PlatformState<TState>, key: string): unknown {
   if (key.startsWith("transport.")) return readNestedValue(state.transport, key.slice("transport.".length));
   if (key.startsWith("mapping.")) return readNestedValue(state.mappingConfig, key.slice("mapping.".length));
+  if (key.startsWith("system.")) return readNestedValue(state.system, key.slice("system.".length));
   return readValue(state.runtimeConfig, key);
 }
 
@@ -546,6 +1211,10 @@ function writeAnyValue<TState>(state: PlatformState<TState>, key: string, value:
   if (key.startsWith("mapping.")) {
     const mappingConfig = writeNestedValue(state.mappingConfig, key.slice("mapping.".length), value) as MappingConfig;
     return { ...state, mappingConfig };
+  }
+  if (key.startsWith("system.")) {
+    const system = writeNestedValue(state.system, key.slice("system.".length), value) as SystemState;
+    return { ...state, system };
   }
   return { ...state, runtimeConfig: writeValue(state.runtimeConfig, key, value) };
 }
@@ -670,6 +1339,7 @@ function formatDisplayValue(key: string, value: unknown): string {
   if (key === "displayBrightness") return `OLED ${value}%`;
   if (key === "gridBrightness") return `Grid ${value}%`;
   if (key === "buttonBrightness") return `Btn ${value}%`;
+  if (key === "screenSleepSeconds") return Number(value) <= 0 ? "Sleep: Off" : `Sleep: ${value}s`;
   if (key === "populationMode") return value === "grid" ? "Sequencer" : "Conway";
   if (key === "scanMode") return value === "immediate" ? "Immediate" : "Scanning";
   if (key === "scanAxis") return value === "columns" ? "Cols" : "Rows";
@@ -863,6 +1533,7 @@ export function emergencyBrake<TState>(state: PlatformState<TState>): { state: P
     state: {
       ...state,
       transport: { ...state.transport, playing: false, ppqnPulse: 0 },
+      system: { ...state.system, stopLatched: true, transportFlash: "none", transportFlashUntilMs: 0 },
       scanIndex: origin,
       scanPulseAccumulator: 0,
       conwayPulseAccumulator: 0,

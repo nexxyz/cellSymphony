@@ -91,14 +91,12 @@ body {
   position: relative;
   image-rendering: pixelated;
   border-radius: 6px;
-  border: 1px solid #2a3f33;
+  border: 0;
   color: #78f7ab;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  gap: 2px;
-  padding: 8px;
-  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  box-sizing: content-box;
   background:
     repeating-linear-gradient(0deg, rgba(120, 247, 171, 0.04) 0 1px, transparent 1px 3px),
     radial-gradient(circle at 40% 35%, rgba(16, 102, 55, 0.48) 0, rgba(3, 16, 8, 0.95) 70%);
@@ -107,79 +105,13 @@ body {
     0 0 24px rgba(50, 205, 124, 0.12);
 }
 
-.oled-panel p {
-  margin: 0;
-  font-family: "IBM Plex Mono", "Consolas", monospace;
-  font-size: 10px;
-  line-height: 1.05;
-  white-space: pre;
-  text-shadow: 0 0 5px rgba(114, 255, 177, 0.35);
+.oled-canvas {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
 }
 
-.oled-panel .oled-selected {
-  background: rgba(145, 255, 186, 0.9);
-  color: #08120d;
-  text-shadow: none;
-  border-radius: 2px;
-  padding: 0 2px;
-}
 
-.transport-indicator {
-  position: absolute;
-  right: 10px;
-  bottom: 8px;
-  font-size: 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: #6be89f;
-}
-
-.pause-slash {
-  position: relative;
-  width: 11px;
-  height: 11px;
-  border: 1px solid currentColor;
-  display: inline-block;
-}
-
-.pause-slash::after {
-  content: "";
-  position: absolute;
-  left: 4px;
-  top: -1px;
-  width: 1px;
-  height: 12px;
-  background: currentColor;
-  transform: rotate(35deg);
-}
-
-.transport-indicator.beat {
-  color: #f2df78;
-}
-
-.transport-indicator.measure {
-  color: #7dff9c;
-}
-
-.event-dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #244637;
-}
-
-.event-dot.on {
-  background: #80ffbc;
-  box-shadow: 0 0 6px #80ffbc;
-}
-
-.meta {
-  text-align: center;
-  font-size: 12px;
-  margin: 8px 0 0;
-  color: #b8c8be;
-}
 
 .encoder-card {
   border: 1px solid #355142;
@@ -290,14 +222,14 @@ body {
 }
 
 .button-stack .beat {
-  background: linear-gradient(180deg, #84782f, #5d541f);
-  box-shadow: 0 0 14px rgba(242, 223, 120, 0.5);
+  background: linear-gradient(180deg, #2f8446, #1f5d32);
+  box-shadow: 0 0 14px rgba(120, 242, 160, 0.5);
 }
 
 .button-stack .measure {
-  background: linear-gradient(180deg, #3e7f4f, #285837);
-  box-shadow: 0 0 18px rgba(114, 255, 139, 0.55);
-  border-color: #86d6a1;
+  background: linear-gradient(180deg, #8a2f2f, #5e1f1f);
+  box-shadow: 0 0 18px rgba(255, 92, 92, 0.55);
+  border-color: #d68686;
 }
 
 .button-stack .solid_yellow {

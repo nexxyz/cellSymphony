@@ -245,3 +245,54 @@ test("default note mapping range is C2 to C6 with C3 start", () => {
   assert.equal(state.runtimeConfig.pitch.startingNote, 48);
   assert.equal(state.runtimeConfig.pitch.highestNote, 84);
 });
+
+test("config save default requires confirmation before emitting effect", () => {
+  let state = createInitialState(mockBehavior);
+
+  const input = (i: DeviceInput) => {
+    const result = routeInput(state, i, mockBehavior);
+    state = result.state;
+    return result;
+  };
+
+  // Root -> System
+  for (let i = 0; i < 5; i += 1) input({ type: "encoder_turn", delta: 1 });
+  input({ type: "encoder_press" }); // enter System
+  input({ type: "encoder_press" }); // enter Config
+  input({ type: "encoder_turn", delta: 1 });
+  input({ type: "encoder_press" }); // enter Default
+
+  // Cursor 0 should be Save Default.
+  const before = input({ type: "encoder_press" });
+  assert.equal(before.effects.length, 0);
+  assert.ok(state.system.confirm);
+
+  // Choose Yes and confirm.
+  input({ type: "encoder_turn", delta: 1 });
+  const confirmed = input({ type: "encoder_press" });
+  assert.ok(confirmed.effects.some((e) => e.type === "store_save_default"));
+});
+
+test("shift+back deletes character when editing draft name", () => {
+  let state = createInitialState(mockBehavior);
+
+  // Navigate into Save As and focus Name.
+  const step = (i: DeviceInput) => {
+    state = routeInput(state, i, mockBehavior).state;
+  };
+
+  for (let i = 0; i < 5; i += 1) step({ type: "encoder_turn", delta: 1 });
+  step({ type: "encoder_press" }); // System
+  step({ type: "encoder_press" }); // Config
+  step({ type: "encoder_press" }); // Presets
+  step({ type: "encoder_press" }); // Save As
+  step({ type: "encoder_press" }); // Name (enter editing)
+
+  state.system.draftName = "AB";
+  state.system.nameCursor = 2;
+
+  // Hold shift then press back.
+  step({ type: "button_shift", pressed: true });
+  step({ type: "button_a" });
+  assert.equal(state.system.draftName, "A");
+});

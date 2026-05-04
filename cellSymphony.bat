@@ -1,0 +1,1 @@
+corepack pnpm --filter @cellsymphony/desktop tauri:dev

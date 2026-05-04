@@ -6,12 +6,6 @@ export type InputAction =
   | { type: "emergency_brake" }
   | { type: "shift"; active: boolean };
 
-export type TransportIndicator = {
-  icon: "play" | "pause" | "stop";
-  flash: "none" | "beat" | "measure";
-  eventBlipUntilMs: number;
-};
-
 export type NeoKeyLeds = {
   back: "off" | "solid_red";
   space: "off" | "beat" | "measure";
@@ -21,8 +15,6 @@ export type NeoKeyLeds = {
 
 export type SimulatorSnapshot = {
   frame: SimulatorFrame;
-  oledLines: string[];
-  transportIndicator: TransportIndicator;
   neoKeyLeds: NeoKeyLeds;
   displayBrightness: number;
   buttonBrightness: number;
