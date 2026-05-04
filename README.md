@@ -174,4 +174,12 @@ The long-term goal is a standalone hardware device:
 
 ## License:
 
-This project is currently unlicensed and for personal/hobby use. A license will be added when the MVP stabilizes.
+Copyright (c) 2026 Thomas Steirer.
+
+**Free for personal/non-commercial use**: you may use, copy, modify, and build this software for personal purposes.
+
+**Commercial use or selling hardware devices** requires prior written permission.
+
+To request permission, contact: https://github.com/nexxyz
+
+See the [LICENSE](LICENSE) file for full terms.
