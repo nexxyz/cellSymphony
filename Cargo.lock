@@ -1975,14 +1975,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "midi-smoketest"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "midir",
-]
-
-[[package]]
 name = "midir"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
