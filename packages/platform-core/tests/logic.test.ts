@@ -205,16 +205,16 @@ test("aux encoder inputs are reserved and do not navigate menu", () => {
 });
 
 test("OLED formatter clamps display lines and width", () => {
-  const lines = toOledLines({
+  const result = toOledLines({
     page: "Transport",
     title: "Cell Symphony Super Long Header",
     editing: false,
     lines: ["line one", "line two", "line three", "line four"]
   });
 
-  assert.equal(lines.length, 5);
-  assert.equal(lines[0].length, OLED_TEXT_COLUMNS);
-  assert.equal(lines[lines.length - 1], "line four");
+  assert.equal(result.lines.length, 5);
+  assert.equal(result.lines[0].length, OLED_TEXT_COLUMNS);
+  assert.equal(result.lines[result.lines.length - 1], "line four");
 });
 
 test("edit marker uses compact star prefix", () => {
