@@ -64,7 +64,7 @@ jobs:
           sudo apt-get install -y \
             quilt parted qemu-user-static debootstrap \
             dosfstools rsync btrfs-progs kpartx xz-utils \
-            coreutils
+            coreutils qemu-user-binfmt libarchive-tools arch-test
 
       - name: Clone pi-gen (official RPi OS image tool)
         run: |
@@ -79,10 +79,8 @@ jobs:
           RELEASE=bookworm
           TARGET_ARCH=armhf
           STAGE_LIST="stage0 stage1 stage2 stage4-cellsymphony"
-          POST_EXPORT="stage4-cellsymphony/../post-export.sh"
           EXPORT_DIR=deploy
           DEPLOY_ZIP=1
-          LOCAL_DEBS=1
           EOL
 
       - name: Run pi-gen build
