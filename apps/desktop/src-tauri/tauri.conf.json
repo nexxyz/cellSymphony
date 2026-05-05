@@ -28,7 +28,6 @@
       "../docs/**/*"
     ],
     "windows": {
-      "webviewInstallMode": "downloadBootstrapper",
       "nsis": {
         "installMode": "both"
       }
