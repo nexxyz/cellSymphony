@@ -150,13 +150,11 @@ jobs:
         run: cargo build --target armv7-unknown-linux-gnueabihf -p cellsymphony-hal --features pi-zero
 
   pi_zero_app_build:
-    name: Pi Zero App Build (Custom Docker)
+    name: Pi Zero App Build (cross)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Build custom cross image
-        run: docker build -f Dockerfile.pi-zero -t cellsymphony-pi-cross .
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
