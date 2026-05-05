@@ -18,5 +18,20 @@
         "resizable": true
       }
     ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "resources": [
+      "../README.md",
+      "../LICENSE",
+      "../docs/**/*"
+    ],
+    "windows": {
+      "webviewInstallMode": "downloadBootstrapper",
+      "nsis": {
+        "installMode": "both"
+      }
+    }
   }
 }
