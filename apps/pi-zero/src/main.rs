@@ -5,9 +5,9 @@ use cellsymphony_hal::{
     encoder_gpio::*, i2c_bus::*, i2s_dac::I2sDac, neokey::*, neotrellis::*, oled_ssd1351::*,
     pinmap::*,
 };
-use midir::{Ignore, MidiInput};
-use rodio::{OutputStream, OutputStreamHandle, Sink};
-use std::sync::mpsc;
+use midir::MidiInput;
+use rodio::{OutputStream, Sink};
+use std::sync::mpsc::{self, Sender};
 use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -55,6 +55,13 @@ impl AudioManager {
     }
 }
 
+/// MIDI message for cross-thread communication
+enum MidiMessage {
+    NoteOn { note: u8, velocity: u8 },
+    NoteOff { note: u8 },
+    CC { cc: u8, value: u8 },
+}
+
 fn main() {
     println!("Cell Symphony - Headless Pi Zero 2W");
 
@@ -77,6 +84,9 @@ fn main() {
         }
     };
 
+    // MIDI message channel (Send-safe)
+    let (midi_tx, midi_rx) = mpsc::channel::<MidiMessage>();
+
     // Initialize MIDI input
     let midi_input = MidiInput::new("cellsymphony-pi").expect("MIDI init failed");
     let ports = midi_input.ports();
@@ -96,7 +106,7 @@ fn main() {
             .unwrap_or_else(|_| "<unknown>".into());
         println!("Connecting to MIDI: {}", port_name);
 
-        let audio_clone = audio;
+        let tx = midi_tx.clone();
         Some(
             midi_input
                 .connect(
@@ -105,27 +115,21 @@ fn main() {
                     move |_timestamp, message, _| {
                         if message.len() >= 3 {
                             let status = message[0] & 0xF0;
-                            let note = message[1];
-                            let vel = message[2];
-                            match status {
-                                0x90 => {
-                                    if vel > 0 {
-                                        println!("MIDI Note On: {} vel {}", note, vel);
-                                        if let Some(ref audio) = audio_clone {
-                                            let _ = audio.play_note(note, vel, 1000);
-                                        }
-                                    } else {
-                                        println!("MIDI Note Off: {}", note);
-                                    }
-                                }
-                                0x80 => {
-                                    println!("MIDI Note Off: {}", note);
-                                }
-                                0xB0 => {
-                                    println!("MIDI CC: {} = {}", note, vel);
-                                }
-                                _ => {}
-                            }
+                            let data1 = message[1];
+                            let data2 = message[2];
+                            let msg = match status {
+                                0x90 if data2 > 0 => MidiMessage::NoteOn {
+                                    note: data1,
+                                    velocity: data2,
+                                },
+                                0x90 | 0x80 => MidiMessage::NoteOff { note: data1 },
+                                0xB0 => MidiMessage::CC {
+                                    cc: data1,
+                                    value: data2,
+                                },
+                                _ => return,
+                            };
+                            let _ = tx.send(msg);
                         }
                     },
                     (),
@@ -170,6 +174,24 @@ fn main() {
     let tick_duration = Duration::from_millis(8);
 
     loop {
+        // Handle MIDI messages (sent from callback via channel)
+        while let Ok(msg) = midi_rx.try_recv() {
+            match msg {
+                MidiMessage::NoteOn { note, velocity } => {
+                    println!("MIDI Note On: {} vel {}", note, velocity);
+                    if let Some(ref audio) = audio {
+                        let _ = audio.play_note(note, velocity, 1000);
+                    }
+                }
+                MidiMessage::NoteOff { note } => {
+                    println!("MIDI Note Off: {}", note);
+                }
+                MidiMessage::CC { cc, value } => {
+                    println!("MIDI CC: {} = {}", cc, value);
+                }
+            }
+        }
+
         // Handle hardware events
         while let Ok(event) = event_rx.try_recv() {
             match event {
