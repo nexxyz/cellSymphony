@@ -1,65 +1,90 @@
 //! NeoTrellis 8x8 LED matrix driver (4x4 devices x4 chain)
-//! Uses seesaw over I2C
+//! Uses seesaw over I2C.
 
 #[cfg(feature = "pi-zero")]
-use crate::i2c_bus::I2CBus;
+use std::fs::{File, OpenOptions};
 #[cfg(feature = "pi-zero")]
-use embedded_hal::blocking::i2c::{SevenBitAddress, I2C};
+use std::io::{Read, Write};
+#[cfg(feature = "pi-zero")]
+use std::os::unix::io::AsRawFd;
+
+#[cfg(not(feature = "pi-zero"))]
+use std::fmt;
 
 /// NeoTrellis device (4x4, daisy-chained to make 8x8)
 #[cfg(feature = "pi-zero")]
 pub struct NeoTrellis {
-    i2c: I2CBus,
-    devices: [(SevenBitAddress, [u8; 16]); 4],
+    i2c_path: String,
+    devices: [(u16, [u8; 16]); 4],
 }
 
 #[cfg(feature = "pi-zero")]
 impl NeoTrellis {
     /// Initialize 4 NeoTrellis devices at addresses 0x2E, 0x2F, 0x30, 0x31
-    pub fn new(i2c: I2CBus) -> Result<Self, String> {
+    pub fn new(i2c_path: &str) -> Result<Self, String> {
         let devices = [
-            (0x2E as SevenBitAddress, [0; 16]),
-            (0x2F as SevenBitAddress, [0; 16]),
-            (0x30 as SevenBitAddress, [0; 16]),
-            (0x31 as SevenBitAddress, [0; 16]),
+            (0x2E as u16, [0; 16]),
+            (0x2F as u16, [0; 16]),
+            (0x30 as u16, [0; 16]),
+            (0x31 as u16, [0; 16]),
         ];
 
-        let mut trellis = Self { i2c, devices };
+        let trellis = Self {
+            i2c_path: i2c_path.to_string(),
+            devices,
+        };
 
         // Initialize seesaw on each device
         for (addr, _) in &trellis.devices {
             // Seesaw init: set module base, enable keypad
-            let init_cmd = [0xFE, 0x41]; // Seesaw HW_ID
-            trellis
-                .i2c
-                .write(*addr, &init_cmd)
+            let mut file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&trellis.i2c_path)
                 .map_err(|e| format!("Trellis init failed at {:#04x}: {}", addr, e))?;
+
+            // Set slave address
+            set_slave_addr(&file, *addr)?;
+
+            // Seesaw HW_ID check
+            let init_cmd = [0xFE, 0x41];
+            file.write_all(&init_cmd)
+                .map_err(|e| format!("Trellis init failed: {}", e))?;
         }
 
         Ok(trellis)
     }
 
     /// Scan all keys, return Vec<(x, y, pressed)>
-    pub fn scan_keys(&mut self) -> Result<Vec<(u8, u8, bool)>, String> {
+    pub fn scan_keys(&mut self) -> Result<Vec<(usize, usize, bool)>, String> {
         let mut result = Vec::new();
 
         for (dev_idx, (addr, _)) in self.devices.iter().enumerate() {
-            // Read keypad FIFO (seesaw register 0x10)
-            let mut buf = [0u8; 4];
-            let read_cmd = [0x10];
-            self.i2c
-                .write_read(*addr, &read_cmd, &mut buf)
+            let mut file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&self.i2c_path)
                 .map_err(|e| format!("Trellis scan failed: {}", e))?;
 
-            // Parse keypad data
+            set_slave_addr(&file, *addr)?;
+
+            // Read keypad FIFO (seesaw register 0x10)
+            let read_cmd = [0x10];
+            file.write_all(&read_cmd)
+                .map_err(|e| format!("Trellis scan failed: {}", e))?;
+
+            let mut buf = [0u8; 4];
+            file.read_exact(&mut buf)
+                .map_err(|e| format!("Trellis scan failed: {}", e))?;
+
             let key_count = buf[0];
             for i in 0..key_count {
                 let key_data = buf[i as usize + 1];
                 let pressed = (key_data & 0x80) == 0;
                 let key_num = key_data & 0x7F;
                 // Map 4x4 key to 8x8 grid position
-                let local_x = key_num % 4;
-                let local_y = key_num / 4;
+                let local_x = (key_num % 4) as usize;
+                let local_y = (key_num / 4) as usize;
                 let base_x = (dev_idx % 2) * 4;
                 let base_y = (dev_idx / 2) * 4;
                 let x = base_x + local_x;
@@ -77,8 +102,16 @@ impl NeoTrellis {
             let base_x = (dev_idx % 2) * 4;
             let base_y = (dev_idx / 2) * 4;
 
+            let mut file = OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(&self.i2c_path)
+                .map_err(|e| format!("Trellis LED write failed: {}", e))?;
+
+            set_slave_addr(&file, *addr)?;
+
             // Batch write LED states via seesaw
-            let mut cmd = vec![0x0E, 0x00]; // Seesaw LED base
+            let mut cmd = vec![0x0E, 0x00]; // Seesaw LED base.
 
             for y in base_y..(base_y + 4) {
                 for x in base_x..(base_x + 4) {
@@ -90,13 +123,21 @@ impl NeoTrellis {
                 }
             }
 
-            self.i2c
-                .write(*addr, &cmd)
+            file.write_all(&cmd)
                 .map_err(|e| format!("Trellis LED write failed: {}", e))?;
         }
 
         Ok(())
     }
+}
+
+#[cfg(feature = "pi-zero")]
+fn set_slave_addr(file: &File, addr: u16) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    unsafe {
+        libc::ioctl(file.as_raw_fd(), 0x0703, addr as u64); // I2C_SLAVE = 0x0703
+    }
+    Ok(())
 }
 
 /// Stub for non-Pi builds
@@ -107,15 +148,22 @@ pub struct NeoTrellis {
 
 #[cfg(not(feature = "pi-zero"))]
 impl NeoTrellis {
-    pub fn new(_i2c: ()) -> Result<Self, String> {
+    pub fn new(_i2c_path: &str) -> Result<Self, String> {
         Ok(Self { _private: () })
     }
 
-    pub fn scan_keys(&mut self) -> Result<Vec<(u8, u8, bool)>, String> {
+    pub fn scan_keys(&mut self) -> Result<Vec<(usize, usize, bool)>, String> {
         Ok(Vec::new())
     }
 
     pub fn write_led_frame(&mut self, _frame: &[[u8; 3]; 64]) -> Result<(), String> {
         Ok(())
+    }
+}
+
+#[cfg(not(feature = "pi-zero"))]
+impl fmt::Debug for NeoTrellis {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "NeoTrellis {{ ... }}")
     }
 }

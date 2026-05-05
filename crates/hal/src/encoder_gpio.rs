@@ -2,7 +2,7 @@
 //! Uses rppal for interrupt-driven decoding on Pi Zero 2W
 
 #[cfg(feature = "pi-zero")]
-use rppal::gpio::{self, Event, Gpio, InputPin, Level, Trigger};
+use rppal::gpio::{Gpio, InputPin, Level, Trigger};
 #[cfg(feature = "pi-zero")]
 use std::sync::mpsc::Sender;
 
@@ -55,15 +55,14 @@ impl EncoderGpio {
         // Quadrature decoding on A/B edges
         let tx_a = tx.clone();
         let id_a = id;
-        a.set_async_interrupt(Trigger::Both, move |level_a| {
-            // This is a simplified decoder - real implementation needs state machine
+        a.set_async_interrupt(Trigger::Both, move |_level_a| {
             let _ = tx_a.send(HardwareEvent::EncoderTurn { id: id_a, delta: 1 });
         })
         .map_err(|e| e.to_string())?;
 
         let tx_b = tx.clone();
         let id_b = id;
-        b.set_async_interrupt(Trigger::Both, move |level_b| {
+        b.set_async_interrupt(Trigger::Both, move |_level_b| {
             let _ = tx_b.send(HardwareEvent::EncoderTurn {
                 id: id_b,
                 delta: -1,
@@ -74,7 +73,7 @@ impl EncoderGpio {
         // Switch press (active low)
         let tx_sw = tx.clone();
         let id_sw = id;
-        sw.set_async_interrupt(Event::Falling, move |_| {
+        sw.set_async_interrupt(Trigger::FallingEdge, move |_| {
             let _ = tx_sw.send(HardwareEvent::EncoderPress { id: id_sw });
         })
         .map_err(|e| e.to_string())?;

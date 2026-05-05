@@ -11,5 +11,8 @@ path = "src/main.rs"
 cellsymphony-hal = { path = "../../crates/hal", features = ["pi-zero"] }
 realtime-engine = { path = "../../crates/realtime-engine" }
 
+# Pi-specific dependencies
+rppal = "0.14"
+
 # Logging
 simple_logger = "1.16"
