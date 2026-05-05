@@ -153,7 +153,7 @@ jobs:
     name: Pi Zero App Build (Docker)
     runs-on: ubuntu-latest
     container:
-      image: ghcr.io/cross-rs/cross/armv7-unknown-linux-gnueabihf:latest
+      image: ghcr.io/cross-rs/cross/armv7-unknown-linux-gnueabihf:main
     steps:
       - name: Checkout
         uses: actions/checkout@v4
