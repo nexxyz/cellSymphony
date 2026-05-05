@@ -1,27 +1,26 @@
 //! I2S PCM5102 DAC driver for Raspberry Pi Zero 2W
-//! Uses rodio with ALSA backend (same as desktop)
+//! Hardware abstraction - actual audio output is in the Pi app via rodio
 
 #[cfg(not(feature = "pi-zero"))]
 use std::fmt;
 
-/// I2S DAC wrapper (uses rodio with ALSA backend)
-/// Note: The actual rodio/audio implementation lives in the Pi binary,
-/// this is just the HAL interface trait.
+/// I2S DAC wrapper - stub for non-Pi builds
+/// Actual audio output uses rodio in the Pi-Zero app
 #[cfg(feature = "pi-zero")]
 pub struct I2sDac {
-    // Placeholder - actual implementation in pi-zero app
+    // Placeholder - actual implementation in apps/pi-zero with rodio
 }
 
 #[cfg(feature = "pi-zero")]
 impl I2sDac {
     /// Initialize I2S DAC
     pub fn new() -> Result<Self, String> {
-        // I2S on Pi Zero 2W requires no initialization -
         // PCM5102 is a dumb DAC that auto-detects I2S clock
+        // Actual rodio initialization happens in the Pi app
         Ok(Self {})
     }
 
-    /// Trigger a note (for testing/playback)
+    /// Trigger a note (stub - actual implementation in Pi app)
     pub fn trigger_note(
         &self,
         _channel: u8,

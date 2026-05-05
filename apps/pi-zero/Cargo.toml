@@ -10,6 +10,5 @@ path = "src/main.rs"
 [dependencies]
 cellsymphony-hal = { path = "../../crates/hal", features = ["pi-zero"] }
 realtime-engine = { path = "../../crates/realtime-engine" }
-
-# Logging
+# midir = "0.10"  # Disabled: needs ALSA for cross-compilation from Windows
 simple_logger = "1.16"
