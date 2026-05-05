@@ -1,7 +1,5 @@
 # Cargo configuration for cross-compilation to Pi Zero 2W
-# Install ARM GNU Toolchain from: https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads
-# Download: arm-gnu-toolchain-*-mingw-w64-x86_64-arm-none-linux-gnueabihf.zip
-# Extract to C:\arm-gnu-toolchain and add C:\arm-gnu-toolchain\bin to PATH
+# ARM GNU Toolchain installed at: F:\Tools\arm-gnu-toolchain-15.2.rel1-mingw-w64-i686-arm-none-linux-gnueabihf
 
 [target.armv7-unknown-linux-gnueabihf]
-linker = "arm-none-linux-gnueabihf-gcc"
+linker = "F:\\Tools\\arm-gnu-toolchain-15.2.rel1-mingw-w64-i686-arm-none-linux-gnueabihf\\bin\\arm-none-linux-gnueabihf-gcc.exe"
