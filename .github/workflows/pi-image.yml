@@ -105,4 +105,4 @@ jobs:
           files: pi-gen/deploy/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-test')
