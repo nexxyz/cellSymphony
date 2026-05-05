@@ -1,0 +1,17 @@
+[Unit]
+Description=Cell Symphony Pi Zero 2W Headless Music System
+After=sound.target network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi
+ExecStartPre=/bin/sleep 2
+ExecStart=/usr/local/bin/cellsymphony-pi
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
