@@ -68,7 +68,7 @@ jobs:
 
       - name: Clone pi-gen (official RPi OS image tool)
         run: |
-          git clone --depth 1 --branch master https://github.com/RPi-Distro/pi-gen.git
+          git clone --depth 1 --branch bookworm https://github.com/RPi-Distro/pi-gen.git
           cp -r tools/pi-image/stage4-cellsymphony pi-gen/
 
       - name: Configure pi-gen
