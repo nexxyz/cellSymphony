@@ -1,24 +1,16 @@
-FROM --platform=linux/arm/v7 ubuntu:22.04
+FROM ghcr.io/cross-rs/cross/armv7-unknown-linux-gnueabihf:main
 
-ENV DEBIAN_FRONTEND=noninteractive
+ARG CROSS_DEB_ARCH
 
-# Install cross-compiler and ALSA for ARM target
+# Add ARM HF architecture and install ALSA for target
 RUN dpkg --add-architecture armhf && \
     apt-get update && apt-get install -y \
-    gcc-arm-linux-gnueabihf \
-    g++-arm-linux-gnueabihf \
-    pkg-config \
     libasound2-dev:armhf \
+    pkg-config \
     libdbus-1-dev:armhf \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up cross-compilation environment
-ENV CARGO_TARGET_ARMv7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc
-ENV PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig/
+ENV CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER="arm-linux-gnueabihf-gcc"
+ENV PKG_CONFIG_PATH="/usr/lib/arm-linux-gnueabihf/pkgconfig/"
 ENV PKG_CONFIG_ALLOW_CROSS=1
-
-WORKDIR /workspace
-
-COPY . /workspace/
-
-CMD ["cargo", "build", "--target", "armv7-unknown-linux-gnueabihf", "-p", "cellsymphony-pi"]
