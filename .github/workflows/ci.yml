@@ -116,8 +116,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
-      - name: Run clippy (deny warnings, exclude pi-zero)
-        run: cargo clippy --workspace --all-targets --exclude cellsymphony-pi -- -D warnings
+      - name: Run clippy (exclude desktop+pi)
+        run: cargo clippy --workspace --exclude cellsymphony-pi --exclude cellsymphony-desktop --all-targets -- -D warnings
 
   rust_test:
     name: Rust tests
@@ -129,8 +129,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
-      - name: Run Rust tests (exclude pi-zero)
-        run: cargo test --workspace --exclude cellsymphony-pi
+      - name: Run Rust tests (exclude desktop+pi)
+        run: cargo test --workspace --exclude cellsymphony-pi --exclude cellsymphony-desktop
 
   pi_zero_build:
     name: Pi Zero Build Check

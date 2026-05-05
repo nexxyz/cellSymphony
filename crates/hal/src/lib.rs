@@ -3,19 +3,19 @@
 
 // Only compile HAL modules when targeting Pi
 #[cfg(feature = "pi-zero")]
-pub mod pinmap;
-#[cfg(feature = "pi-zero")]
 pub mod encoder_gpio;
 #[cfg(feature = "pi-zero")]
 pub mod i2c_bus;
 #[cfg(feature = "pi-zero")]
-pub mod neotrellis;
+pub mod i2s_dac;
 #[cfg(feature = "pi-zero")]
 pub mod neokey;
 #[cfg(feature = "pi-zero")]
+pub mod neotrellis;
+#[cfg(feature = "pi-zero")]
 pub mod oled_ssd1351;
 #[cfg(feature = "pi-zero")]
-pub mod i2s_dac;
+pub mod pinmap;
 
 // Re-exports for convenience
 #[cfg(feature = "pi-zero")]
@@ -23,10 +23,10 @@ pub use encoder_gpio::EncoderGpio;
 #[cfg(feature = "pi-zero")]
 pub use i2c_bus::I2CBus;
 #[cfg(feature = "pi-zero")]
-pub use neotrellis::NeoTrellis;
+pub use i2s_dac::I2sDac;
 #[cfg(feature = "pi-zero")]
 pub use neokey::NeoKey;
 #[cfg(feature = "pi-zero")]
-pub use oled_ssd1351::OledSsd1351;
+pub use neotrellis::NeoTrellis;
 #[cfg(feature = "pi-zero")]
-pub use i2s_dac::I2sDac;
+pub use oled_ssd1351::OledSsd1351;
