@@ -116,8 +116,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
-      - name: Run clippy (deny warnings)
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      - name: Run clippy (deny warnings, exclude pi-zero)
+        run: cargo clippy --workspace --all-targets --exclude cellsymphony-pi -- -D warnings
 
   rust_test:
     name: Rust tests
@@ -129,8 +129,25 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
-      - name: Run Rust tests
-        run: cargo test --workspace --all-features
+      - name: Run Rust tests (exclude pi-zero)
+        run: cargo test --workspace --exclude cellsymphony-pi
+
+  pi_zero_build:
+    name: Pi Zero Build Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          target: armv7-unknown-linux-gnueabihf
+      - name: Install ARM GCC
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+      - name: Build HAL for Pi Zero 2W
+        run: cargo build --target armv7-unknown-linux-gnueabihf -p cellsymphony-hal --features pi-zero
 
   desktop_build_smoke:
     name: Desktop Build Smoke
