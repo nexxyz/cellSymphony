@@ -1,6 +1,4 @@
-FROM ghcr.io/cross-rs/cross/armv7-unknown-linux-gnueabihf:main
-
-ARG CROSS_DEB_ARCH
+FROM ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:latest
 
 # Add ARM HF architecture and install ALSA for target
 RUN dpkg --add-architecture armhf && \
