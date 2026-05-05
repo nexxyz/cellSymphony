@@ -132,8 +132,8 @@ jobs:
       - name: Run Rust tests (exclude desktop+pi+midi-sidecar)
         run: cargo test --workspace --exclude cellsymphony-pi --exclude cellsymphony-desktop --exclude midi-io-sidecar
 
-  pi_zero_build:
-    name: Pi Zero Build Check
+  pi_zero_hal_build:
+    name: Pi Zero HAL Build Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -148,6 +148,17 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Build HAL for Pi Zero 2W
         run: cargo build --target armv7-unknown-linux-gnueabihf -p cellsymphony-hal --features pi-zero
+
+  pi_zero_app_build:
+    name: Pi Zero App Build (Docker)
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/cross-rs/cross/armv7-unknown-linux-gnueabihf:latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build Pi app (with audio/MIDI)
+        run: cargo build --target armv7-unknown-linux-gnueabihf -p cellsymphony-pi
 
   desktop_build_smoke:
     name: Desktop Build Smoke
