@@ -361,7 +361,6 @@ version = "0.1.0"
 dependencies = [
  "cellsymphony-hal",
  "realtime-engine",
- "rppal",
  "simple_logger",
 ]
 
