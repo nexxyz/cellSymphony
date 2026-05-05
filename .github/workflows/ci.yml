@@ -150,15 +150,17 @@ jobs:
         run: cargo build --target armv7-unknown-linux-gnueabihf -p cellsymphony-hal --features pi-zero
 
   pi_zero_app_build:
-    name: Pi Zero App Build (Docker)
+    name: Pi Zero App Build (cross)
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/cross-rs/cross/armv7-unknown-linux-gnueabihf:main
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Build Pi app (with audio/MIDI)
-        run: cargo build --target armv7-unknown-linux-gnueabihf -p cellsymphony-pi
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install cross
+        run: cargo install cross
+      - name: Build Pi app with cross
+        run: cross build --target armv7-unknown-linux-gnueabihf -p cellsymphony-pi
 
   desktop_build_smoke:
     name: Desktop Build Smoke
