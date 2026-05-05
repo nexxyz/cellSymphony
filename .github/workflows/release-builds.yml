@@ -49,7 +49,7 @@ jobs:
         id: find_installer
         shell: pwsh
         run: |
-          $installer = Get-ChildItem -Path "apps/desktop/src-tauri/target/release/bundle/nsis" -Filter "*.exe" | Select-Object -First 1
+          $installer = Get-ChildItem -Path "target/release/bundle/nsis" -Filter "*.exe" | Select-Object -First 1
           $installerName = $installer.Name
           echo "INSTALLER_PATH=$installer.FullName" >> $env:GITHUB_OUTPUT
           echo "INSTALLER_NAME=$installerName" >> $env:GITHUB_OUTPUT
