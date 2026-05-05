@@ -60,8 +60,8 @@ jobs:
 
       - name: Install pi-gen dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
             quilt parted debootstrap \
             dosfstools rsync btrfs-progs kpartx xz-utils \
             coreutils qemu-user-static libarchive-tools arch-test
