@@ -4,7 +4,7 @@
 #[cfg(feature = "pi-zero")]
 use rppal::gpio::{Gpio, OutputPin};
 #[cfg(feature = "pi-zero")]
-use spidev::{SpiMode, SpidevOptions};
+use spidev::Spidev;
 #[cfg(feature = "pi-zero")]
 use std::io::Write;
 
@@ -33,7 +33,7 @@ const CMD_SET_COMMAND_LOCK: u8 = 0xFD;
 /// OLED display driver
 #[cfg(feature = "pi-zero")]
 pub struct OledSsd1351 {
-    spi: File,      // spidev handle
+    spi: Spidev,
     dc: OutputPin,  // GPIO24 for Data/Command
     rst: OutputPin, // GPIO25 for Reset
 }
@@ -43,12 +43,16 @@ impl OledSsd1351 {
     /// Initialize OLED on SPI bus 0
     pub fn new() -> Result<Self, String> {
         // Open SPI device
-        let spi = SpidevOptions::new()
-            .devpath("/dev/spidev0.0")
-            .mode(SpiMode::Mode0)
-            .max_speed_hz(8_000_000) // 8MHz
-            .build()
-            .map_err(|e| format!("SPI init failed: {}", e))?;
+        let mut spi =
+            Spidev::open("/dev/spidev0.0").map_err(|e| format!("SPI open failed: {}", e))?;
+
+        // Configure SPI: mode 0, 8-bit, 8MHz
+        let mut config = spidev::SpidevOptions::new();
+        config.mode(spidev::SpiModeFlags::SPI_MODE_0);
+        config.max_speed_hz(8_000_000u32);
+        config.bits_per_word(8);
+        spi.configure(&config)
+            .map_err(|e| format!("SPI configure failed: {}", e))?;
 
         // Get GPIO handles
         let gpio = Gpio::new().map_err(|e| e.to_string())?;
@@ -62,37 +66,41 @@ impl OledSsd1351 {
         std::thread::sleep(std::time::Duration::from_millis(100));
 
         // Init sequence for SSD1351
-        Self::write_command(&mut dc, CMD_SET_COMMAND_LOCK, &[0x12])?; // Unlock
-        Self::write_command(&mut dc, CMD_DISPLAY_OFF, &[])?;
+        Self::write_command(&mut spi, &mut dc, CMD_SET_COMMAND_LOCK, &[0x12])?; // Unlock
+        Self::write_command(&mut spi, &mut dc, CMD_DISPLAY_OFF, &[])?;
 
-        Self::write_command(&mut dc, CMD_SET_MUX_RATIO, &[127])?; // 128 mux
-        Self::write_command(&mut dc, CMD_SET_START_LINE, &[0])?;
-        Self::write_command(&mut dc, CMD_SET_DISPLAY_OFFSET, &[0])?;
+        Self::write_command(&mut spi, &mut dc, CMD_SET_MUX_RATIO, &[127])?; // 128 mux
+        Self::write_command(&mut spi, &mut dc, CMD_SET_START_LINE, &[0])?;
+        Self::write_command(&mut spi, &mut dc, CMD_SET_DISPLAY_OFFSET, &[0])?;
 
         // Remap: BGR, COM split, scan direction
-        Self::write_command(&mut dc, CMD_SET_REMAP, &[0x74])?;
+        Self::write_command(&mut spi, &mut dc, CMD_SET_REMAP, &[0x74])?;
 
-        Self::write_command(&mut dc, CMD_SET_GPIO, &[0x00])?;
-        Self::write_command(&mut dc, CMD_FUNCTION_SELECTION, &[0x01])?; // Internal VDD
+        Self::write_command(&mut spi, &mut dc, CMD_SET_GPIO, &[0x00])?;
+        Self::write_command(&mut spi, &mut dc, CMD_FUNCTION_SELECTION, &[0x01])?; // Internal VDD
 
         // Precharge
-        Self::write_command(&mut dc, CMD_SET_PRECHARGE1, &[0x32])?; // Phase 1
-        Self::write_command(&mut dc, CMD_SET_PRECHARGE2, &[0x01, 0x03, 0x03])?; // Phase 2
+        Self::write_command(&mut spi, &mut dc, CMD_SET_PRECHARGE1, &[0x32])?; // Phase 1
+        Self::write_command(&mut spi, &mut dc, CMD_SET_PRECHARGE2, &[0x01, 0x03, 0x03])?; // Phase 2
 
-        Self::write_command(&mut dc, CMD_SET_VCOMH, &[0x05])?;
-        Self::write_command(&mut dc, CMD_SET_CONTRAST, &[0xC8, 0xC8, 0xC8])?; // RGB contrast
-        Self::write_command(&mut dc, CMD_MASTER_CONTRAST, &[0x0F])?; // Max
+        Self::write_command(&mut spi, &mut dc, CMD_SET_VCOMH, &[0x05])?;
+        Self::write_command(&mut spi, &mut dc, CMD_SET_CONTRAST, &[0xC8, 0xC8, 0xC8])?; // RGB contrast
+        Self::write_command(&mut spi, &mut dc, CMD_MASTER_CONTRAST, &[0x0F])?; // Max
 
-        Self::write_command(&mut dc, CMD_DISPLAY_ON, &[])?;
+        Self::write_command(&mut spi, &mut dc, CMD_DISPLAY_ON, &[])?;
 
         Ok(Self { spi, dc, rst })
     }
 
     /// Write command + optional data bytes
-    fn write_command(dc: &mut OutputPin, cmd: u8, data: &[u8]) -> Result<(), String> {
+    fn write_command(
+        spi: &mut Spidev,
+        dc: &mut OutputPin,
+        cmd: u8,
+        data: &[u8],
+    ) -> Result<(), String> {
         // DC low = command
         dc.set_low();
-        let mut spi = File::open("/dev/spidev0.0").map_err(|e| e.to_string())?;
         spi.write(&[cmd])
             .map_err(|e| format!("SPI write failed: {}", e))?;
 
@@ -109,19 +117,24 @@ impl OledSsd1351 {
     /// Write pre-rendered RGB565 frame (128x128x2 bytes)
     pub fn write_frame(&mut self, pixels: &[u8]) -> Result<(), String> {
         // Set column address: 0-127
-        Self::write_command(&mut self.dc, CMD_SET_COLUMN_ADDR, &[0x00, 0x7F])?;
+        Self::write_command(
+            &mut self.spi,
+            &mut self.dc,
+            CMD_SET_COLUMN_ADDR,
+            &[0x00, 0x7F],
+        )?;
 
         // Set row address: 0-127
-        Self::write_command(&mut self.dc, CMD_SET_ROW_ADDR, &[0x00, 0x7F])?;
+        Self::write_command(&mut self.spi, &mut self.dc, CMD_SET_ROW_ADDR, &[0x00, 0x7F])?;
 
         // Write to RAM
         self.dc.set_high();
-        let mut spi = spidev::SpidevOptions::new()
-            .devpath("/dev/spidev0.0")
-            .build()
-            .map_err(|e| e.to_string())?;
-        spi.write(&[CMD_WRITE_RAM]).map_err(|e| e.to_string())?;
-        spi.write(pixels).map_err(|e| e.to_string())?;
+        self.spi
+            .write(&[CMD_WRITE_RAM])
+            .map_err(|e| format!("SPI write failed: {}", e))?;
+        self.spi
+            .write(pixels)
+            .map_err(|e| format!("SPI frame write failed: {}", e))?;
 
         Ok(())
     }
