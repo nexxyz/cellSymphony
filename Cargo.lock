@@ -360,7 +360,9 @@ name = "cellsymphony-pi"
 version = "0.1.0"
 dependencies = [
  "cellsymphony-hal",
+ "midir",
  "realtime-engine",
+ "rodio",
  "simple_logger",
 ]
 
