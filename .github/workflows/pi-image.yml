@@ -62,7 +62,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            quilt parted realpath qemu-user-static debootstrap \
+            quilt parted qemu-user-static debootstrap \
             dosfstools rsync btrfs-progs kpartx xz-utils \
             coreutils
 
@@ -79,7 +79,7 @@ jobs:
           RELEASE=bookworm
           TARGET_ARCH=armhf
           STAGE_LIST="stage0 stage1 stage2 stage4-cellsymphony"
-          POST_EXPORT="../tools/pi-image/post-export.sh"
+          POST_EXPORT="stage4-cellsymphony/../post-export.sh"
           EXPORT_DIR=deploy
           DEPLOY_ZIP=1
           LOCAL_DEBS=1
