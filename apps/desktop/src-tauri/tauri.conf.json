@@ -23,9 +23,9 @@
     "active": true,
     "targets": ["nsis"],
     "resources": [
-      "../README.md",
-      "../LICENSE",
-      "../docs/**/*"
+      "../../../README.md",
+      "../../../LICENSE",
+      "../../../docs/**/*"
     ],
     "windows": {
       "nsis": {
