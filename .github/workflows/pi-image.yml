@@ -10,7 +10,7 @@ on:
   workflow_dispatch:  # Allow manual trigger
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   pi_zero_app_build:
