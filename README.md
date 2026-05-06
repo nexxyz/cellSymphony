@@ -1,6 +1,6 @@
 # Cell Symphony
 
-A device (with a 1:1 simulator app) for cellular music instrument that turns Conway's Game of Life into a playable, performable synthesizer. Inspired by the Tenori-On, it combines cellular automata with real-time music generation.
+A physical instrument for cellular music instrument that turns Conway's Game of Life into a playable, performable synthesizer. Inspired by the Tenori-On, it combines cellular automata with real-time music generation. There is also a 1:1 UI so you can explore the Cell Symphony before building it.
 
 > **Work in Progress.** This is an active hobby project. Things change, break, and improve rapidly. The MVP is not yet complete.
 
