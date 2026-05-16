@@ -467,7 +467,7 @@ export function routeInput<TState>(
           }
         }
       } else {
-        if (choice === "Yes") {
+        if (choice === "Yes" || choice === "Confirm") {
           nextState = executeConfirmed(nextState, c.action, effects, behavior);
         }
       }
@@ -1479,7 +1479,7 @@ function confirmView<TState>(state: PlatformState<TState>): { path: string; line
 
 function confirmDetails<TState>(state: PlatformState<TState>, confirm: ConfirmState): string {
   const a = confirm.action;
-  if (a.kind === "preset_save") return `Overwrite? ${a.name}`;
+  if (a.kind === "preset_save") return `Save ${a.name}?`;
   if (a.kind === "preset_delete") return `Delete? ${a.name}`;
   if (a.kind === "preset_load") return `Load? ${a.name}`;
   if (a.kind === "preset_rename") return `Rename? ${a.from}`;
@@ -1951,7 +1951,7 @@ function handleAction<TState>(state: PlatformState<TState>, action: ActionSpec, 
   if (action.type === "preset_save_current") {
     const name = state.system.currentPresetName;
     if (!name) return toast("No preset loaded");
-    return openConfirm("overwrite_preset", { kind: "preset_save", name });
+    return openConfirm("overwrite_preset", { kind: "preset_save", name }, ["Cancel", "Confirm"]);
   }
   if (action.type === "preset_load") {
     return openConfirm("load_preset", { kind: "preset_load", name: action.name });
@@ -1963,7 +1963,7 @@ function handleAction<TState>(state: PlatformState<TState>, action: ActionSpec, 
     const name = state.system.draftName.trim();
     if (name.length === 0) return toast("Name required");
     if (state.system.presetNames.includes(name)) {
-      return openConfirm("overwrite_preset", { kind: "preset_save", name });
+      return openConfirm("overwrite_preset", { kind: "preset_save", name }, ["Cancel", "Confirm"]);
     }
     effects.push({ type: "store_save_preset", name, payload: extractConfigPayload(state) });
     return state;
