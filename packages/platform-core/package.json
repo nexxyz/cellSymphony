@@ -7,7 +7,9 @@
   "types": "src/index.ts",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "lint": "node -e \"process.exit(0)\"",
+    "lint": "tsx scripts/lint-menu-help.ts",
+    "lint:menu-help": "tsx scripts/lint-menu-help.ts",
+    "sync:menu-help": "node scripts/sync-menu-help.mjs",
     "format:check": "node -e \"process.exit(0)\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts",

@@ -1,0 +1,37 @@
+id	path	key	kind	title	line1	line2
+default_group	*		group	Section	Opens this submenu and shows related settings.	Use Enter to open and Back to return.
+default_action	*		action	Action	Runs this command.	Use this when you want to execute the highlighted action.
+default_number	*		number	Number Setting	Adjusts a numeric value.	Enter edit mode, then turn encoder to change it.
+default_enum	*		enum	Option Setting	Selects one option from a list.	Enter edit mode, then turn encoder to choose.
+default_bool	*		bool	Toggle Setting	Selects Off or On.	Enter edit mode, then turn encoder to choose.
+default_text	*		text	Text Setting	Edits text for this field.	Use the encoder to move cursor and adjust characters.
+group_any	Menu > *		group	Section	Opens this submenu and shows related settings.	Use Enter to open and Back to return.
+action_any	*	action:*	action	Action	Runs this command.	Use this when you want to execute the highlighted action.
+number_any	*	key:*	number	Number Setting	Adjusts a numeric value.	Enter edit mode, then turn encoder to change it.
+enum_any	*	key:*	enum	Option Setting	Selects one option from a list.	Enter edit mode, then turn encoder to choose.
+bool_any	*	key:*	bool	Toggle Setting	Selects Off or On.	Enter edit mode, then turn encoder to choose.
+text_any	*	key:*	text	Text Setting	Edits text for this field.	Use the encoder to move cursor and adjust characters.
+life_spawn_shared	*	action:behavior_action:spawnRandom	action	Spawn Now	Spawns new cells or entities for the active Life behavior.	This is mapped as a shared action across compatible behaviors.
+life_spawn_shared_brain	*	action:behavior_action:seedRandom	action	Spawn Now	Seeds random active cells for Brian's Brain.	This shares the same Spawn Now intent across behaviors.
+life_spawn_shared_ant	*	action:behavior_action:spawnAnt	action	Spawn Now	Adds an ant to the current grid.	This shares the same Spawn Now intent across behaviors.
+life_spawn_shared_bounce	*	action:behavior_action:addBall	action	Spawn Now	Adds a ball to the simulation.	This shares the same Spawn Now intent across behaviors.
+life_spawn_shared_pulse	*	action:behavior_action:spawnPulse	action	Spawn Now	Spawns a pulse shape.	This shares the same Spawn Now intent across behaviors.
+life_spawn_shared_rain	*	action:behavior_action:dropNow	action	Spawn Now	Drops a new raindrop immediately.	This shares the same Spawn Now intent across behaviors.
+life_spawn_shared_dla	*	action:behavior_action:seedCluster	action	Spawn Now	Seeds a new DLA cluster.	This shares the same Spawn Now intent across behaviors.
+life_spawn_shared_glider	*	action:behavior_action:spawnGlider	action	Spawn Now	Spawns a glider pattern.	This shares the same Spawn Now intent across behaviors.
+preset_save_current	System > Presets > Library > Save Current	action:preset_save_current	action	Save Current	Saves changes to the currently loaded preset file.	If no preset is loaded, this action is unavailable.
+preset_refresh	System > Presets > Library > Refresh List	action:refresh_presets	action	Refresh List	Refreshes preset names from storage.	Use this if files changed outside the app.
+preset_save	System > Presets > Library > Save As > Save	action:preset_save	action	Save As	Saves the current configuration to the name you entered.	If the name exists, confirmation is required.
+preset_load_dynamic	System > Presets > Library > Load > *	action:preset_load:*	action	Load Preset	Loads the selected preset and replaces current runtime configuration.	Use Save Current or Save As first if you want to keep edits.
+preset_delete_dynamic	System > Presets > Library > Delete > *	action:preset_delete:*	action	Delete Preset	Deletes the selected preset from storage.	This action asks for confirmation.
+preset_rename_pick	System > Presets > Library > Rename > *	action:preset_rename_pick:*	action	Rename Preset	Chooses the preset that will be renamed.	Then enter a new name and apply.
+midi_enabled	System > MIDI > Enabled	key:midi.enabled	bool	MIDI Enabled	Turns MIDI features on or off.	Disable if you want the engine to run without MIDI I/O.
+midi_panic	System > MIDI > !Panic	action:midi_panic	action	Panic	Sends all-notes-off style panic to clear stuck notes.	Use this if external devices hang notes.
+midi_out_disconnect	System > MIDI > MIDI Out > Disconnect	action:midi_select_output:null	action	MIDI Out Disconnect	Disconnects the current MIDI output target.	No MIDI output port will be selected.
+midi_in_disconnect	System > MIDI > MIDI In > Disconnect	action:midi_select_input:null	action	MIDI In Disconnect	Disconnects the current MIDI input source.	No MIDI input port will be selected.
+midi_out_dynamic	System > MIDI > MIDI Out > *	action:midi_select_output:*	action	Select MIDI Output	Selects this MIDI output device for note/event transmission.	Use Disconnect to clear selection.
+midi_in_dynamic	System > MIDI > MIDI In > *	action:midi_select_input:*	action	Select MIDI Input	Selects this MIDI input device for transport/sync control.	Use Disconnect to clear selection.
+midi_sync_mode	System > MIDI > Sync & Clock > Sync Mode	key:midi.syncMode	enum	Sync Mode	Chooses whether timing is internal or external MIDI clock.	External mode follows incoming clock when enabled.
+midi_clock_out	System > MIDI > Sync & Clock > Clock Out	key:midi.clockOutEnabled	bool	Clock Out	Enables outgoing MIDI clock messages.	Useful when other gear should follow this transport.
+midi_clock_in	System > MIDI > Sync & Clock > Clock In	key:midi.clockInEnabled	bool	Clock In	Enables incoming MIDI clock processing.	Required to follow external timing.
+midi_respond_start_stop	System > MIDI > Sync & Clock > Respond Start/Stop	key:midi.respondToStartStop	bool	Respond Start/Stop	When enabled, external MIDI Start/Stop controls transport.	When disabled, transport reacts only to local controls.

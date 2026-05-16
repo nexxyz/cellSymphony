@@ -4,6 +4,7 @@ import type { InputAction } from "../types";
 export function mapKeyboardEventToInputAction(event: KeyboardEvent): InputAction | null {
   const key = event.key;
   if (key === "Shift") return { type: "shift", active: true };
+  if (key === "Control") return { type: "fn", active: true };
   if (key === " " && event.shiftKey) return { type: "emergency_brake" };
   if (key === "ArrowLeft") return wrap({ type: "encoder_turn", delta: -1, id: "main" });
   if (key === "ArrowRight") return wrap({ type: "encoder_turn", delta: 1, id: "main" });
@@ -17,6 +18,7 @@ export function mapKeyboardEventToInputAction(event: KeyboardEvent): InputAction
 
 export function mapKeyboardKeyupToInputAction(event: KeyboardEvent): InputAction | null {
   if (event.key === "Shift") return { type: "shift", active: false };
+  if (event.key === "Control") return { type: "fn", active: false };
   return null;
 }
 
