@@ -1,4 +1,13 @@
-import type { BehaviorEngine } from "@cellsymphony/behavior-api";
+import { type BehaviorEngine, getBehavior, listBehaviorIds, registerBehavior } from "@cellsymphony/behavior-api";
+import { sequencerBehavior } from "@cellsymphony/behaviors-sequencer";
+import { brainBehavior } from "@cellsymphony/behaviors-brain";
+import { lifeBehavior } from "@cellsymphony/behaviors-life";
+import { antBehavior } from "@cellsymphony/behaviors-ant";
+import { bounceBehavior } from "@cellsymphony/behaviors-bounce";
+import { shapesBehavior } from "@cellsymphony/behaviors-pulse";
+import { raindropsBehavior } from "@cellsymphony/behaviors-raindrops";
+import { dlaBehavior } from "@cellsymphony/behaviors-dla";
+import { gliderBehavior } from "@cellsymphony/behaviors-glider";
 import {
   GRID_HEIGHT,
   GRID_WIDTH,
@@ -18,6 +27,21 @@ import {
 } from "@cellsymphony/interpretation-core";
 import { loadDefaultMappingConfig, mapIntentsToMusicalEvents, type MappingConfig } from "@cellsymphony/mapping-core";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
+
+// Register available behaviors
+registerBehavior(sequencerBehavior);
+registerBehavior(lifeBehavior);
+registerBehavior(brainBehavior);
+registerBehavior(antBehavior);
+registerBehavior(bounceBehavior);
+registerBehavior(shapesBehavior);
+registerBehavior(raindropsBehavior);
+registerBehavior(dlaBehavior);
+registerBehavior(gliderBehavior);
+
+function resolveBehavior(activeId: string): BehaviorEngine<any, any> {
+  return getBehavior(activeId) ?? sequencerBehavior;
+}
 
 import { renderOledFrame } from "./oledRender";
 import { logoSepia128Rgb565be } from "./oledAssets/logoSepia128_rgb565be";
@@ -63,7 +87,6 @@ type AxisModConfig = {
 };
 
 type RuntimeConfig = {
-  populationMode: "grid" | "conway";
   masterVolume: number;
   displayBrightness: number;
   gridBrightness: number;
@@ -87,9 +110,12 @@ type RuntimeConfig = {
   scanAxis: ScanAxis;
   scanUnit: NoteUnit;
   scanDirection: Direction;
-  conwayStepUnit: NoteUnit;
+  algorithmStepUnit: NoteUnit;
+  activeBehavior: string;
+  autoSaveDefault: boolean;
+  behaviorConfig: Record<string, unknown>;
   eventEnabled: boolean;
-  eventParity: "none" | "birth_even_death_odd";
+  eventParity: "none" | "activate_even_deactivate_odd";
   stateEnabled: boolean;
   pitch: PitchSettings;
   x: AxisModConfig;
@@ -118,7 +144,8 @@ type ActionSpec =
   | { type: "factory_load" }
   | { type: "midi_select_output"; id: string | null }
   | { type: "midi_select_input"; id: string | null }
-  | { type: "midi_panic" };
+  | { type: "midi_panic" }
+  | { type: "behavior_action"; behaviorId: string; actionType: string };
 
 type MenuState = {
   stack: number[];
@@ -141,7 +168,8 @@ type ConfirmKind =
   | "load_factory"
   | "save_default"
   | "text_dirty_exit"
-  | "midi_panic";
+  | "midi_panic"
+  | "aux_unbind";
   
 
 type TextConfirmMode = "save" | "discard";
@@ -155,6 +183,7 @@ type PendingAction =
   | { kind: "default_load" }
   | { kind: "factory_load" }
   | { kind: "midi_panic" }
+  | { kind: "aux_unbind"; encoderId: string }
   | {
       kind: "text_dirty_exit";
       key: string;
@@ -167,7 +196,8 @@ type PendingAction =
 type ConfirmState = {
   kind: ConfirmKind;
   action: PendingAction;
-  cursor: 0 | 1; // 0 = No, 1 = Yes
+  cursor: number;
+  options: string[];
 };
 
 type TextEditSession = {
@@ -205,6 +235,28 @@ type SystemState = {
   oledSplashText: string;
   oledSplashUntilMs: number;
   lastInteractionMs: number;
+  auxBindings: Record<string, AuxBinding | null>;
+};
+
+type AuxTurnBinding = {
+  key: string;
+  label?: string;
+  kind: "number" | "enum" | "bool";
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: string[];
+};
+
+type AuxPressBinding = {
+  actionType: string;
+  routeKey?: string;
+  label?: string;
+};
+
+type AuxBinding = {
+  turn: AuxTurnBinding | null;
+  press: AuxPressBinding | null;
 };
 
 export type PlatformEffectBase =
@@ -252,7 +304,7 @@ export type PlatformState<TState> = {
   system: SystemState;
   scanIndex: number;
   scanPulseAccumulator: number;
-  conwayPulseAccumulator: number;
+  algorithmPulseAccumulator: number;
   ppqnPulseRemainder: number;
 };
 
@@ -263,7 +315,6 @@ export const OLED_TEXT_LINES = 8;
 
 export function createInitialState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
   const runtimeConfig: RuntimeConfig = {
-    populationMode: "conway",
     masterVolume: 73,
     displayBrightness: 75,
     gridBrightness: 75,
@@ -287,9 +338,22 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
     scanAxis: "columns",
     scanUnit: "1/8",
     scanDirection: "forward",
-    conwayStepUnit: "1/8",
+    algorithmStepUnit: "1/8",
+    activeBehavior: behavior.id,
+    autoSaveDefault: false,
+    behaviorConfig: Object.fromEntries(listBehaviorIds().map(id => {
+      const b = getBehavior(id);
+      const defaults: Record<string, unknown> = {};
+      if (b?.configMenu) {
+        const s = b.init({});
+        for (const item of b.configMenu(s)) {
+          defaults[item.key] = (s as any)[item.key];
+        }
+      }
+      return [id, defaults];
+    })),
     eventEnabled: true,
-    eventParity: "birth_even_death_odd",
+    eventParity: "activate_even_deactivate_odd",
     stateEnabled: true,
     pitch: { startingNote: 48, lowestNote: 36, highestNote: 84, outOfRange: "clamp", scale: "major_pentatonic", root: "C" },
     x: {
@@ -334,12 +398,13 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
       pausedByUser: false,
       oledMode: "splash",
       oledSplashText: "Starting up",
-      oledSplashUntilMs: Date.now() + 3000,
-      lastInteractionMs: Date.now()
+      oledSplashUntilMs: Date.now() + 1000,
+      lastInteractionMs: Date.now(),
+      auxBindings: {}
     },
     scanIndex: 0,
     scanPulseAccumulator: 0,
-    conwayPulseAccumulator: 0,
+    algorithmPulseAccumulator: 0,
     ppqnPulseRemainder: 0
   };
 }
@@ -378,12 +443,15 @@ export function routeInput<TState>(
   if (nextState.system.confirm) {
     const c = nextState.system.confirm;
     if (input.type === "encoder_turn" && isMainEncoderInput(input.id)) {
-      const nextCursor = clamp(c.cursor + input.delta, 0, 1) as 0 | 1;
+      const nextCursor = clamp(c.cursor + input.delta, 0, c.options.length - 1);
       nextState.system = { ...nextState.system, confirm: { ...c, cursor: nextCursor } };
     } else if (input.type === "encoder_press" && isMainEncoderInput(input.id)) {
-      const opts = confirmOptions(c);
-      const choice = opts[c.cursor];
-      if (c.kind === "text_dirty_exit") {
+      const choice = c.options[c.cursor];
+      if (c.kind === "aux_unbind" && c.action.kind === "aux_unbind") {
+        if (choice !== "Cancel") {
+          nextState = applyAuxUnbindChoice(nextState, c.action.encoderId, choice);
+        }
+      } else if (c.kind === "text_dirty_exit") {
         if (choice === "Save") {
           nextState = executeConfirmed(nextState, c.action, effects, behavior);
         } else {
@@ -444,7 +512,7 @@ export function routeInput<TState>(
               nextState.transport = { ...nextState.transport, playing: true, ppqnPulse: 0, tick: 0 };
               nextState.scanIndex = 0;
               nextState.scanPulseAccumulator = 0;
-              nextState.conwayPulseAccumulator = 0;
+              nextState.algorithmPulseAccumulator = 0;
               nextState.ppqnPulseRemainder = 0;
               nextState.system = {
                 ...nextState.system,
@@ -490,7 +558,7 @@ export function routeInput<TState>(
         // STOP->PLAY (or fresh startup) forces a new bar and measure flash.
         nextState.transport = { ...nextState.transport, ppqnPulse: 0, tick: 0 };
         nextState.scanPulseAccumulator = 0;
-        nextState.conwayPulseAccumulator = 0;
+        nextState.algorithmPulseAccumulator = 0;
         nextState.ppqnPulseRemainder = 0;
         nextState.scanIndex = 0;
         nextState.system = {
@@ -505,11 +573,23 @@ export function routeInput<TState>(
       }
     }
   } else if (input.type === "button_a" && pressed(input)) {
-    // Shift+Backspace in text editing mode.
+    // Shift+Backspace in text editing mode. Shift+Back anywhere else clears the grid.
     const view = locate(menuTree(nextState), nextState, nextState.menu);
     const selected = view.siblings[nextState.menu.cursor];
     if (nextState.menu.editing && selected && selected.kind === "text" && nextState.system.shiftHeld) {
       nextState = textBackspace(nextState, selected.key);
+    } else if (nextState.system.shiftHeld) {
+      const behavior = resolveBehavior(nextState.runtimeConfig.activeBehavior);
+      const ns = nextState.runtimeConfig.behaviorConfig?.[nextState.runtimeConfig.activeBehavior] as Record<string, unknown> | undefined;
+      const cfg: any = {};
+      if (behavior.configMenu) {
+        for (const item of behavior.configMenu(behavior.init({}))) {
+          const val = ns?.[item.key];
+          if (val !== undefined) cfg[item.key] = val;
+        }
+      }
+      nextState.behaviorState = behavior.init(cfg);
+      nextState.system = { ...nextState.system, toast: { message: "Grid cleared", untilMs: Date.now() + 1500 } };
     } else {
       if (nextState.menu.editing && selected && selected.kind === "text") {
         const current = String(readAnyValue(nextState, selected.key) ?? "");
@@ -528,7 +608,8 @@ export function routeInput<TState>(
                 backAfter: true,
                 mode: "save"
               },
-              cursor: 0
+              cursor: 0,
+              options: ["Save", "Discard"]
             }
           };
         } else {
@@ -543,6 +624,17 @@ export function routeInput<TState>(
     nextState = pressMenu(nextState, effects);
   } else if (input.type === "encoder_turn" && isMainEncoderInput(input.id)) {
     nextState = turnMenu(nextState, input.delta, effects);
+  }
+
+  if (input.type === "encoder_press" && input.id && !isMainEncoderInput(input.id)) {
+    if (nextState.system.shiftHeld) {
+      nextState = assignAuxEncoder(nextState, input.id, effects);
+    } else {
+      nextState = pressAuxEncoder(nextState, input.id, effects, (event) => events.push(event));
+    }
+  }
+  if (input.type === "encoder_turn" && input.id && !isMainEncoderInput(input.id)) {
+    nextState = turnAuxEncoder(nextState, input.id, input.delta, effects);
   }
 
   nextState.behaviorState = behavior.onInput(nextState.behaviorState, input, {
@@ -664,7 +756,7 @@ export function tick<TState>(
   if (next.transport.playing) {
     const elapsedPulses = pulsesPerSecond(next.transport.bpm) * elapsedSeconds;
     next.scanPulseAccumulator += elapsedPulses;
-    next.conwayPulseAccumulator += elapsedPulses;
+    next.algorithmPulseAccumulator += elapsedPulses;
     next.ppqnPulseRemainder += elapsedPulses;
     const wholePulses = Math.floor(next.ppqnPulseRemainder);
     if (wholePulses > 0) {
@@ -687,12 +779,10 @@ export function tick<TState>(
     }
 
     const beforeGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
-    if (next.runtimeConfig.populationMode === "conway") {
-      const conwayStepPulses = noteUnitToPulses(next.runtimeConfig.conwayStepUnit);
-      while (next.conwayPulseAccumulator >= conwayStepPulses) {
-        next.conwayPulseAccumulator -= conwayStepPulses;
-        next.behaviorState = behavior.onTick(next.behaviorState, { bpm: next.transport.bpm, emit: () => {} });
-      }
+    const algorithmStepPulses = noteUnitToPulses(next.runtimeConfig.algorithmStepUnit);
+    while (next.algorithmPulseAccumulator >= algorithmStepPulses) {
+      next.algorithmPulseAccumulator -= algorithmStepPulses;
+      next.behaviorState = behavior.onTick(next.behaviorState, { bpm: next.transport.bpm, emit: () => {} });
     }
     const afterGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
     const shouldInterpret = next.runtimeConfig.scanMode === "immediate" || scanAdvanced;
@@ -730,7 +820,7 @@ export function tick<TState>(
 
 export function extractConfigPayload<TState>(state: PlatformState<TState>): ConfigPayload {
   return {
-    activeBehavior: state.activeBehavior,
+    activeBehavior: (state.runtimeConfig as any).activeBehavior ?? state.activeBehavior,
     runtimeConfig: state.runtimeConfig,
     mappingConfig: state.mappingConfig
   };
@@ -742,17 +832,23 @@ export function applyConfigPayload<TState>(
   behavior: BehaviorEngine<TState, unknown>
 ): PlatformState<TState> {
   const safe = sanitizePayload(payload, behavior);
-  const next = { ...state };
+  const next = { ...state } as any;
   next.activeBehavior = safe.activeBehavior;
   next.runtimeConfig = safe.runtimeConfig;
   next.mappingConfig = safe.mappingConfig;
 
+  // Re-init behavior state if the active behavior changed
+  const resolved = resolveBehavior(safe.activeBehavior);
+  if (resolved.id !== behavior.id || resolved.id !== state.activeBehavior) {
+    next.behaviorState = resolved.init({});
+  }
+
   // Reset transient timing accumulators to avoid discontinuities.
   next.scanPulseAccumulator = 0;
-  next.conwayPulseAccumulator = 0;
+  next.algorithmPulseAccumulator = 0;
   next.ppqnPulseRemainder = 0;
   next.scanIndex = 0;
-  return next;
+  return next as PlatformState<TState>;
 }
 
 function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngine<TState, unknown>): ConfigPayload {
@@ -875,7 +971,7 @@ function applyExternalClockPulses<TState>(
     if (nextExt >= target) {
       next.transport = { ...next.transport, ppqnPulse: target, tick: 0 };
       next.scanPulseAccumulator = 0;
-      next.conwayPulseAccumulator = 0;
+      next.algorithmPulseAccumulator = 0;
       next.ppqnPulseRemainder = 0;
       next.scanIndex = 0;
       next.system = { ...next.system, pendingResync: false };
@@ -899,7 +995,7 @@ function advanceEngineByPulses<TState>(
   const events: MusicalEvent[] = [];
   let next = { ...state };
   next.scanPulseAccumulator += pulses;
-  next.conwayPulseAccumulator += pulses;
+  next.algorithmPulseAccumulator += pulses;
   next.transport = { ...next.transport, ppqnPulse: next.transport.ppqnPulse + pulses };
 
   let scanAdvanced = false;
@@ -917,12 +1013,10 @@ function advanceEngineByPulses<TState>(
   }
 
   const beforeGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
-  if (next.runtimeConfig.populationMode === "conway") {
-    const conwayStepPulses = noteUnitToPulses(next.runtimeConfig.conwayStepUnit);
-    while (next.conwayPulseAccumulator >= conwayStepPulses) {
-      next.conwayPulseAccumulator -= conwayStepPulses;
-      next.behaviorState = behavior.onTick(next.behaviorState, { bpm: next.transport.bpm, emit: () => {} });
-    }
+  const algorithmStepPulses = noteUnitToPulses(next.runtimeConfig.algorithmStepUnit);
+  while (next.algorithmPulseAccumulator >= algorithmStepPulses) {
+    next.algorithmPulseAccumulator -= algorithmStepPulses;
+    next.behaviorState = behavior.onTick(next.behaviorState, { bpm: next.transport.bpm, emit: () => {} });
   }
   const afterGrid = toGridSnapshot(behavior.renderModel(next.behaviorState));
   const shouldInterpret = next.runtimeConfig.scanMode === "immediate" || scanAdvanced;
@@ -972,7 +1066,7 @@ export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior:
   return {
     display: baseDisplay,
     oled,
-    leds: { width: GRID_WIDTH, height: GRID_HEIGHT, cells: cellsToLeds(model.cells, scanCursor, state.runtimeConfig.gridBrightness / 100) },
+    leds: { width: GRID_WIDTH, height: GRID_HEIGHT, cells: cellsToLeds(model.cells, model.triggerTypes, scanCursor, state.runtimeConfig.gridBrightness / 100) },
     transport: state.transport,
     activeBehavior: model.name
   };
@@ -1026,6 +1120,23 @@ function profileFromConfig(cfg: RuntimeConfig): InterpretationProfile {
 }
 
 function menuTree<TState>(state: PlatformState<TState>): MenuNode {
+  const activeEngine = resolveBehavior(state.runtimeConfig.activeBehavior);
+  const behaviorConfigNodes: MenuNode[] = [];
+  if (activeEngine.configMenu) {
+    const items = activeEngine.configMenu(state.behaviorState as any);
+    for (const item of items) {
+      if (item.type === "number") {
+        behaviorConfigNodes.push({ kind: "number", label: item.label, key: `behaviorConfig.${activeEngine.id}.${item.key}`, min: item.min ?? 0, max: item.max ?? 127, step: item.step ?? 1 });
+      } else if (item.type === "bool") {
+        behaviorConfigNodes.push({ kind: "bool", label: item.label, key: `behaviorConfig.${activeEngine.id}.${item.key}` });
+      } else if (item.type === "enum") {
+        behaviorConfigNodes.push({ kind: "enum", label: item.label, key: `behaviorConfig.${activeEngine.id}.${item.key}`, options: item.options ?? [] });
+      } else if (item.type === "action") {
+        behaviorConfigNodes.push({ kind: "action", label: item.label, action: { type: "behavior_action", behaviorId: activeEngine.id, actionType: item.key } });
+      }
+    }
+  }
+
   return {
     kind: "group",
     label: "Root",
@@ -1034,8 +1145,9 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
         kind: "group",
         label: "L1: Life",
         children: [
-          { kind: "enum", label: "Population Mode", key: "populationMode", options: ["grid", "conway"] },
-          { kind: "enum", label: "Conway Step", key: "conwayStepUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.populationMode === "conway" }
+          { kind: "enum", label: "Step Rate", key: "algorithmStepUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"] },
+          { kind: "enum", label: "Behaviour", key: "activeBehavior", options: listBehaviorIds() },
+          ...behaviorConfigNodes
         ]
       },
       {
@@ -1047,7 +1159,7 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
           { kind: "enum", label: "Scan Unit", key: "scanUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.scanMode === "scanning" },
           { kind: "enum", label: "Scan Direction", key: "scanDirection", options: ["forward", "reverse"], visible: (c) => c.scanMode === "scanning" },
           { kind: "bool", label: "Event Triggers", key: "eventEnabled" },
-          { kind: "enum", label: "Event Pattern", key: "eventParity", options: ["none", "birth_even_death_odd"] },
+          { kind: "enum", label: "Event Pattern", key: "eventParity", options: ["none", "activate_even_deactivate_odd"] },
           { kind: "bool", label: "State Notes", key: "stateEnabled" },
           axisGroup("X Axis", "x", 1),
           axisGroup("Y Axis", "y", 8)
@@ -1069,9 +1181,10 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
               { kind: "enum", label: "Root", key: "pitch.root", options: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] }
             ]
           },
-          { kind: "enum", label: "Birth Target", key: "mapping.birth.channel", options: ["0", "1", "2", "3"] },
-          { kind: "enum", label: "Death Target", key: "mapping.death.channel", options: ["0", "1", "2", "3"] },
-          { kind: "enum", label: "State Target", key: "mapping.state.channel", options: ["0", "1", "2", "3"] },
+          { kind: "enum", label: "Activate Target", key: "mapping.activate.channel", options: ["0", "1", "2", "3"] },
+          { kind: "enum", label: "Stable Target", key: "mapping.stable.channel", options: ["0", "1", "2", "3"] },
+          { kind: "enum", label: "Deactivate Target", key: "mapping.deactivate.channel", options: ["0", "1", "2", "3"] },
+          { kind: "enum", label: "Scanned Target", key: "mapping.scanned.channel", options: ["0", "1", "2", "3"] },
           axisGroup("X Axis", "x", 1),
           axisGroup("Y Axis", "y", 3)
         ]
@@ -1132,7 +1245,8 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
                 label: "Default",
                 children: [
                   { kind: "action", label: "Save Default", action: { type: "default_save" } },
-                  { kind: "action", label: "Load Default", action: { type: "default_load" } }
+                  { kind: "action", label: "Load Default", action: { type: "default_load" } },
+                  { kind: "bool", label: "Auto Save", key: "autoSaveDefault" }
                 ]
               },
               {
@@ -1342,16 +1456,12 @@ function confirmView<TState>(state: PlatformState<TState>): { path: string; line
   if (!c) return { path: "CONF", lines: [] };
   const title = c.kind === "text_dirty_exit" ? "TEXT" : "CONFIRM";
   const details = confirmDetails(state, c);
-  const [opt0, opt1] = confirmOptions(c);
-  const a = c.cursor === 0 ? `@@> ${opt0}` : `  ${opt0}`;
-  const b = c.cursor === 1 ? `@@> ${opt1}` : `  ${opt1}`;
-  const lines = [fitOledText(details), "", a, b].filter((l) => l.length > 0);
+  const lines = [fitOledText(details)];
+  for (let i = 0; i < c.options.length; i++) {
+    const prefix = c.cursor === i ? "@@> " : "  ";
+    lines.push(`${prefix}${c.options[i]}`);
+  }
   return { path: title, lines: lines.slice(0, OLED_TEXT_LINES - 1) };
-}
-
-function confirmOptions(confirm: ConfirmState): [string, string] {
-  if (confirm.kind === "text_dirty_exit") return ["Save", "Discard"];
-  return ["No", "Yes"];
 }
 
 function confirmDetails<TState>(state: PlatformState<TState>, confirm: ConfirmState): string {
@@ -1365,7 +1475,34 @@ function confirmDetails<TState>(state: PlatformState<TState>, confirm: ConfirmSt
   if (a.kind === "factory_load") return "Load factory?";
   if (a.kind === "text_dirty_exit") return "Save changes?";
   if (a.kind === "midi_panic") return "MIDI panic?";
+  if (a.kind === "aux_unbind") return "Unbind encoder?";
   return "Confirm";
+}
+
+function applyAuxUnbindChoice<TState>(state: PlatformState<TState>, encoderId: string, choice: string): PlatformState<TState> {
+  const binding = state.system.auxBindings[encoderId];
+  if (!binding) return setAuxToast(state, "No binding");
+
+  let nextBinding: AuxBinding | null = binding;
+  if (choice === "Both") {
+    nextBinding = null;
+  } else if (choice === "Click") {
+    nextBinding = binding.turn ? { turn: binding.turn, press: null } : null;
+  } else if (choice === "Turn") {
+    nextBinding = binding.press ? { turn: null, press: binding.press } : null;
+  }
+
+  const nextState = {
+    ...state,
+    system: {
+      ...state.system,
+      auxBindings: {
+        ...state.system.auxBindings,
+        [encoderId]: nextBinding
+      }
+    }
+  };
+  return setAuxToast(nextState, nextBinding ? "Unbound" : "Unbound");
 }
 
 function abbreviatePath(path: string): string {
@@ -1419,7 +1556,7 @@ function formatMenuItemLines<TState>(item: MenuNode, state: PlatformState<TState
     return [`${mark}> ${item.label}`];
   }
   if (item.kind === "action") {
-    return [`${mark}> ${item.label}`];
+    return [`${mark}> ${formatActionMenuLabel(item)}`];
   }
   if (item.kind === "text") {
     const value = String(readAnyValue(state, item.key) ?? "");
@@ -1434,6 +1571,38 @@ function formatMenuItemLines<TState>(item: MenuNode, state: PlatformState<TState
     return [`${mark}> ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitOledText(value)}`];
   }
   return [`  ${item.label}`];
+}
+
+function formatActionMenuLabel(item: Extract<MenuNode, { kind: "action" }>): string {
+  const shared = isSharedActionSpec(item.action);
+  return `!${item.label}${shared ? " [S]" : ""}`;
+}
+
+function isSharedActionSpec(action: ActionSpec): boolean {
+  return action.type === "behavior_action" && isSpawnActionType(action.actionType);
+}
+
+function isSpawnActionType(actionType: string): boolean {
+  return actionType === "spawnRandom"
+    || actionType === "seedRandom"
+    || actionType === "spawnAnt"
+    || actionType === "addBall"
+    || actionType === "spawnPulse"
+    || actionType === "dropNow"
+    || actionType === "seedCluster"
+    || actionType === "spawnGlider";
+}
+
+function spawnActionTypeForBehavior(behaviorId: string): string | null {
+  if (behaviorId === "life") return "spawnRandom";
+  if (behaviorId === "brain") return "seedRandom";
+  if (behaviorId === "ant") return "spawnAnt";
+  if (behaviorId === "bounce") return "addBall";
+  if (behaviorId === "pulse") return "spawnPulse";
+  if (behaviorId === "raindrops") return "dropNow";
+  if (behaviorId === "dla") return "seedCluster";
+  if (behaviorId === "glider") return "spawnGlider";
+  return null;
 }
 
 function locate<TState>(root: MenuNode, state: PlatformState<TState>, menu: MenuState): { node: MenuNode; siblings: MenuNode[]; path: string } {
@@ -1501,7 +1670,9 @@ function pressMenu<TState>(state: PlatformState<TState>, effects: PlatformEffect
     return { ...state, transport: { ...state.transport, playing: !state.transport.playing } };
   }
   if (selected.kind === "bool") {
-    return { ...state, runtimeConfig: writeValue(state.runtimeConfig, selected.key, !readValue(state.runtimeConfig, selected.key)) };
+    const next = { ...state, runtimeConfig: writeValue(state.runtimeConfig, selected.key, !readValue(state.runtimeConfig, selected.key)) };
+    if (selected.key !== "autoSaveDefault") autoSaveEffect(next, effects);
+    return next;
   }
 
   if (selected.kind === "text") {
@@ -1548,7 +1719,14 @@ function turnMenu<TState>(state: PlatformState<TState>, delta: -1 | 1, effects: 
   if (selected.kind === "number") {
     const current = readAnyValue(state, selected.key);
     const nextValue = clamp(Number(current) + delta * selected.step, selected.min, selected.max);
-    return writeAnyValue(state, selected.key, nextValue);
+    const nextState = writeAnyValue(state, selected.key, nextValue);
+    if (selected.key.startsWith("behaviorConfig.")) {
+      const finalState = reinitBehaviorState(nextState, selected.key);
+      autoSaveEffect(finalState, effects);
+      return finalState;
+    }
+    autoSaveEffect(nextState, effects);
+    return nextState;
   }
   // Must be "enum" kind
   const current = readAnyValue(state, selected.key);
@@ -1558,13 +1736,195 @@ function turnMenu<TState>(state: PlatformState<TState>, delta: -1 | 1, effects: 
   if (selected.key === "transport.playing") {
     return { ...state, transport: { ...state.transport, playing: raw === "true" } };
   }
-  return writeAnyValue(state, selected.key, raw);
+  if (selected.key === "activeBehavior") {
+    const nextState = writeAnyValue(state, selected.key, raw);
+    const finalState = reinitBehaviorState(nextState, selected.key);
+    autoSaveEffect(finalState, effects);
+    return finalState;
+  }
+  if (selected.key.startsWith("behaviorConfig.")) {
+    const nextState = writeAnyValue(state, selected.key, raw);
+    const finalState = reinitBehaviorState(nextState, selected.key);
+    autoSaveEffect(finalState, effects);
+    return finalState;
+  }
+  const nextState = writeAnyValue(state, selected.key, raw);
+  autoSaveEffect(nextState, effects);
+  return nextState;
+}
+
+function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId: string, effects: PlatformEffect[]): PlatformState<TState> {
+  const view = locate(menuTree(state), state, state.menu);
+  const selected = view.siblings[state.menu.cursor];
+  const existing = state.system.auxBindings[encoderId];
+  const openUnbindConfirm = (next: PlatformState<TState>): PlatformState<TState> => ({
+    ...next,
+    system: {
+      ...next.system,
+      confirm: {
+        kind: "aux_unbind",
+        action: { kind: "aux_unbind", encoderId },
+        cursor: 0,
+        options: ["Both", "Click", "Turn", "Cancel"]
+      }
+    }
+  });
+
+  // Nothing bindable at cursor → unbind both
+  if (!selected || selected.kind === "group" || selected.kind === "spacer" || selected.kind === "text") {
+    if (!existing) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} No binding`);
+    return openUnbindConfirm(state);
+  }
+
+  // Case 1: value parameter (number/enum/bool) in editing mode → bind turn
+  if (state.menu.editing && (selected.kind === "number" || selected.kind === "enum" || selected.kind === "bool")) {
+    const key = (selected as any).key as string;
+    if (!key) return state;
+    // Same turn binding → unbind turn slot
+    if (existing?.turn && existing.turn.key === key) {
+      return openUnbindConfirm(state);
+    }
+    const turn: AuxTurnBinding = { key, label: (selected as any).label, kind: selected.kind };
+    if (selected.kind === "number") {
+      turn.min = (selected as any).min;
+      turn.max = (selected as any).max;
+      turn.step = (selected as any).step;
+    } else if (selected.kind === "enum") {
+      turn.options = (selected as any).options;
+    }
+    return setAuxToast(
+      { ...state, system: { ...state.system, auxBindings: { ...state.system.auxBindings, [encoderId]: { turn, press: existing?.press ?? null } } } },
+      `${auxInputPrefix("press", encoderId)} Bound turn: ${(selected as any).label}`
+    );
+  }
+
+  // Case 2: action → bind press (any editing state)
+  if (selected.kind === "action") {
+    const action = (selected as any).action as ActionSpec;
+    if (action.type === "behavior_action") {
+      const nextPress: AuxPressBinding = isSpawnActionType(action.actionType)
+        ? { actionType: action.actionType, routeKey: "trigger.life.spawn_now", label: "Spawn Now" }
+        : { actionType: action.actionType, label: (selected as any).label };
+      // Same press binding → unbind press slot
+      if (existing?.press && existing.press.actionType === nextPress.actionType && existing.press.routeKey === nextPress.routeKey) {
+        return openUnbindConfirm(state);
+      }
+      return setAuxToast(
+        {
+          ...state,
+          system: {
+            ...state.system,
+            auxBindings: {
+              ...state.system.auxBindings,
+              [encoderId]: { turn: existing?.turn ?? null, press: nextPress }
+            }
+          }
+        },
+        `${auxInputPrefix("press", encoderId)} Bound click: ${(selected as any).label}`
+      );
+    }
+    return state;
+  }
+
+  // Not on a bindable item → unbind both
+  if (!existing) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} No binding`);
+  return openUnbindConfirm(state);
+}
+
+function pressAuxEncoder<TState>(state: PlatformState<TState>, encoderId: string, effects: PlatformEffect[], emit: (event: MusicalEvent) => void): PlatformState<TState> {
+  const binding = state.system.auxBindings[encoderId];
+  if (!binding?.press) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} No binding`);
+
+  let actionType = binding.press.actionType;
+  let label = binding.press.label ?? binding.press.actionType;
+  if (binding.press.routeKey === "trigger.life.spawn_now") {
+    label = "Spawn Now";
+    const resolvedAction = spawnActionTypeForBehavior(state.runtimeConfig.activeBehavior);
+    if (!resolvedAction) {
+      return setAuxToast(state, `${auxInputPrefix("press", encoderId)} N/A (Spawn Now)`);
+    }
+    actionType = resolvedAction;
+  }
+
+  const behavior = resolveBehavior(state.runtimeConfig.activeBehavior);
+  const newBehaviorState = behavior.onInput(state.behaviorState, { type: "behavior_action", actionType } as DeviceInput, {
+    bpm: state.transport.bpm,
+    emit
+  });
+  const nextState = { ...state, behaviorState: newBehaviorState };
+  return setAuxToast(nextState, `${auxInputPrefix("press", encoderId)} ${label}`);
+}
+
+function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: string, delta: -1 | 1, effects: PlatformEffect[]): PlatformState<TState> {
+  const binding = state.system.auxBindings[encoderId];
+  if (!binding?.turn) return setAuxToast(state, `${auxInputPrefix("turn", encoderId)} No binding`);
+
+  const t = binding.turn;
+  const label = t.label ?? t.key;
+
+  if (t.kind === "number") {
+    const current = readAnyValue(state, t.key);
+    const nextValue = clamp(Number(current) + delta * (t.step ?? 1), t.min ?? 0, t.max ?? 127);
+    const nextState = writeAnyValue(state, t.key, nextValue);
+    if (t.key.startsWith("behaviorConfig.")) {
+      const finalState = reinitBehaviorState(nextState, t.key);
+      autoSaveEffect(finalState, effects);
+      const v = formatDisplayValue(t.key, readAnyValue(finalState, t.key));
+      return setAuxToast(finalState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+    }
+    autoSaveEffect(nextState, effects);
+    const v = formatDisplayValue(t.key, readAnyValue(nextState, t.key));
+    return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+  }
+
+  if (t.kind === "enum" && t.options) {
+    const current = readAnyValue(state, t.key);
+    const idx = t.options.indexOf(String(current));
+    const nextIdx = clamp(idx + delta, 0, t.options.length - 1);
+    const raw = t.options[nextIdx];
+    if (t.key === "transport.playing") {
+      const nextState = { ...state, transport: { ...state.transport, playing: raw === "true" } };
+      const v = formatDisplayValue(t.key, readAnyValue(nextState, t.key));
+      return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+    }
+    if (t.key === "activeBehavior") {
+      const nextState = writeAnyValue(state, t.key, raw);
+      const finalState = reinitBehaviorState(nextState, t.key);
+      autoSaveEffect(finalState, effects);
+      const v = formatDisplayValue(t.key, readAnyValue(finalState, t.key));
+      return setAuxToast(finalState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+    }
+    if (t.key.startsWith("behaviorConfig.")) {
+      const nextState = writeAnyValue(state, t.key, raw);
+      const finalState = reinitBehaviorState(nextState, t.key);
+      autoSaveEffect(finalState, effects);
+      const v = formatDisplayValue(t.key, readAnyValue(finalState, t.key));
+      return setAuxToast(finalState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+    }
+    const nextState = writeAnyValue(state, t.key, raw);
+    autoSaveEffect(nextState, effects);
+    const v = formatDisplayValue(t.key, readAnyValue(nextState, t.key));
+    return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+  }
+
+  if (t.kind === "bool") {
+    const current = readAnyValue(state, t.key);
+    const nextValue = delta > 0 ? true : delta < 0 ? false : current;
+    // Clamp: once at true, can't go further right; once at false, can't go further left
+    const clamped = current === true ? (delta > 0 ? true : false) : (delta < 0 ? false : true);
+    const nextState = writeAnyValue(state, t.key, clamped);
+    autoSaveEffect(nextState, effects);
+    const v = formatDisplayValue(t.key, readAnyValue(nextState, t.key));
+    return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+  }
+
+  return state;
 }
 
 function handleAction<TState>(state: PlatformState<TState>, action: ActionSpec, effects: PlatformEffect[]): PlatformState<TState> {
-  const openConfirm = (kind: ConfirmKind, pending: PendingAction): PlatformState<TState> => ({
+  const openConfirm = (kind: ConfirmKind, pending: PendingAction, options: string[] = ["No", "Yes"]): PlatformState<TState> => ({
     ...state,
-    system: { ...state.system, confirm: { kind, action: pending, cursor: 0 } }
+    system: { ...state.system, confirm: { kind, action: pending, cursor: 0, options } }
   });
   const toast = (message: string): PlatformState<TState> => ({
     ...state,
@@ -1630,7 +1990,103 @@ function handleAction<TState>(state: PlatformState<TState>, action: ActionSpec, 
   if (action.type === "midi_panic") {
     return openConfirm("midi_panic", { kind: "midi_panic" });
   }
+  if (action.type === "behavior_action") {
+    const behavior = resolveBehavior(action.behaviorId);
+    const newState = behavior.onInput(state.behaviorState, { type: "behavior_action", actionType: action.actionType } as DeviceInput, {
+      bpm: state.transport.bpm,
+      emit: () => {}
+    });
+    return { ...state, behaviorState: newState };
+  }
   return state;
+}
+
+function autoSaveEffect<TState>(state: PlatformState<TState>, effects: PlatformEffect[]): void {
+  if (state.runtimeConfig.autoSaveDefault) {
+    effects.push({ type: "store_save_default", payload: extractConfigPayload(state) });
+  }
+}
+
+function setAuxToast<TState>(state: PlatformState<TState>, message: string): PlatformState<TState> {
+  const now = Date.now();
+  const baseMs = 1400;
+  const extendMs = 600;
+  const maxMs = 3000;
+  const current = state.system.toast;
+  const active = current && current.untilMs > now;
+  const untilMs = active ? Math.min(now + maxMs, Math.max(now + baseMs, current.untilMs + extendMs)) : now + baseMs;
+  return {
+    ...state,
+    system: {
+      ...state.system,
+      toast: { message, untilMs }
+    }
+  };
+}
+
+function auxInputPrefix(kind: "press" | "turn", encoderId: string): string {
+  const index = encoderId.startsWith("aux") ? encoderId.slice(3) : encoderId;
+  const lead = kind === "press" ? "S" : "T";
+  return `${lead}${index}:`;
+}
+
+function reinitBehaviorState<TState>(state: PlatformState<TState>, key: string): PlatformState<TState> {
+  const previousBehaviorId = state.activeBehavior;
+  const parts = key.split(".");
+  const behaviorId = parts[1] ?? state.runtimeConfig.activeBehavior;
+  const behavior = resolveBehavior(behaviorId);
+  const ns = state.runtimeConfig.behaviorConfig?.[behaviorId] as Record<string, unknown> | undefined;
+  const cfg: any = {};
+  if (behavior.configMenu) {
+    for (const item of behavior.configMenu(behavior.init({}))) {
+      const val = ns?.[item.key];
+      if (val !== undefined) cfg[item.key] = val;
+    }
+  }
+  const next = { ...state } as any;
+  next.behaviorState = behavior.init(cfg);
+  next.activeBehavior = behaviorId;
+  if (key === "activeBehavior") {
+    next.system = {
+      ...next.system,
+      auxBindings: remapAuxPressBindingsForBehavior(next.system.auxBindings, previousBehaviorId, behaviorId)
+    };
+  }
+  return next as PlatformState<TState>;
+}
+
+function primaryBehaviorAction(behaviorId: string): { actionType: string; label: string } | null {
+  const behavior = resolveBehavior(behaviorId);
+  if (!behavior.configMenu) return null;
+  const items = behavior.configMenu(behavior.init({}));
+  for (const item of items) {
+    if (item.type === "action") return { actionType: item.key, label: item.label };
+  }
+  return null;
+}
+
+function remapAuxPressBindingsForBehavior(
+  bindings: Record<string, AuxBinding | null>,
+  fromBehaviorId: string,
+  toBehaviorId: string
+): Record<string, AuxBinding | null> {
+  if (fromBehaviorId === toBehaviorId) return bindings;
+  const fromAction = primaryBehaviorAction(fromBehaviorId);
+  if (!fromAction) return bindings;
+  const toAction = primaryBehaviorAction(toBehaviorId);
+
+  const next: Record<string, AuxBinding | null> = { ...bindings };
+  for (const id of Object.keys(next)) {
+    const binding = next[id];
+    if (binding?.press?.routeKey) continue;
+    if (!binding?.press || binding.press.actionType !== fromAction.actionType) continue;
+    if (!toAction) {
+      next[id] = binding.turn ? { turn: binding.turn, press: null } : null;
+      continue;
+    }
+    next[id] = { ...binding, press: { actionType: toAction.actionType, label: toAction.label } };
+  }
+  return next;
 }
 
 function textEditTurn<TState>(state: PlatformState<TState>, node: Extract<MenuNode, { kind: "text" }>, delta: -1 | 1): PlatformState<TState> {
@@ -1749,8 +2205,15 @@ function toGridSnapshot(model: { cells: boolean[] }): GridSnapshot {
   return { width: GRID_WIDTH, height: GRID_HEIGHT, cells: model.cells };
 }
 
-function cellsToLeds(cells: boolean[], scanCursor: { axis: ScanAxis; index: number } | null, brightness: number): LedCell[] {
+function cellsToLeds(
+  cells: boolean[],
+  triggerTypes: import("@cellsymphony/behavior-api").CellTriggerType[] | undefined,
+  scanCursor: { axis: ScanAxis; index: number } | null,
+  brightness: number
+): LedCell[] {
   const b = clamp(brightness, 0.1, 1);
+  const OFF_BG: LedCell = { r: 15, g: 15, b: 22 };
+  const OFF_CURSOR: LedCell = { r: 70, g: 70, b: 76 };
   return cells.map((alive, i) => {
     const x = i % GRID_WIDTH;
     const y = Math.floor(i / GRID_WIDTH);
@@ -1759,14 +2222,21 @@ function cellsToLeds(cells: boolean[], scanCursor: { axis: ScanAxis; index: numb
       ((scanCursor.axis === "columns" && x === scanCursor.index) ||
         (scanCursor.axis === "rows" && y === scanCursor.index));
 
-    if (!inCursor) {
-      return alive ? scaleLed({ r: 0, g: 255, b: 120 }, b) : scaleLed({ r: 15, g: 15, b: 22 }, b);
+    if (!alive) {
+      return scaleLed(inCursor ? OFF_CURSOR : OFF_BG, b);
     }
 
-    if (alive) {
-      return scaleLed({ r: 90, g: 160, b: 120 }, b);
+    const type = triggerTypes?.[i] ?? "stable";
+    switch (type) {
+      case "activate":
+        return scaleLed({ r: 255, g: 255, b: 255 }, b);
+      case "deactivate":
+        return scaleLed({ r: 128, g: 128, b: 128 }, b);
+      case "scanned":
+        return scaleLed({ r: 255, g: 0, b: 0 }, b);
+      default:
+        return scaleLed({ r: 0, g: 255, b: 120 }, b);
     }
-    return scaleLed({ r: 70, g: 70, b: 76 }, b);
   });
 }
 
@@ -1795,7 +2265,7 @@ export function toOledLines(display: DisplayFrame): { lines: string[]; colors: n
   const body = display.lines
     .slice(0, OLED_TEXT_LINES - 1)
     .map((line, idx) => ({
-      line: line.trim().length === 0 ? "" : fitOledText(line),
+      line: line.trim().length === 0 ? "" : fitOledMenuLine(line),
       color: display.colors?.[idx] ?? 0xffff
     }));
   // Keep empty lines - they render as blank spacer lines
@@ -1805,10 +2275,22 @@ export function toOledLines(display: DisplayFrame): { lines: string[]; colors: n
   };
 }
 
+function fitOledMenuLine(line: string): string {
+  if (!line.startsWith("@@")) return fitOledText(line);
+  if (line.startsWith("@@> ")) {
+    return `@@${fitOledTextToWidth(line.slice(4), OLED_TEXT_COLUMNS)}`;
+  }
+  return `@@${fitOledTextToWidth(line.slice(2), OLED_TEXT_COLUMNS)}`;
+}
+
 function fitOledText(text: string): string {
-  if (text.length <= OLED_TEXT_COLUMNS) return text;
-  if (OLED_TEXT_COLUMNS <= 3) return text.slice(0, OLED_TEXT_COLUMNS);
-  return `${text.slice(0, OLED_TEXT_COLUMNS - 3)}...`;
+  return fitOledTextToWidth(text, OLED_TEXT_COLUMNS);
+}
+
+function fitOledTextToWidth(text: string, width: number): string {
+  if (text.length <= width) return text;
+  if (width <= 3) return text.slice(0, width);
+  return `${text.slice(0, width - 3)}...`;
 }
 
 function isMainEncoderInput(id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined): boolean {
@@ -1821,7 +2303,7 @@ function formatDisplayValue(key: string, value: unknown): string {
   if (key === "gridBrightness") return `Grid ${value}%`;
   if (key === "buttonBrightness") return `Btn ${value}%`;
   if (key === "screenSleepSeconds") return Number(value) <= 0 ? "Sleep: Off" : `Sleep: ${value}s`;
-  if (key === "populationMode") return value === "grid" ? "Sequencer" : "Conway";
+  if (key === "activeBehavior") return String(value);
   if (key === "scanMode") return value === "immediate" ? "Immediate" : "Scanning";
   if (key === "scanAxis") return value === "columns" ? "Cols" : "Rows";
   if (key === "scanDirection") return value === "forward" ? "Fwd" : "Rev";
@@ -2033,7 +2515,7 @@ export function emergencyBrake<TState>(state: PlatformState<TState>): { state: P
       system: { ...state.system, stopLatched: true, transportFlash: "none", transportFlashUntilMs: 0 },
       scanIndex: origin,
       scanPulseAccumulator: 0,
-      conwayPulseAccumulator: 0,
+      algorithmPulseAccumulator: 0,
       ppqnPulseRemainder: 0
     },
     events

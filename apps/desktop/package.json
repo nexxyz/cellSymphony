@@ -16,21 +16,21 @@
     "tauri:build:ci": "tauri build --debug"
   },
   "dependencies": {
-    "@cellsymphony/behaviors-life": "workspace:*",
+    "@cellsymphony/behavior-api": "workspace:*",
     "@cellsymphony/device-contracts": "workspace:*",
     "@cellsymphony/interpretation-core": "workspace:*",
     "@cellsymphony/musical-events": "workspace:*",
     "@cellsymphony/platform-core": "workspace:*",
-    "@tauri-apps/api": "^2.0.0",
+    "@tauri-apps/api": "^2.11.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^2.0.0",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@vitejs/plugin-react": "^4.3.2",
-    "typescript": "^5.6.3",
-    "vite": "^5.4.8"
+    "@tauri-apps/cli": "^2.11.1",
+    "@types/react": "^18.3.28",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21"
   }
 }

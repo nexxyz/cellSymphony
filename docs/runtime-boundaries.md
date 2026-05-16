@@ -18,7 +18,7 @@ Authoritative menu/control behavior spec: `docs/menu-and-controls-spec.md`.
   - publishes snapshots and musical events
   - owns MIDI input/output via Tauri bridges only (no Web MIDI)
 
-- Core logic layer (`packages/platform-core`, `packages/interpretation-core`, `packages/mapping-core`, behavior packages)
+- Core logic layer (`packages/platform-core`, `packages/interpretation-core`, `packages/mapping-core`, `packages/behavior-api`, all behavior packages)
   - deterministic simulation, menu/control state, interpretation, mapping
   - no UI framework code
   - no platform-specific I/O

@@ -16,6 +16,15 @@
   },
   "dependencies": {
     "@cellsymphony/behavior-api": "workspace:*",
+    "@cellsymphony/behaviors-ant": "workspace:*",
+    "@cellsymphony/behaviors-bounce": "workspace:*",
+    "@cellsymphony/behaviors-brain": "workspace:*",
+    "@cellsymphony/behaviors-dla": "workspace:*",
+    "@cellsymphony/behaviors-glider": "workspace:*",
+    "@cellsymphony/behaviors-life": "workspace:*",
+    "@cellsymphony/behaviors-pulse": "workspace:*",
+    "@cellsymphony/behaviors-raindrops": "workspace:*",
+    "@cellsymphony/behaviors-sequencer": "workspace:*",
     "@cellsymphony/device-contracts": "workspace:*",
     "@cellsymphony/interpretation-core": "workspace:*",
     "@cellsymphony/mapping-core": "workspace:*",
@@ -24,7 +33,7 @@
   "devDependencies": {
     "c8": "^11.0.0",
     "pngjs": "^7.0.0",
-    "tsx": "^4.21.0",
-    "typescript": "^5.6.3"
+    "tsx": "^4.22.0",
+    "typescript": "^5.9.3"
   }
 }

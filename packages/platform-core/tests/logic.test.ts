@@ -48,17 +48,16 @@ test("interpretation supports event and state trigger paths", () => {
     y: { mode: "scale_step", step: 3 }
   });
 
-  assert.equal(intents.length, 3);
-  assert.deepEqual(intents.map((i) => i.kind).sort(), ["birth", "death", "state_on"]);
+  assert.deepEqual(intents.map((i) => i.kind).sort(), ["activate", "deactivate", "scanned"]);
 });
 
 test("mapping routes trigger kinds to configured targets", () => {
   const mapping = loadDefaultMappingConfig();
   const events = mapIntentsToMusicalEvents(
     [
-      { x: 0, y: 0, degree: 0, kind: "birth" },
-      { x: 1, y: 0, degree: 1, kind: "death" },
-      { x: 2, y: 0, degree: 2, kind: "state_on" }
+      { x: 0, y: 0, degree: 0, kind: "activate" },
+      { x: 1, y: 0, degree: 1, kind: "deactivate" },
+      { x: 2, y: 0, degree: 2, kind: "scanned" }
     ],
     mapping
   );
@@ -68,9 +67,9 @@ test("mapping routes trigger kinds to configured targets", () => {
   assert.equal(events[1].type, "note_on");
   assert.equal(events[2].type, "note_on");
   if (events[0].type === "note_on" && events[1].type === "note_on" && events[2].type === "note_on") {
-    assert.equal(events[0].channel, mapping.birth.channel);
-    assert.equal(events[1].channel, mapping.death.channel);
-    assert.equal(events[2].channel, mapping.state.channel);
+    assert.equal(events[0].channel, mapping.activate.channel);
+    assert.equal(events[1].channel, mapping.deactivate.channel);
+    assert.equal(events[2].channel, mapping.scanned.channel);
   }
 });
 
@@ -130,7 +129,6 @@ test("scanning mode emits notes only when scan index advances", () => {
   state.runtimeConfig.scanAxis = "columns";
   state.runtimeConfig.scanDirection = "forward";
   state.runtimeConfig.scanUnit = "1/1";
-  state.runtimeConfig.populationMode = "grid";
 
   const first = tick(state, mockBehavior);
   assert.equal(first.state.scanIndex, 0);
@@ -155,8 +153,7 @@ test("grid brightness scales rendered LED intensity", () => {
 test("velocity modulation mode changes output velocity", () => {
   let state = createInitialState(mockBehavior);
   state.transport.playing = true;
-  state.runtimeConfig.populationMode = "conway";
-  state.runtimeConfig.conwayStepUnit = "1/16";
+  state.runtimeConfig.algorithmStepUnit = "1/16";
   state.runtimeConfig.eventParity = "none";
   state.runtimeConfig.x.velocity.enabled = true;
   state.runtimeConfig.x.velocity.from = 20;
@@ -172,8 +169,7 @@ test("velocity modulation mode changes output velocity", () => {
 test("filter modulation mode emits cutoff/resonance CC", () => {
   let state = createInitialState(mockBehavior);
   state.transport.playing = true;
-  state.runtimeConfig.populationMode = "conway";
-  state.runtimeConfig.conwayStepUnit = "1/16";
+  state.runtimeConfig.algorithmStepUnit = "1/16";
   state.runtimeConfig.eventParity = "none";
   state.runtimeConfig.x.filterCutoff.enabled = true;
   state.runtimeConfig.y.filterResonance.enabled = true;
@@ -215,6 +211,31 @@ test("OLED formatter clamps display lines and width", () => {
   assert.equal(result.lines.length, 5);
   assert.equal(result.lines[0].length, OLED_TEXT_COLUMNS);
   assert.equal(result.lines[result.lines.length - 1], "line four");
+});
+
+test("OLED formatter does not truncate selected marker lines that fit visually", () => {
+  const result = toOledLines({
+    page: "System/MIDI",
+    title: "System/MIDI",
+    editing: false,
+    lines: ["@@> Respond Start/Stop", "@@> !Spawn Random [S]"]
+  });
+
+  assert.equal(result.lines[1], "@@Respond Start/Stop");
+  assert.equal(result.lines[2], "@@!Spawn Random [S]");
+});
+
+test("OLED formatter still truncates truly long selected lines", () => {
+  const result = toOledLines({
+    page: "System/MIDI",
+    title: "System/MIDI",
+    editing: false,
+    lines: ["@@> This selection label is definitely too long"]
+  });
+
+  assert.equal(result.lines[1].startsWith("@@"), true);
+  assert.equal(result.lines[1].slice(2).length, OLED_TEXT_COLUMNS);
+  assert.equal(result.lines[1].slice(2).endsWith("..."), true);
 });
 
 test("edit marker uses compact star prefix", () => {
@@ -261,8 +282,7 @@ test("modulation mode labels are user-facing", () => {
 test("additive pitch uses shared starting/lowest/highest", () => {
   let state = createInitialState(mockBehavior);
   state.transport.playing = true;
-  state.runtimeConfig.populationMode = "conway";
-  state.runtimeConfig.conwayStepUnit = "1/16";
+  state.runtimeConfig.algorithmStepUnit = "1/16";
   state.runtimeConfig.eventParity = "none";
   state.runtimeConfig.pitch.startingNote = 60;
   state.runtimeConfig.pitch.lowestNote = 48;

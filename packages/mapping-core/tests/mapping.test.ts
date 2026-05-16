@@ -1,36 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { loadDefaultMappingConfig, mapIntentsToMusicalEvents, mapTransitionsToMusicalEvents, type MappingConfig } from "../src/index";
+import { loadDefaultMappingConfig, mapIntentsToMusicalEvents, type MappingConfig } from "../src/index";
 
-test("mapTransitionsToMusicalEvents maps birth/death to target channels", () => {
+test("mapIntentsToMusicalEvents maps scanned intents to scanned target", () => {
   const config = loadDefaultMappingConfig();
-  const events = mapTransitionsToMusicalEvents(
-    [
-      { x: 0, y: 0, kind: "birth" },
-      { x: 0, y: 1, kind: "death" }
-    ],
-    8,
-    config
-  );
-
-  assert.equal(events.length, 2);
-  assert.equal(events[0].type, "note_on");
-  assert.equal(events[1].type, "note_on");
-  if (events[0].type === "note_on" && events[1].type === "note_on") {
-    assert.equal(events[0].channel, config.birth.channel);
-    assert.equal(events[1].channel, config.death.channel);
-  }
-});
-
-test("mapIntentsToMusicalEvents maps state intents to state target", () => {
-  const config = loadDefaultMappingConfig();
-  const events = mapIntentsToMusicalEvents([{ x: 2, y: 3, degree: 5, kind: "state_on" }], config);
+  const events = mapIntentsToMusicalEvents([{ x: 2, y: 3, degree: 5, kind: "scanned" }], config);
 
   assert.equal(events.length, 1);
   assert.equal(events[0].type, "note_on");
   if (events[0].type === "note_on") {
-    assert.equal(events[0].channel, config.state.channel);
+    assert.equal(events[0].channel, config.scanned.channel);
     assert.ok(events[0].note >= config.baseMidiNote);
   }
 });
@@ -43,12 +23,13 @@ test("mapping config sanitizes out-of-range values", () => {
     scale: [0, 2, 4, 7, 12],
     rowStepDegrees: -2,
     columnStepDegrees: 3.9,
-    birth: { channel: 20, velocity: 200, durationMs: 999999 },
-    death: { channel: -1, velocity: 0, durationMs: 0 },
-    state: { channel: 1, velocity: 80, durationMs: 120 }
+    activate: { channel: 20, velocity: 200, durationMs: 999999 },
+    deactivate: { channel: -1, velocity: 0, durationMs: 0 },
+    stable: { channel: 2, velocity: 80, durationMs: 120 },
+    scanned: { channel: 3, velocity: 80, durationMs: 120 }
   };
 
-  const events = mapIntentsToMusicalEvents([{ x: 0, y: 0, degree: 300, kind: "birth" }], unsafe);
+  const events = mapIntentsToMusicalEvents([{ x: 0, y: 0, degree: 300, kind: "activate" }], unsafe);
   assert.equal(events.length, 1);
   if (events[0].type === "note_on") {
     assert.ok(events[0].note >= 0 && events[0].note <= 127);

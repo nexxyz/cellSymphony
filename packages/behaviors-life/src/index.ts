@@ -1,4 +1,4 @@
-import type { BehaviorEngine } from "@cellsymphony/behavior-api";
+import type { BehaviorEngine, CellTriggerType } from "@cellsymphony/behavior-api";
 import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 
 export type LifeState = {
@@ -6,24 +6,50 @@ export type LifeState = {
   height: typeof GRID_HEIGHT;
   cells: boolean[];
   generation: number;
+  randomCellsPerTick: number;
+  randomTickInterval: number;
+  tickCounter: number;
+  triggerTypes: CellTriggerType[];
 };
 
 export type LifeConfig = {
   width?: typeof GRID_WIDTH;
   height?: typeof GRID_HEIGHT;
+  randomCellsPerTick?: number;
+  randomTickInterval?: number;
 };
+
+const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
 
 export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
   id: "life",
-  init(): LifeState {
+  init(config): LifeState {
     return {
       width: GRID_WIDTH,
       height: GRID_HEIGHT,
-      cells: new Array(GRID_WIDTH * GRID_HEIGHT).fill(false),
-      generation: 0
+      cells: new Array(CELL_COUNT).fill(false),
+      generation: 0,
+      randomCellsPerTick: config.randomCellsPerTick ?? 0,
+      randomTickInterval: config.randomTickInterval ?? 1,
+      tickCounter: 0,
+      triggerTypes: new Array(CELL_COUNT).fill("none")
     };
   },
   onInput(state, input: DeviceInput) {
+    if (input.type === "behavior_action" && input.actionType === "spawnRandom") {
+      const cells = state.cells.slice();
+      const tt = state.triggerTypes.slice();
+      for (let r = 0; r < 5; r++) {
+        const rx = Math.floor(Math.random() * GRID_WIDTH);
+        const ry = Math.floor(Math.random() * GRID_HEIGHT);
+        const ri = ry * GRID_WIDTH + rx;
+        if (!cells[ri]) {
+          cells[ri] = true;
+          tt[ri] = "activate";
+        }
+      }
+      return { ...state, cells, triggerTypes: tt };
+    }
     if (input.type !== "grid_press") {
       return state;
     }
@@ -40,33 +66,71 @@ export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
   },
   onTick(state, context) {
     const nextCells = state.cells.slice();
-    let aliveCount = 0;
+    const triggerTypes = new Array<CellTriggerType>(CELL_COUNT).fill("none");
+
     for (let y = 0; y < GRID_HEIGHT; y += 1) {
       for (let x = 0; x < GRID_WIDTH; x += 1) {
         const i = y * GRID_WIDTH + x;
         const alive = state.cells[i];
         const neighbors = countNeighbors(state.cells, x, y);
-        nextCells[i] = alive ? neighbors === 2 || neighbors === 3 : neighbors === 3;
-        if (nextCells[i]) {
-          aliveCount += 1;
+        const nextAlive = alive ? neighbors === 2 || neighbors === 3 : neighbors === 3;
+        nextCells[i] = nextAlive;
+        if (nextAlive && !alive) {
+          triggerTypes[i] = "activate";
+        } else if (!nextAlive && alive) {
+          triggerTypes[i] = "deactivate";
+        } else if (nextAlive && alive) {
+          triggerTypes[i] = "stable";
         }
       }
     }
+
+    let aliveCount = 0;
+    for (let i = 0; i < CELL_COUNT; i += 1) {
+      if (nextCells[i]) aliveCount += 1;
+    }
+
     if (aliveCount > 0 && aliveCount % 12 === 0) {
       context.emit({ type: "note_on", channel: 0, note: 60 + (aliveCount % 12), velocity: 90, durationMs: 120 });
     }
+
+    const nextTickCounter = state.tickCounter + 1;
+
+    // Inject random cells if configured
+    if (state.randomCellsPerTick > 0 && nextTickCounter % state.randomTickInterval === 0) {
+      for (let r = 0; r < state.randomCellsPerTick; r += 1) {
+        const rx = Math.floor(Math.random() * GRID_WIDTH);
+        const ry = Math.floor(Math.random() * GRID_HEIGHT);
+        const ri = ry * GRID_WIDTH + rx;
+        if (!nextCells[ri]) {
+          nextCells[ri] = true;
+          triggerTypes[ri] = "activate";
+        }
+      }
+    }
+
     return {
       ...state,
       cells: nextCells,
-      generation: state.generation + 1
+      generation: state.generation + 1,
+      tickCounter: nextTickCounter,
+      triggerTypes
     };
   },
   renderModel(state) {
     return {
       name: "Game of Life",
       statusLine: `Gen ${state.generation}`,
-      cells: state.cells
+      cells: state.cells,
+      triggerTypes: state.triggerTypes
     };
+  },
+  configMenu() {
+    return [
+      { key: "randomCellsPerTick", label: "Spawn Count", type: "number", min: 0, max: 20, step: 1 },
+      { key: "randomTickInterval", label: "Spawn Interval", type: "number", min: 1, max: 20, step: 1 },
+      { key: "spawnRandom", label: "Spawn Random", type: "action" }
+    ];
   },
   serialize(state) {
     return state;

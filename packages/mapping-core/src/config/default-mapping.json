@@ -5,17 +5,22 @@
   "scale": [0, 3, 5, 7, 10],
   "rowStepDegrees": 3,
   "columnStepDegrees": 1,
-  "birth": {
+  "activate": {
     "channel": 0,
     "velocity": 96,
     "durationMs": 150
   },
-  "death": {
+  "deactivate": {
     "channel": 1,
     "velocity": 68,
     "durationMs": 90
   },
-  "state": {
+  "stable": {
+    "channel": 0,
+    "velocity": 88,
+    "durationMs": 130
+  },
+  "scanned": {
     "channel": 0,
     "velocity": 88,
     "durationMs": 130

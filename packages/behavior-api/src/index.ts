@@ -1,6 +1,8 @@
 import type { DeviceInput } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 
+export type CellTriggerType = "activate" | "stable" | "deactivate" | "scanned" | "none";
+
 export type BehaviorContext = {
   bpm: number;
   emit: (event: MusicalEvent) => void;
@@ -10,6 +12,17 @@ export type BehaviorRenderModel = {
   name: string;
   statusLine: string;
   cells: boolean[];
+  triggerTypes?: CellTriggerType[];
+};
+
+export type BehaviorConfigItem = {
+  key: string;
+  label: string;
+  type: "number" | "bool" | "enum" | "action";
+  min?: number;
+  max?: number;
+  step?: number;
+  options?: string[];
 };
 
 export interface BehaviorEngine<State, Config> {
@@ -20,4 +33,7 @@ export interface BehaviorEngine<State, Config> {
   renderModel(state: State): BehaviorRenderModel;
   serialize(state: State): unknown;
   deserialize(data: unknown): State;
+  configMenu?(state: State): BehaviorConfigItem[];
 }
+
+export { registerBehavior, getBehavior, listBehaviorIds } from "./registry";

@@ -4,8 +4,8 @@ export type GridSnapshot = {
   cells: boolean[];
 };
 
-export type CellTransitionKind = "birth" | "death";
-export type CellTriggerKind = CellTransitionKind | "state_on";
+export type CellTransitionKind = "activate" | "deactivate";
+export type CellTriggerKind = CellTransitionKind | "stable" | "scanned";
 
 export type CellTransition = {
   x: number;
@@ -14,7 +14,7 @@ export type CellTransition = {
 };
 
 export type TickStrategy =
-  | { mode: "whole_grid_transitions"; parity: "none" | "birth_even_death_odd" }
+  | { mode: "whole_grid_transitions"; parity: "none" | "activate_even_deactivate_odd" }
   | { mode: "whole_grid_active" }
   | { mode: "scan_column_active" }
   | { mode: "scan_row_active" };
@@ -26,7 +26,7 @@ export type AxisStrategy =
 
 export type InterpretationProfile = {
   id: string;
-  event: { enabled: boolean; parity: "none" | "birth_even_death_odd" };
+  event: { enabled: boolean; parity: "none" | "activate_even_deactivate_odd" };
   state: { enabled: boolean; tick: TickStrategy };
   x: AxisStrategy;
   y: AxisStrategy;
@@ -39,28 +39,7 @@ export type CellTriggerIntent = {
   degree: number;
 };
 
-export const PROFILE_LIFE_DEFAULT: InterpretationProfile = {
-  id: "life_default",
-  event: { enabled: true, parity: "birth_even_death_odd" },
-  state: { enabled: false, tick: { mode: "scan_column_active" } },
-  x: { mode: "scale_step", step: 1 },
-  y: { mode: "scale_step", step: 3 }
-};
-
-export const PROFILE_COLUMN_SEQUENCER_BASIC: InterpretationProfile = {
-  id: "column_sequencer_basic",
-  event: { enabled: true, parity: "none" },
-  state: { enabled: true, tick: { mode: "scan_column_active" } },
-  x: { mode: "timing_only" },
-  y: { mode: "scale_step", step: 1 }
-};
-
-export const INTERPRETATION_PROFILES: InterpretationProfile[] = [
-  PROFILE_LIFE_DEFAULT,
-  PROFILE_COLUMN_SEQUENCER_BASIC
-];
-
-export function extractBirthDeathTransitions(previous: GridSnapshot, next: GridSnapshot): CellTransition[] {
+export function extractTransitions(previous: GridSnapshot, next: GridSnapshot): CellTransition[] {
   const transitions: CellTransition[] = [];
   const len = Math.min(previous.cells.length, next.cells.length);
   for (let i = 0; i < len; i += 1) {
@@ -71,22 +50,9 @@ export function extractBirthDeathTransitions(previous: GridSnapshot, next: GridS
     }
     const x = i % previous.width;
     const y = Math.floor(i / previous.width);
-    transitions.push({ x, y, kind: after ? "birth" : "death" });
+    transitions.push({ x, y, kind: after ? "activate" : "deactivate" });
   }
   return transitions;
-}
-
-export function interpretTransitions(
-  previous: GridSnapshot,
-  next: GridSnapshot,
-  tick: number,
-  mode: "birth_death" | "birth_death_parity" = "birth_death_parity"
-): CellTransition[] {
-  const transitions = extractBirthDeathTransitions(previous, next);
-  if (mode === "birth_death") {
-    return transitions;
-  }
-  return applyBirthDeathParityGating(transitions, tick);
 }
 
 export function interpretGrid(
@@ -108,23 +74,23 @@ export function interpretGrid(
   }));
 }
 
-export function applyBirthDeathParityGating(transitions: CellTransition[], tick: number): CellTransition[] {
+export function applyParityGating(transitions: CellTransition[], tick: number): CellTransition[] {
   const evenTick = tick % 2 === 0;
   if (evenTick) {
-    return transitions.filter((transition) => transition.kind === "birth");
+    return transitions.filter((transition) => transition.kind === "activate");
   }
-  return transitions.filter((transition) => transition.kind === "death");
+  return transitions.filter((transition) => transition.kind === "deactivate");
 }
 
 function selectEventCandidates(
   previous: GridSnapshot,
   next: GridSnapshot,
   tick: number,
-  parity: "none" | "birth_even_death_odd"
+  parity: "none" | "activate_even_deactivate_odd"
 ): Array<{ x: number; y: number; kind: CellTriggerKind }> {
-  const transitions = extractBirthDeathTransitions(previous, next);
-  if (parity === "birth_even_death_odd") {
-    return applyBirthDeathParityGating(transitions, tick);
+  const transitions = extractTransitions(previous, next);
+  if (parity === "activate_even_deactivate_odd") {
+    return applyParityGating(transitions, tick);
   }
   return transitions;
 }
@@ -139,7 +105,7 @@ function selectStateCandidates(
     for (let y = 0; y < next.height; y += 1) {
       for (let x = 0; x < next.width; x += 1) {
         if (next.cells[y * next.width + x]) {
-          out.push({ x, y, kind: "state_on" });
+          out.push({ x, y, kind: "scanned" });
         }
       }
     }
@@ -151,7 +117,7 @@ function selectStateCandidates(
     const out: Array<{ x: number; y: number; kind: CellTriggerKind }> = [];
     for (let y = 0; y < next.height; y += 1) {
       if (next.cells[y * next.width + column]) {
-        out.push({ x: column, y, kind: "state_on" });
+        out.push({ x: column, y, kind: "scanned" });
       }
     }
     return out;
@@ -165,7 +131,7 @@ function selectStateCandidates(
   const out: Array<{ x: number; y: number; kind: CellTriggerKind }> = [];
   for (let x = 0; x < next.width; x += 1) {
     if (next.cells[row * next.width + x]) {
-      out.push({ x, y: row, kind: "state_on" });
+      out.push({ x, y: row, kind: "scanned" });
     }
   }
   return out;
