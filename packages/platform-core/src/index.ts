@@ -2278,7 +2278,7 @@ export function toOledLines(display: DisplayFrame): { lines: string[]; colors: n
 function fitOledMenuLine(line: string): string {
   if (!line.startsWith("@@")) return fitOledText(line);
   if (line.startsWith("@@> ")) {
-    return `@@${fitOledTextToWidth(line.slice(4), OLED_TEXT_COLUMNS)}`;
+    return `@@> ${fitOledTextToWidth(line.slice(4), OLED_TEXT_COLUMNS - 2)}`;
   }
   return `@@${fitOledTextToWidth(line.slice(2), OLED_TEXT_COLUMNS)}`;
 }

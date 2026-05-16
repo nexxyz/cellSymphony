@@ -221,8 +221,8 @@ test("OLED formatter does not truncate selected marker lines that fit visually",
     lines: ["@@> Respond Start/Stop", "@@> !Spawn Random [S]"]
   });
 
-  assert.equal(result.lines[1], "@@Respond Start/Stop");
-  assert.equal(result.lines[2], "@@!Spawn Random [S]");
+  assert.equal(result.lines[1], "@@> Respond Start/Stop");
+  assert.equal(result.lines[2], "@@> !Spawn Random [S]");
 });
 
 test("OLED formatter still truncates truly long selected lines", () => {
