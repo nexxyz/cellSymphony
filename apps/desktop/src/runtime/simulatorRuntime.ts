@@ -1,4 +1,5 @@
-import { lifeBehavior } from "@cellsymphony/behaviors-life";
+import { getBehavior } from "@cellsymphony/behavior-api";
+import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { DeviceInput } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import {
@@ -27,7 +28,6 @@ type SimulatorRuntime = {
   getSnapshot(): SimulatorSnapshot;
 };
 
-const behavior = lifeBehavior;
 const LOOKAHEAD_MS = 20;
 const MAX_CATCHUP_MS = 250;
 
@@ -42,7 +42,10 @@ type ScheduledMidi = {
 };
 
 export function createSimulatorRuntime(scheduler: RuntimeScheduler = createIntervalRuntimeScheduler(8)): SimulatorRuntime {
-  let state: PlatformState<ReturnType<typeof behavior.init>> = createInitialState(behavior);
+  function activeBehavior(): BehaviorEngine<any, any> {
+    return getBehavior((state.runtimeConfig as any).activeBehavior) ?? getBehavior("sequencer")!;
+  }
+  let state: PlatformState<any> = createInitialState(getBehavior("life")!);
   let shiftActive = false;
   let prevPlaying = state.transport.playing;
   let prevStopLatched = state.system.stopLatched;
@@ -53,7 +56,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
   const eventListeners = new Set<EventsListener>();
 
   function snapshotFromState(next: typeof state): SimulatorSnapshot {
-    const frame = toSimulatorFrame(next, behavior);
+    const frame = toSimulatorFrame(next, activeBehavior());
     const flash = next.system.transportFlash; // read from core state, same as OLED
     return {
       frame,
@@ -192,7 +195,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
         return;
       }
     }
-    const result = routeInput(state, input, behavior);
+    const result = routeInput(state, input, activeBehavior());
     state = result.state;
     enqueueEvents(result.events, performance.now());
     applyEffects(result.effects);
@@ -252,12 +255,12 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
 
   // Prime MIDI port lists on boot.
   void midi.listOutputs().then((outputs) => {
-    const applied = applyStoreResult(state, { type: "midi_list_outputs_result", outputs } as any, behavior);
+    const applied = applyStoreResult(state, { type: "midi_list_outputs_result", outputs } as any, activeBehavior());
     state = applied.state;
     publishSnapshot();
   });
   void midi.listInputs().then((inputs) => {
-    const applied = applyStoreResult(state, { type: "midi_list_inputs_result", inputs } as any, behavior);
+    const applied = applyStoreResult(state, { type: "midi_list_inputs_result", inputs } as any, activeBehavior());
     state = applied.state;
     publishSnapshot();
   });
@@ -290,7 +293,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       if (effect.type === "midi_list_outputs_request") {
         // Fire-and-forget async, return empty immediately.
         void midi.listOutputs().then((outputs) => {
-          const applied = applyStoreResult(state, { type: "midi_list_outputs_result", outputs } as any, behavior);
+          const applied = applyStoreResult(state, { type: "midi_list_outputs_result", outputs } as any, activeBehavior());
           state = applied.state;
           publishSnapshot();
         });
@@ -298,7 +301,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       }
       if (effect.type === "midi_list_inputs_request") {
         void midi.listInputs().then((inputs) => {
-          const applied = applyStoreResult(state, { type: "midi_list_inputs_result", inputs } as any, behavior);
+          const applied = applyStoreResult(state, { type: "midi_list_inputs_result", inputs } as any, activeBehavior());
           state = applied.state;
           publishSnapshot();
         });
@@ -306,7 +309,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       }
       if (effect.type === "midi_select_output") {
         void midi.selectOutput(effect.id).then((res) => {
-          const applied = applyStoreResult(state, { type: "midi_status", ok: res.ok, message: res.message, selectedOutId: effect.id } as any, behavior);
+          const applied = applyStoreResult(state, { type: "midi_status", ok: res.ok, message: res.message, selectedOutId: effect.id } as any, activeBehavior());
           state = applied.state;
           publishSnapshot();
         });
@@ -314,7 +317,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       }
       if (effect.type === "midi_select_input") {
         void midi.selectInput(effect.id).then((res) => {
-          const applied = applyStoreResult(state, { type: "midi_status", ok: res.ok, message: res.message, selectedInId: effect.id } as any, behavior);
+          const applied = applyStoreResult(state, { type: "midi_status", ok: res.ok, message: res.message, selectedInId: effect.id } as any, activeBehavior());
           state = applied.state;
           publishSnapshot();
         });
@@ -342,7 +345,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       const effect = queue.shift();
       if (!effect) break;
       const result = execEffect(effect);
-      const applied = applyStoreResult(state, result, behavior);
+      const applied = applyStoreResult(state, result, activeBehavior());
       state = applied.state;
       queue.push(...applied.effects);
     }
@@ -390,7 +393,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
             const m = extMsgs.shift();
             if (!m) break;
             const di: DeviceInput = m === "start" ? { type: "midi_start" } : m === "continue" ? { type: "midi_continue" } : { type: "midi_stop" };
-            const r = routeInput(state, di, behavior);
+            const r = routeInput(state, di, activeBehavior());
             state = r.state;
             enqueueEvents(r.events, nowMs + LOOKAHEAD_MS);
             applyEffects(r.effects);
@@ -398,13 +401,13 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
           if (extPulses > 0) {
             const pulses = extPulses;
             extPulses = 0;
-            const r = routeInput(state, { type: "midi_clock", pulses }, behavior);
+            const r = routeInput(state, { type: "midi_clock", pulses }, activeBehavior());
             state = r.state;
             enqueueEvents(r.events, nowMs + LOOKAHEAD_MS);
             applyEffects(r.effects);
           }
         } else {
-          const result = tick(state, behavior, safeElapsedMs / 1000);
+          const result = tick(state, activeBehavior(), safeElapsedMs / 1000);
           state = result.state;
           enqueueEvents(result.events, nowMs + LOOKAHEAD_MS);
           applyEffects(result.effects);

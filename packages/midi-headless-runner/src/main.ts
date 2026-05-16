@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import readline from "node:readline";
 
-import { lifeBehavior } from "@cellsymphony/behaviors-life";
+import { getBehavior } from "@cellsymphony/behavior-api";
 import { createInitialState, emergencyBrake, routeInput, tick } from "@cellsymphony/platform-core";
 import type { DeviceInput } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
@@ -76,9 +76,9 @@ async function main() {
 
   await sleep(200);
 
-  const behavior = lifeBehavior;
-  let state = createInitialState(behavior);
+  let state = createInitialState(getBehavior("sequencer")!);
   state.system.oledMode = "normal";
+  state.runtimeConfig.activeBehavior = "life";
 
   // Enable MIDI internal + clock out.
   state.runtimeConfig.midi.enabled = true;
@@ -87,8 +87,7 @@ async function main() {
   state.runtimeConfig.midi.outId = "loopback";
 
   // Make note generation deterministic/fast.
-  state.runtimeConfig.populationMode = "conway";
-  state.runtimeConfig.conwayStepUnit = "1/16";
+  state.runtimeConfig.algorithmStepUnit = "1/16";
   state.runtimeConfig.eventParity = "none";
 
   // Force stopLatched then play so we emit Start.
@@ -106,11 +105,11 @@ async function main() {
       { type: "grid_press", x: 5, y: 3 }
     ];
     for (const s of seeds) {
-      const r0 = routeInput(state, s, behavior);
+      const r0 = routeInput(state, s, getBehavior(state.activeBehavior)!);
       state = r0.state;
     }
 
-    const r = routeInput(state, { type: "button_s" } as DeviceInput, behavior);
+    const r = routeInput(state, { type: "button_s" } as DeviceInput, getBehavior(state.activeBehavior)!);
     state = r.state;
   }
 

@@ -2,45 +2,33 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  applyBirthDeathParityGating,
-  extractBirthDeathTransitions,
+  applyParityGating,
+  extractTransitions,
   interpretGrid,
-  interpretTransitions,
   type GridSnapshot
 } from "../src/index";
 
-test("extractBirthDeathTransitions detects births and deaths", () => {
+test("extractTransitions detects activations and deactivations", () => {
   const previous: GridSnapshot = { width: 3, height: 2, cells: [false, true, false, true, false, false] };
   const next: GridSnapshot = { width: 3, height: 2, cells: [true, true, false, false, false, true] };
 
-  const transitions = extractBirthDeathTransitions(previous, next);
+  const transitions = extractTransitions(previous, next);
   assert.equal(transitions.length, 3);
   assert.deepEqual(transitions, [
-    { x: 0, y: 0, kind: "birth" },
-    { x: 0, y: 1, kind: "death" },
-    { x: 2, y: 1, kind: "birth" }
+    { x: 0, y: 0, kind: "activate" },
+    { x: 0, y: 1, kind: "deactivate" },
+    { x: 2, y: 1, kind: "activate" }
   ]);
 });
 
-test("parity gating keeps births on even ticks and deaths on odd ticks", () => {
+test("parity gating keeps activates on even ticks and deactivates on odd ticks", () => {
   const transitions = [
-    { x: 0, y: 0, kind: "birth" as const },
-    { x: 1, y: 0, kind: "death" as const }
+    { x: 0, y: 0, kind: "activate" as const },
+    { x: 1, y: 0, kind: "deactivate" as const }
   ];
 
-  assert.deepEqual(applyBirthDeathParityGating(transitions, 0), [{ x: 0, y: 0, kind: "birth" }]);
-  assert.deepEqual(applyBirthDeathParityGating(transitions, 1), [{ x: 1, y: 0, kind: "death" }]);
-});
-
-test("interpretTransitions respects parity mode", () => {
-  const previous: GridSnapshot = { width: 2, height: 1, cells: [false, true] };
-  const next: GridSnapshot = { width: 2, height: 1, cells: [true, false] };
-
-  const all = interpretTransitions(previous, next, 0, "birth_death");
-  assert.equal(all.length, 2);
-
-  const parity = interpretTransitions(previous, next, 1, "birth_death_parity");
-  assert.deepEqual(parity, [{ x: 1, y: 0, kind: "death" }]);
+  assert.deepEqual(applyParityGating(transitions, 0), [{ x: 0, y: 0, kind: "activate" }]);
+  assert.deepEqual(applyParityGating(transitions, 1), [{ x: 1, y: 0, kind: "deactivate" }]);
 });
 
 test("interpretGrid combines event and scan-row state intents with degrees", () => {
@@ -56,7 +44,7 @@ test("interpretGrid combines event and scan-row state intents with degrees", () 
   });
 
   assert.equal(intents.length, 4);
-  const stateOn = intents.filter((i) => i.kind === "state_on");
-  assert.equal(stateOn.length, 2);
+  const scanned = intents.filter((i) => i.kind === "scanned");
+  assert.equal(scanned.length, 2);
   assert.ok(intents.every((i) => i.degree >= 0));
 });

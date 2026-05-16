@@ -9,7 +9,8 @@ export type DeviceInput =
   | { type: "midi_start" }
   | { type: "midi_continue" }
   | { type: "midi_stop" }
-  | { type: "grid_press"; x: number; y: number };
+  | { type: "grid_press"; x: number; y: number }
+  | { type: "behavior_action"; actionType: string };
 
 export type PageId = string;
 

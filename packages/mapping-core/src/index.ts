@@ -1,4 +1,4 @@
-import type { CellTransition, CellTriggerIntent, CellTriggerKind } from "@cellsymphony/interpretation-core";
+import type { CellTriggerIntent, CellTriggerKind } from "@cellsymphony/interpretation-core";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import defaults from "./config/default-mapping.json";
 
@@ -17,32 +17,14 @@ export type MappingConfig = {
   scale: number[];
   rowStepDegrees: number;
   columnStepDegrees: number;
-  birth: TriggerTarget;
-  death: TriggerTarget;
-  state: TriggerTarget;
+  activate: TriggerTarget;
+  deactivate: TriggerTarget;
+  stable: TriggerTarget;
+  scanned: TriggerTarget;
 };
 
 export function loadDefaultMappingConfig(): MappingConfig {
   return validateConfig(defaults as MappingConfig);
-}
-
-export function mapTransitionsToMusicalEvents(
-  transitions: CellTransition[],
-  gridHeight: number,
-  config: MappingConfig
-): MusicalEvent[] {
-  const safe = validateConfig(config);
-  return transitions.map((transition) => {
-    const note = toPentatonicNote(transition.x, transition.y, gridHeight, safe);
-    const target = transition.kind === "birth" ? safe.birth : safe.death;
-    return {
-      type: "note_on",
-      channel: target.channel,
-      note,
-      velocity: target.velocity,
-      durationMs: target.durationMs
-    } satisfies MusicalEvent;
-  });
 }
 
 export function mapIntentsToMusicalEvents(intents: CellTriggerIntent[], config: MappingConfig): MusicalEvent[] {
@@ -61,20 +43,10 @@ export function mapIntentsToMusicalEvents(intents: CellTriggerIntent[], config: 
 }
 
 function targetForKind(kind: CellTriggerKind, config: MappingConfig): TriggerTarget {
-  if (kind === "birth") return config.birth;
-  if (kind === "death") return config.death;
-  return config.state;
-}
-
-function toPentatonicNote(x: number, y: number, gridHeight: number, config: MappingConfig): number {
-  const rowFromBottom = Math.max(0, gridHeight - 1 - y);
-  const degree = rowFromBottom * config.rowStepDegrees + x * config.columnStepDegrees;
-
-  const note = degreeToPentatonicNote(degree, config);
-  if (config.rangeMode === "wrap") {
-    return wrapDegreeIntoRange(degree, config);
-  }
-  return clamp(note, config.baseMidiNote, config.maxMidiNote);
+  if (kind === "activate") return config.activate;
+  if (kind === "deactivate") return config.deactivate;
+  if (kind === "scanned") return config.scanned;
+  return config.stable;
 }
 
 function noteFromDegree(degree: number, config: MappingConfig): number {
@@ -106,9 +78,10 @@ function validateConfig(config: MappingConfig): MappingConfig {
     scale: config.scale.map((step) => clamp(Math.floor(step), 0, 11)),
     rowStepDegrees: Math.max(0, Math.floor(config.rowStepDegrees)),
     columnStepDegrees: Math.max(0, Math.floor(config.columnStepDegrees)),
-    birth: sanitizeTarget(config.birth),
-    death: sanitizeTarget(config.death),
-    state: sanitizeTarget(config.state ?? config.birth)
+    activate: sanitizeTarget(config.activate),
+    deactivate: sanitizeTarget(config.deactivate),
+    stable: sanitizeTarget(config.stable ?? config.activate),
+    scanned: sanitizeTarget(config.scanned ?? config.activate)
   };
 }
 
