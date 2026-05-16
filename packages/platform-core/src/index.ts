@@ -134,6 +134,7 @@ type MenuNode =
 
 type ActionSpec =
   | { type: "refresh_presets" }
+  | { type: "preset_save_current" }
   | { type: "preset_save" }
   | { type: "preset_load"; name: string }
   | { type: "preset_delete"; name: string }
@@ -215,6 +216,7 @@ type SystemState = {
   shiftHeld: boolean;
   presetNames: string[];
   selectedPreset: string | null;
+  currentPresetName: string | null;
   draftName: string;
   nameCursor: number;
   pendingRename: { from: string; to: string } | null;
@@ -380,6 +382,7 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
       shiftHeld: false,
       presetNames: [],
       selectedPreset: null,
+      currentPresetName: null,
       draftName: "",
       nameCursor: 0,
       pendingRename: null,
@@ -656,7 +659,8 @@ function executeConfirmed<TState>(
 ): PlatformState<TState> {
   if (action.kind === "factory_load") {
     const factory = factoryPayload(behavior);
-    return applyConfigPayload(state, factory, behavior);
+    const next = applyConfigPayload(state, factory, behavior);
+    return { ...next, system: { ...next.system, currentPresetName: null } };
   }
   if (action.kind === "default_load") {
     effects.push({ type: "store_load_default" });
@@ -927,13 +931,14 @@ export function applyStoreResult<TState>(
     }
 
     if (!result.payload) return { state: setToast(state, "Preset not found"), effects };
-    const next = applyConfigPayload(state, result.payload, behavior);
+    const loaded = applyConfigPayload(state, result.payload, behavior);
+    const next = { ...loaded, system: { ...loaded.system, currentPresetName: result.name } };
     return { state: setToast(next, `Loaded: ${result.name}`), effects };
   }
   if (result.type === "save_preset_result") {
     const msg = result.outcome === "overwritten" ? `Overwrote: ${result.name}` : `Saved: ${result.name}`;
     effects.push({ type: "store_list_presets" });
-    return { state: setToast(state, msg), effects };
+    return { state: setToast({ ...state, system: { ...state.system, currentPresetName: result.name } }, msg), effects };
   }
   if (result.type === "delete_preset_result") {
     effects.push({ type: "store_list_presets" });
@@ -941,7 +946,8 @@ export function applyStoreResult<TState>(
   }
   if (result.type === "load_default_result") {
     if (!result.payload) return { state: setToast(state, "No default saved"), effects };
-    const next = applyConfigPayload(state, result.payload, behavior);
+    const loaded = applyConfigPayload(state, result.payload, behavior);
+    const next = { ...loaded, system: { ...loaded.system, currentPresetName: null } };
     return { state: setToast(next, "Loaded default"), effects };
   }
   if (result.type === "save_default_result") {
@@ -1222,6 +1228,7 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
                       { kind: "action", label: "Save", action: { type: "preset_save" } }
                     ]
                   },
+                  { kind: "action", label: "Save Current", action: { type: "preset_save_current" } },
                   {
                     kind: "group",
                     label: "Load",
@@ -1237,7 +1244,7 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
                     label: "Delete",
                     children: (s) => presetListNodes(s, "delete")
                   },
-                  { kind: "action", label: "Refresh", action: { type: "refresh_presets" } }
+                  { kind: "action", label: "Refresh List", action: { type: "refresh_presets" } }
                 ]
               },
               {
@@ -1252,7 +1259,7 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
               {
                 kind: "group",
                 label: "Factory",
-                children: [{ kind: "action", label: "Revert Factory", action: { type: "factory_load" } }]
+                children: [{ kind: "action", label: "Load Fact. Default", action: { type: "factory_load" } }]
               }
             ]
           },
@@ -1261,7 +1268,7 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
             label: "MIDI",
             children: [
               { kind: "bool", label: "Enabled", key: "midi.enabled" },
-              { kind: "enum", label: "Sync Mode", key: "midi.syncMode", options: ["internal", "external"] },
+              { kind: "action", label: "Panic", action: { type: "midi_panic" } },
               {
                 kind: "group",
                 label: "MIDI Out",
@@ -1276,12 +1283,12 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
                 kind: "group",
                 label: "Sync & Clock",
                 children: [
+                  { kind: "enum", label: "Sync Mode", key: "midi.syncMode", options: ["internal", "external"] },
                   { kind: "bool", label: "Clock Out", key: "midi.clockOutEnabled" },
                   { kind: "bool", label: "Clock In", key: "midi.clockInEnabled" },
                   { kind: "bool", label: "Respond Start/Stop", key: "midi.respondToStartStop" }
                 ]
-              },
-              { kind: "action", label: "Panic", action: { type: "midi_panic" } }
+              }
             ]
           },
           {
@@ -1337,7 +1344,7 @@ function presetRenameNodes<TState>(state: PlatformState<TState>): MenuNode[] {
 
 function midiOutputNodes<TState>(state: PlatformState<TState>): MenuNode[] {
   const out: MenuNode[] = [];
-  out.push({ kind: "action", label: "(none)", action: { type: "midi_select_output", id: null } });
+  out.push({ kind: "action", label: "Disconnect", action: { type: "midi_select_output", id: null } });
   for (const p of state.system.midiOutputs) {
     out.push({ kind: "action", label: p.name.slice(0, 20), action: { type: "midi_select_output", id: p.id } });
   }
@@ -1347,7 +1354,7 @@ function midiOutputNodes<TState>(state: PlatformState<TState>): MenuNode[] {
 
 function midiInputNodes<TState>(state: PlatformState<TState>): MenuNode[] {
   const out: MenuNode[] = [];
-  out.push({ kind: "action", label: "(none)", action: { type: "midi_select_input", id: null } });
+  out.push({ kind: "action", label: "Disconnect", action: { type: "midi_select_input", id: null } });
   for (const p of state.system.midiInputs) {
     out.push({ kind: "action", label: p.name.slice(0, 20), action: { type: "midi_select_input", id: p.id } });
   }
@@ -1940,6 +1947,11 @@ function handleAction<TState>(state: PlatformState<TState>, action: ActionSpec, 
   if (action.type === "refresh_presets") {
     effects.push({ type: "store_list_presets" });
     return state;
+  }
+  if (action.type === "preset_save_current") {
+    const name = state.system.currentPresetName;
+    if (!name) return toast("No preset loaded");
+    return openConfirm("overwrite_preset", { kind: "preset_save", name });
   }
   if (action.type === "preset_load") {
     return openConfirm("load_preset", { kind: "preset_load", name: action.name });

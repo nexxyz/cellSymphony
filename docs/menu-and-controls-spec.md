@@ -144,26 +144,27 @@ System
 │   │   ├── Save As (group)
 │   │   │   ├── Name: (text, max 32 chars)  ← on exit/press: saves preset
 │   │   │   └── Save: (action)
+│   │   ├── Save Current: (action)    ← saves currently loaded preset (with confirm)
 │   │   ├── Load (group)             ← dynamic: one action per preset
 │   │   ├── Rename (group)           ← dynamic: one text+action per preset
 │   │   ├── Delete (group)           ← dynamic: one action per preset
-│   │   └── Refresh: (action)
+│   │   └── Refresh List: (action)
 │   ├── Default (group)
 │   │   ├── Save Default: (action)
 │   │   ├── Load Default: (action)
 │   │   └── Auto Save: [on | off]    ← auto-persists config on every change
 │   └── Factory (group)
-│       └── Revert Factory: (action)
+│       └── Load Fact. Default: (action)
 ├── MIDI (group)
 │   ├── Enabled: [on | off]
-│   ├── Sync Mode: [internal | external]
+│   ├── !Panic: (action)
 │   ├── MIDI Out (group)             ← dynamic: one action per detected MIDI output port
 │   ├── MIDI In (group)              ← dynamic: one action per detected MIDI input port
 │   ├── Sync & Clock (group)
+│   │   ├── Sync Mode: [internal | external]
 │   │   ├── Clock Out: [on | off]
 │   │   ├── Clock In: [on | off]
 │   │   └── Respond Start/Stop: [on | off]
-│   └── Panic: (action)
 ├── Sound (group)
 │   ├── Note Length: [30..2000] step 10 ms  default 120
 │   ├── Velocity Scale: [0..200] step 5 %   default 100

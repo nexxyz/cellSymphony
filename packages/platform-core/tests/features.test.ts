@@ -10,6 +10,7 @@ import {
   toSimulatorFrame,
   extractConfigPayload,
   applyConfigPayload,
+  applyStoreResult,
   type PlatformState,
   type PlatformEffect
 } from "../src/index";
@@ -227,6 +228,50 @@ test("activeBehavior change with autoSaveDefault on emits store_save_default", (
 
   const saveEffect = r.effects.find((e) => e.type === "store_save_default");
   assert.ok(saveEffect, "behavior switch with autoSave should emit store_save_default");
+});
+
+test("save current preset triggers overwrite flow for loaded preset", () => {
+  let state = makeState();
+  state.system.currentPresetName = "Jam A";
+
+  state = selectLabel(state, "System");
+  state = press(state).state;
+  state = selectLabel(state, "Presets");
+  state = press(state).state;
+  state = selectLabel(state, "Library");
+  state = press(state).state;
+  state = selectLabel(state, "Save Current");
+
+  state = press(state).state;
+  assert.ok(state.system.confirm, "should open overwrite confirm");
+
+  state = routeInput(state, { type: "encoder_turn", id: "main", delta: 1 } as DeviceInput, mockBehavior).state;
+  const confirm = routeInput(state, { type: "encoder_press", id: "main" } as DeviceInput, mockBehavior);
+  const hasSave = confirm.effects.some((e) => e.type === "store_save_preset" && e.name === "Jam A");
+  assert.equal(hasSave, true);
+});
+
+test("save current preset shows toast when none loaded", () => {
+  let state = makeState();
+  state.system.currentPresetName = null;
+
+  state = selectLabel(state, "System");
+  state = press(state).state;
+  state = selectLabel(state, "Presets");
+  state = press(state).state;
+  state = selectLabel(state, "Library");
+  state = press(state).state;
+  state = selectLabel(state, "Save Current");
+  state = press(state).state;
+
+  assert.equal(state.system.toast?.message, "No preset loaded");
+});
+
+test("loading preset tracks current preset name", () => {
+  let state = makeState();
+  const payload = extractConfigPayload(state);
+  state = applyStoreResult(state, { type: "load_preset_result", name: "Jam B", payload }, mockBehavior).state;
+  assert.equal(state.system.currentPresetName, "Jam B");
 });
 
 // ─── Aux Encoder Binding ──────────────────────────────────────────
