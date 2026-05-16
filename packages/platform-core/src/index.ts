@@ -27,6 +27,7 @@ import {
 } from "@cellsymphony/interpretation-core";
 import { loadDefaultMappingConfig, mapIntentsToMusicalEvents, type MappingConfig } from "@cellsymphony/mapping-core";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
+import { resolveMenuHelp, type HelpTarget } from "./menuHelp";
 
 // Register available behaviors
 registerBehavior(sequencerBehavior);
@@ -170,7 +171,8 @@ type ConfirmKind =
   | "save_default"
   | "text_dirty_exit"
   | "midi_panic"
-  | "aux_unbind";
+  | "aux_unbind"
+  | "help_info";
   
 
 type TextConfirmMode = "save" | "discard";
@@ -185,6 +187,7 @@ type PendingAction =
   | { kind: "factory_load" }
   | { kind: "midi_panic" }
   | { kind: "aux_unbind"; encoderId: string }
+  | { kind: "help_info"; title: string; detail: string }
   | {
       kind: "text_dirty_exit";
       key: string;
@@ -214,6 +217,7 @@ type ToastState = {
 
 type SystemState = {
   shiftHeld: boolean;
+  fnHeld: boolean;
   presetNames: string[];
   selectedPreset: string | null;
   currentPresetName: string | null;
@@ -380,6 +384,7 @@ export function createInitialState<TState>(behavior: BehaviorEngine<TState, unkn
     menu: { stack: [], cursor: 0, editing: false },
     system: {
       shiftHeld: false,
+      fnHeld: false,
       presetNames: [],
       selectedPreset: null,
       currentPresetName: null,
@@ -486,6 +491,9 @@ export function routeInput<TState>(
 
   if (input.type === "button_shift") {
     nextState.system = { ...nextState.system, shiftHeld: pressed(input) };
+  }
+  if (input.type === "button_fn") {
+    nextState.system = { ...nextState.system, fnHeld: pressed(input) };
   }
 
   // External MIDI clock / transport.
@@ -624,6 +632,10 @@ export function routeInput<TState>(
       }
     }
   } else if (input.type === "encoder_press" && isMainEncoderInput(input.id)) {
+    if (nextState.system.shiftHeld && nextState.system.fnHeld) {
+      nextState = openContextHelp(nextState);
+      return { state: nextState, events, effects };
+    }
     nextState = pressMenu(nextState, effects);
   } else if (input.type === "encoder_turn" && isMainEncoderInput(input.id)) {
     nextState = turnMenu(nextState, input.delta, effects);
@@ -743,7 +755,14 @@ export function tick<TState>(
     } else if (next.system.oledMode === "splash" && nowMs >= next.system.oledSplashUntilMs) {
       // Startup splash returns to normal; sleep splash turns OLED off.
       const nextMode = next.system.oledSplashText === "Starting up" ? "normal" : "off";
-      next.system = { ...next.system, oledMode: nextMode };
+      next.system = {
+        ...next.system,
+        oledMode: nextMode,
+        toast:
+          nextMode === "normal"
+            ? { message: "Help=Sh+Fn+Enter", untilMs: nowMs + 2500 }
+            : next.system.toast
+      };
     }
   }
 
@@ -1467,7 +1486,7 @@ function currentMenuView<TState>(state: PlatformState<TState>): { path: string; 
 function confirmView<TState>(state: PlatformState<TState>): { path: string; lines: string[] } {
   const c = state.system.confirm;
   if (!c) return { path: "CONF", lines: [] };
-  const title = c.kind === "text_dirty_exit" ? "TEXT" : "CONFIRM";
+  const title = c.kind === "text_dirty_exit" ? "TEXT" : c.kind === "help_info" ? "HELP" : "CONFIRM";
   const details = confirmDetails(state, c);
   const lines = [fitOledText(details)];
   for (let i = 0; i < c.options.length; i++) {
@@ -1489,7 +1508,28 @@ function confirmDetails<TState>(state: PlatformState<TState>, confirm: ConfirmSt
   if (a.kind === "text_dirty_exit") return "Save changes?";
   if (a.kind === "midi_panic") return "MIDI panic?";
   if (a.kind === "aux_unbind") return "Unbind encoder?";
+  if (a.kind === "help_info") return a.detail;
   return "Confirm";
+}
+
+function openContextHelp<TState>(state: PlatformState<TState>): PlatformState<TState> {
+  const view = locate(menuTree(state), state, state.menu);
+  const selected = view.siblings[state.menu.cursor];
+  if (!selected || selected.kind === "spacer") return state;
+  const target = menuHelpTargetFromNode(view.path, selected);
+  const help = resolveMenuHelp(target);
+  return {
+    ...state,
+    system: {
+      ...state.system,
+      confirm: {
+        kind: "help_info",
+        action: { kind: "help_info", title: help.title, detail: help.detail },
+        cursor: 0,
+        options: ["Close"]
+      }
+    }
+  };
 }
 
 function applyAuxUnbindChoice<TState>(state: PlatformState<TState>, encoderId: string, choice: string): PlatformState<TState> {
@@ -2312,6 +2352,45 @@ function actionDetailLine<TState>(state: PlatformState<TState>, item: Extract<Me
     return state.system.currentPresetName ?? "(none loaded)";
   }
   return null;
+}
+
+function menuHelpTargetFromNode(path: string, node: MenuNode): HelpTarget {
+  const fullPath = `${path} > ${node.label ?? node.kind}`;
+  if (node.kind === "group") {
+    return { path: fullPath, key: "", kind: "group", label: node.label ?? "Section" };
+  }
+  if (node.kind === "action") {
+    const a = node.action;
+    if (a.type === "behavior_action") return { path: fullPath, key: `action:behavior_action:${a.actionType}`, kind: "action", label: node.label ?? "Action" };
+    if (a.type === "midi_select_output") return { path: fullPath, key: `action:midi_select_output:${a.id ?? "null"}`, kind: "action", label: node.label ?? "Action" };
+    if (a.type === "midi_select_input") return { path: fullPath, key: `action:midi_select_input:${a.id ?? "null"}`, kind: "action", label: node.label ?? "Action" };
+    if (a.type === "preset_load") return { path: fullPath, key: `action:preset_load:${a.name}`, kind: "action", label: node.label ?? "Action" };
+    if (a.type === "preset_delete") return { path: fullPath, key: `action:preset_delete:${a.name}`, kind: "action", label: node.label ?? "Action" };
+    if (a.type === "preset_rename_pick") return { path: fullPath, key: `action:preset_rename_pick:${a.name}`, kind: "action", label: node.label ?? "Action" };
+    return { path: fullPath, key: `action:${a.type}`, kind: "action", label: node.label ?? "Action" };
+  }
+  if (node.kind === "text") return { path: fullPath, key: `key:${node.key}`, kind: "text", label: node.label ?? "Text" };
+  if (node.kind === "number" || node.kind === "enum" || node.kind === "bool") {
+    return { path: fullPath, key: `key:${node.key}`, kind: node.kind, label: node.label ?? "Setting" };
+  }
+  return { path: fullPath, key: "", kind: node.kind, label: node.label ?? "Menu Entry" };
+}
+
+export function enumerateMenuHelpTargets<TState>(state: PlatformState<TState>): HelpTarget[] {
+  const out: HelpTarget[] = [];
+  function walk(node: MenuNode, s: PlatformState<TState>, path: string): void {
+    const kids = visibleChildren(node, s);
+    for (const child of kids) {
+      if (child.kind === "spacer") continue;
+      out.push(menuHelpTargetFromNode(path, child));
+      if (child.kind === "group") {
+        walk(child, s, `${path} > ${child.label ?? "Group"}`);
+      }
+    }
+  }
+  const root = menuTree(state);
+  walk(root, state, "Menu");
+  return out;
 }
 
 function fitOledText(text: string): string {

@@ -369,6 +369,10 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
         applyInput({ type: "button_shift", pressed: action.active });
         return;
       }
+      if (action.type === "fn") {
+        applyInput({ type: "button_fn", pressed: action.active });
+        return;
+      }
       applyInput(action.input);
     },
     start() {

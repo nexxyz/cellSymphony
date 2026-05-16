@@ -4,7 +4,8 @@ import type { MusicalEvent } from "@cellsymphony/musical-events";
 export type InputAction =
   | { type: "device_input"; input: import("@cellsymphony/device-contracts").DeviceInput }
   | { type: "emergency_brake" }
-  | { type: "shift"; active: boolean };
+  | { type: "shift"; active: boolean }
+  | { type: "fn"; active: boolean };
 
 export type NeoKeyLeds = {
   back: "off" | "solid_red";

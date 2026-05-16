@@ -2,6 +2,8 @@
 
 This is the single source of truth for menu structure, control mappings, and parameter behavior.
 
+Context-help copy source: `docs/menu-help-texts.tsv` (required header row).
+
 ## Control Mapping
 
 | Control | Simulator Key | Function |
@@ -15,6 +17,7 @@ This is the single source of truth for menu structure, control mappings, and par
 | Aux encoder 1-4 turn | (simulated) | Adjust bound turn mapping |
 | Aux encoder 1-4 press | (simulated) | Trigger bound press mapping |
 | Shift + Aux encoder press | Shift + (simulated) | Bind current item / open unbind confirm |
+| Shift + Fn + Main press | Shift+Ctrl+Enter | Context help for highlighted entry |
 
 ## Transport States
 

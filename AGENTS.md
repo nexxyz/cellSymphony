@@ -54,6 +54,7 @@ Cell Symphony is a monorepo (pnpm workspaces) combining a TypeScript core engine
 
 - `docs/menu-and-controls-spec.md` is the **single source of truth** for menu structure and controls
 - Any control/menu/runtime behavior change must update this document in the same commit
+- Any menu or feature add/change/remove must also review `docs/menu-help-texts.tsv` and update help entries in the same commit when needed
 - `docs/runtime-boundaries.md` describes layer responsibilities
 - `docs/engineering-quality-requirements.md` defines CI, coverage, and quality gates
 - `docs/implementation-done.md` summarizes the 10-algorithm implementation

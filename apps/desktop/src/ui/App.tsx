@@ -20,7 +20,7 @@ const NEOKEY_BUTTONS = [
   { input: { type: "button_a" } as DeviceInput, label: "Back", key: "back" as const },
   { input: { type: "button_s" } as DeviceInput, label: "Space ▶/⏸", key: "space" as const },
   { input: { type: "button_shift" } as DeviceInput, label: "Shift", key: "shift" as const },
-  { input: { type: "button_fn" } as DeviceInput, label: "Fn", key: "fn" as const }
+  { input: { type: "button_fn" } as DeviceInput, label: "Fn (Ctrl)", key: "fn" as const }
 ];
 
 export function App() {

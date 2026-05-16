@@ -555,3 +555,27 @@ test("external MIDI clock advances external position even when locally paused", 
   assert.equal(result.events.length, 0);
   assert.equal(result.state.system.externalPpqnPulse, 24);
 });
+
+test("Fn+Shift+Enter opens contextual help popup", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+
+  state = routeInput(state, { type: "button_shift", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "button_fn", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "encoder_press", id: "main" }, mockBehavior).state;
+
+  assert.equal(state.system.confirm?.kind, "help_info");
+  assert.equal(state.system.confirm?.options[0], "Close");
+});
+
+test("startup splash close shows help hint toast", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "splash";
+  state.system.oledSplashText = "Starting up";
+  state.system.oledSplashUntilMs = Date.now() - 1;
+
+  state = tick(state, mockBehavior, 0).state;
+
+  assert.equal(state.system.oledMode, "normal");
+  assert.equal(state.system.toast?.message, "Help=Sh+Fn+Enter");
+});
