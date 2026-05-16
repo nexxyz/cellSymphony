@@ -251,6 +251,24 @@ test("save current preset triggers overwrite flow for loaded preset", () => {
   assert.equal(hasSave, true);
 });
 
+test("save current shows loaded preset name under action", () => {
+  let state = makeState();
+  state.system.currentPresetName = "Jam A";
+
+  state = selectLabel(state, "System");
+  state = press(state).state;
+  state = selectLabel(state, "Presets");
+  state = press(state).state;
+  state = selectLabel(state, "Library");
+  state = press(state).state;
+  state = selectLabel(state, "Save Current");
+
+  const frame = toSimulatorFrame(state, mockBehavior);
+  const selectedIndex = frame.display.lines.findIndex((l) => l.startsWith("@@") && l.includes("Save Current"));
+  assert.ok(selectedIndex >= 0, "save current row should be selected");
+  assert.equal(frame.display.lines[selectedIndex + 1], "@@  Jam A");
+});
+
 test("save current preset shows toast when none loaded", () => {
   let state = makeState();
   state.system.currentPresetName = null;
