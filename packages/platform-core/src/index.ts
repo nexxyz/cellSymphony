@@ -1569,6 +1569,12 @@ function formatMenuItemLines<TState>(item: MenuNode, state: PlatformState<TState
     return [`${mark}> ${item.label}`];
   }
   if (item.kind === "action") {
+    if (selected) {
+      const detail = actionDetailLine(state, item);
+      if (detail) {
+        return [`${mark} ${formatActionMenuLabel(item)}`, `${mark}  ${fitOledText(detail)}`];
+      }
+    }
     return [`${mark} ${formatActionMenuLabel(item)}`];
   }
   if (item.kind === "text") {
@@ -2299,6 +2305,13 @@ function fitOledMenuLine(line: string): string {
     return `@@> ${fitOledTextToWidth(line.slice(4), OLED_TEXT_COLUMNS - 2)}`;
   }
   return `@@${fitOledTextToWidth(line.slice(2), OLED_TEXT_COLUMNS)}`;
+}
+
+function actionDetailLine<TState>(state: PlatformState<TState>, item: Extract<MenuNode, { kind: "action" }>): string | null {
+  if (item.action.type === "preset_save_current") {
+    return state.system.currentPresetName ?? "(none loaded)";
+  }
+  return null;
 }
 
 function fitOledText(text: string): string {
