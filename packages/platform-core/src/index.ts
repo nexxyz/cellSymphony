@@ -1272,9 +1272,15 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
                 label: "MIDI In",
                 children: (s) => midiInputNodes(s)
               },
-              { kind: "bool", label: "Clock Out", key: "midi.clockOutEnabled" },
-              { kind: "bool", label: "Clock In", key: "midi.clockInEnabled" },
-              { kind: "bool", label: "Respond Start/Stop", key: "midi.respondToStartStop" },
+              {
+                kind: "group",
+                label: "Sync & Clock",
+                children: [
+                  { kind: "bool", label: "Clock Out", key: "midi.clockOutEnabled" },
+                  { kind: "bool", label: "Clock In", key: "midi.clockInEnabled" },
+                  { kind: "bool", label: "Respond Start/Stop", key: "midi.respondToStartStop" }
+                ]
+              },
               { kind: "action", label: "Panic", action: { type: "midi_panic" } }
             ]
           },
@@ -1556,19 +1562,19 @@ function formatMenuItemLines<TState>(item: MenuNode, state: PlatformState<TState
     return [`${mark}> ${item.label}`];
   }
   if (item.kind === "action") {
-    return [`${mark}> ${formatActionMenuLabel(item)}`];
+    return [`${mark} ${formatActionMenuLabel(item)}`];
   }
   if (item.kind === "text") {
     const value = String(readAnyValue(state, item.key) ?? "");
     const display = value.length === 0 ? "(empty)" : value;
     if (selected) {
-      return [`${mark}> ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitOledText(display)}`];
+      return [`${mark} ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitOledText(display)}`];
     }
     return [`  ${item.label}`];
   }
   const value = formatDisplayValue(item.key, readAnyValue(state, item.key));
   if (selected) {
-    return [`${mark}> ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitOledText(value)}`];
+    return [`${mark} ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitOledText(value)}`];
   }
   return [`  ${item.label}`];
 }
@@ -1669,12 +1675,6 @@ function pressMenu<TState>(state: PlatformState<TState>, effects: PlatformEffect
   if (selected.kind === "enum" && selected.key === "transport.playing") {
     return { ...state, transport: { ...state.transport, playing: !state.transport.playing } };
   }
-  if (selected.kind === "bool") {
-    const next = { ...state, runtimeConfig: writeValue(state.runtimeConfig, selected.key, !readValue(state.runtimeConfig, selected.key)) };
-    if (selected.key !== "autoSaveDefault") autoSaveEffect(next, effects);
-    return next;
-  }
-
   if (selected.kind === "text") {
     const current = String(readAnyValue(state, selected.key) ?? "");
     if (!state.menu.editing) {
@@ -1711,7 +1711,7 @@ function turnMenu<TState>(state: PlatformState<TState>, delta: -1 | 1, effects: 
     return { ...state, menu: { ...state.menu, cursor } };
   }
   const selected = view.siblings[state.menu.cursor];
-  if (!selected || selected.kind === "group" || selected.kind === "bool" || selected.kind === "spacer") return state;
+  if (!selected || selected.kind === "group" || selected.kind === "spacer") return state;
   if (selected.kind === "action") return state;
   if (selected.kind === "text") {
     return textEditTurn(state, selected, delta);
@@ -1726,6 +1726,12 @@ function turnMenu<TState>(state: PlatformState<TState>, delta: -1 | 1, effects: 
       return finalState;
     }
     autoSaveEffect(nextState, effects);
+    return nextState;
+  }
+  if (selected.kind === "bool") {
+    const nextValue = delta > 0;
+    const nextState = writeAnyValue(state, selected.key, nextValue);
+    if (selected.key !== "autoSaveDefault") autoSaveEffect(nextState, effects);
     return nextState;
   }
   // Must be "enum" kind

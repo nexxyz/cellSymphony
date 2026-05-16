@@ -56,7 +56,7 @@ function press(state: PlatformState<MockState>): { state: PlatformState<MockStat
 function selectLabel(state: PlatformState<MockState>, label: string): PlatformState<MockState> {
   for (let i = 0; i < 80; i += 1) {
     const frame = toSimulatorFrame(state, mockBehavior);
-    const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+    const selected = frame.display.lines.find((l) => l.startsWith("@@")) ?? "";
     if (selected.includes(label)) return state;
     const r = turn(state, 1);
     state = r.state;
@@ -348,7 +348,7 @@ test("spawn action label shows shared marker in menu", () => {
   state = selectLabel(state, "Spawn Random");
 
   const frame = toSimulatorFrame(state, mockBehavior);
-  const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+  const selected = frame.display.lines.find((l) => l.startsWith("@@")) ?? "";
   assert.ok(selected.includes("!Spawn Random [S]"));
 });
 
@@ -670,7 +670,7 @@ test("menu navigation skips spacers when turning", () => {
   }
   // Should never land on a spacer
   const frame = toSimulatorFrame(state, mockBehavior);
-  const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+  const selected = frame.display.lines.find((l) => l.startsWith("@@")) ?? "";
   assert.ok(!selected.includes("─"), "should not select spacer");
 });
 
