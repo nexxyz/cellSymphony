@@ -88,7 +88,7 @@ test("menu navigation edits runtime config through hardware-parity inputs", () =
   const selectLabel = (label: string) => {
     for (let i = 0; i < 80; i += 1) {
       const frame = toSimulatorFrame(state, mockBehavior);
-      const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+      const selected = frame.display.lines.find((l) => l.startsWith("@@")) ?? "";
       if (selected.includes(label)) return;
       turn(1);
     }
@@ -107,6 +107,49 @@ test("menu navigation edits runtime config through hardware-parity inputs", () =
   assert.equal(state.runtimeConfig.masterVolume, 72);
   const frame = toSimulatorFrame(state, mockBehavior);
   assert.equal(frame.display.editing, false);
+});
+
+test("bool menu items edit like 2-option enums", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+
+  const turn = (delta: number) => {
+    state = routeInput(state, { type: "encoder_turn", delta }, mockBehavior).state;
+  };
+
+  const press = () => {
+    state = routeInput(state, { type: "encoder_press" }, mockBehavior).state;
+  };
+
+  const selectLabel = (label: string) => {
+    for (let i = 0; i < 80; i += 1) {
+      const frame = toSimulatorFrame(state, mockBehavior);
+      const selected = frame.display.lines.find((l) => l.startsWith("@@")) ?? "";
+      if (selected.includes(label)) return;
+      turn(1);
+    }
+    assert.fail(`failed to select label: ${label}`);
+  };
+
+  selectLabel("System");
+  press();
+  selectLabel("MIDI");
+  press();
+  selectLabel("Enabled");
+
+  assert.equal(state.runtimeConfig.midi.enabled, false);
+  press();
+  assert.equal(state.menu.editing, true);
+  assert.equal(state.runtimeConfig.midi.enabled, false);
+
+  turn(1);
+  assert.equal(state.runtimeConfig.midi.enabled, true);
+
+  turn(-1);
+  assert.equal(state.runtimeConfig.midi.enabled, false);
+
+  press();
+  assert.equal(state.menu.editing, false);
 });
 
 test("scan mode advances cursor using PPQN timing", () => {
@@ -253,7 +296,7 @@ test("edit marker uses compact star prefix", () => {
   const selectLabel = (label: string) => {
     for (let i = 0; i < 80; i += 1) {
       const frame = toSimulatorFrame(state, mockBehavior);
-      const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+      const selected = frame.display.lines.find((l) => l.startsWith("@@")) ?? "";
       if (selected.includes(label)) return;
       turn(1);
     }
@@ -325,7 +368,7 @@ test("config save default requires confirmation before emitting effect", () => {
   const selectLabel = (label: string) => {
     for (let i = 0; i < 80; i += 1) {
       const frame = toSimulatorFrame(state, mockBehavior);
-      const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+      const selected = frame.display.lines.find((l) => l.startsWith("@@")) ?? "";
       if (selected.includes(label)) return;
       turn(1);
     }
@@ -367,7 +410,7 @@ test("entering MIDI Out/In menu requests port lists", () => {
   const selectLabel = (label: string) => {
     for (let i = 0; i < 80; i += 1) {
       const frame = toSimulatorFrame(state, mockBehavior);
-      const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+      const selected = frame.display.lines.find((l) => l.startsWith("@@")) ?? "";
       if (selected.includes(label)) return;
       turn(1);
     }
@@ -405,7 +448,7 @@ test("shift+back deletes character when editing draft name", () => {
   const selectLabel = (label: string) => {
     for (let i = 0; i < 80; i += 1) {
       const frame = toSimulatorFrame(state, mockBehavior);
-      const selected = frame.display.lines.find((l) => l.startsWith("@@> ")) ?? "";
+      const selected = frame.display.lines.find((l) => l.startsWith("@@")) ?? "";
       if (selected.includes(label)) return;
       turn(1);
     }

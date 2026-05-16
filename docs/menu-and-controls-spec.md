@@ -7,7 +7,7 @@ This is the single source of truth for menu structure, control mappings, and par
 | Control | Simulator Key | Function |
 |---|---|---|
 | Main encoder turn | ← → | Move cursor / adjust values |
-| Main encoder press | Enter | Enter group / toggle / enter/exit edit |
+| Main encoder press | Enter | Enter group / enter/exit edit / trigger action |
 | Back button | Backspace | Go back / exit edit / clear grid (with Shift) |
 | Space button | Space | Play / Pause |
 | Shift + Space | Shift+Space | Emergency stop (panic + reset scan origin) |
@@ -159,9 +159,10 @@ System
 │   ├── Sync Mode: [internal | external]
 │   ├── MIDI Out (group)             ← dynamic: one action per detected MIDI output port
 │   ├── MIDI In (group)              ← dynamic: one action per detected MIDI input port
-│   ├── Clock Out: [on | off]
-│   ├── Clock In: [on | off]
-│   ├── Respond Start/Stop: [on | off]
+│   ├── Sync & Clock (group)
+│   │   ├── Clock Out: [on | off]
+│   │   ├── Clock In: [on | off]
+│   │   └── Respond Start/Stop: [on | off]
 │   └── Panic: (action)
 ├── Sound (group)
 │   ├── Note Length: [30..2000] step 10 ms  default 120
@@ -184,6 +185,11 @@ System
 - Transport flash: green (beat) or red (measure) border on play icon
 - Yellow event dot: briefly shown when notes fire
 - Toast text: displayed at bottom for feedback messages
+
+Value editing semantics:
+
+- Number/enum/bool rows enter edit mode on main press
+- Bool behaves like a 2-option enum (`off`/`on`) and changes on encoder turn, not immediate row press
 
 Action row markers:
 
