@@ -13,6 +13,30 @@ export type ResolvedHelp = {
   detail: string;
 };
 
+type MatchTier = 0 | 1 | 2 | 3 | 4 | -1;
+
+function matchTier(entry: MenuHelpEntry, target: HelpTarget): MatchTier {
+  const key = entry.key.trim();
+  const path = entry.path.trim();
+  const kind = entry.kind.trim();
+
+  if (kind && kind !== "*" && kind !== target.kind) return -1;
+  if (key) {
+    if (!globMatch(key, target.key)) return -1;
+  } else if (path && !globMatch(path, target.path)) {
+    return -1;
+  }
+
+  if (key && !key.includes("*")) return 0;
+  if (key && key.includes("*")) {
+    if (key === "action:*" || key === "key:*") return 4;
+    return 1;
+  }
+  if (path && !path.includes("*")) return 2;
+  if (path && path.includes("*")) return 3;
+  return 4;
+}
+
 function globMatch(pattern: string, value: string): boolean {
   if (!pattern || pattern === "*") return true;
   if (!pattern.includes("*")) return pattern === value;
@@ -21,29 +45,18 @@ function globMatch(pattern: string, value: string): boolean {
 }
 
 function score(entry: MenuHelpEntry, target: HelpTarget): number {
-  const key = entry.key.trim();
-  const path = entry.path.trim();
-  if (key && !globMatch(key, target.key)) return -1;
-  if (path && !globMatch(path, target.path)) return -1;
-  if (entry.kind && entry.kind !== "*" && entry.kind !== target.kind) return -1;
-
-  const keyScore = key ? (key.includes("*") ? 30 : 40) : 0;
-  const pathScore = path ? (path.includes("*") ? 20 : 30) : 0;
-  const kindScore = entry.kind && entry.kind !== "*" ? 10 : 0;
-  return keyScore + pathScore + kindScore;
+  const tier = matchTier(entry, target);
+  if (tier < 0) return -1;
+  const keySpecificity = (entry.key ?? "").replace(/\*/g, "").length;
+  const pathSpecificity = (entry.path ?? "").replace(/\*/g, "").length;
+  const specificity = keySpecificity + pathSpecificity;
+  const kindBonus = entry.kind && entry.kind !== "*" ? 1 : 0;
+  return (500 - tier * 100) + specificity + kindBonus;
 }
 
 export function resolveMenuHelp(target: HelpTarget): ResolvedHelp {
-  let best: MenuHelpEntry | null = null;
-  let bestScore = -1;
-  for (const entry of MENU_HELP_ENTRIES) {
-    const s = score(entry, target);
-    if (s > bestScore) {
-      best = entry;
-      bestScore = s;
-    }
-  }
-  if (!best || bestScore < 0) {
+  const best = resolveMenuHelpEntry(target);
+  if (!best) {
     return {
       title: target.label || "Help",
       detail: "No help text is available for this entry yet."
@@ -58,4 +71,17 @@ export function resolveMenuHelp(target: HelpTarget): ResolvedHelp {
 
 export function listMenuHelpEntries(): MenuHelpEntry[] {
   return MENU_HELP_ENTRIES.slice();
+}
+
+export function resolveMenuHelpEntry(target: HelpTarget): MenuHelpEntry | null {
+  let best: MenuHelpEntry | null = null;
+  let bestScore = -1;
+  for (const entry of MENU_HELP_ENTRIES) {
+    const s = score(entry, target);
+    if (s > bestScore) {
+      best = entry;
+      bestScore = s;
+    }
+  }
+  return bestScore < 0 ? null : best;
 }
