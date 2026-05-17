@@ -19,6 +19,11 @@ Context-help copy source: `docs/menu-help-texts.tsv` (required header row).
 | Shift + Aux encoder press | Shift + (simulated) | Bind current item / open unbind confirm |
 | Shift + Fn + Main press | Shift+Ctrl+Enter | Context help for highlighted entry |
 
+Help popup behavior:
+
+- Main encoder turn scrolls help text
+- Main encoder press closes help
+
 ## Transport States
 
 - Play: `▶` (green flash on beat, red flash on measure)
