@@ -114,3 +114,10 @@ if (ambiguities.length > 0) {
 console.log(
   `menu-help lint passed (${targets.length} covered: exactKey=${buckets.exactKey}, wildcardKey=${buckets.wildcardKey}, exactPath=${buckets.exactPath}, wildcardPath=${buckets.wildcardPath}, kindFallback=${buckets.kindFallback})`
 );
+
+const fallbackRatio = targets.length === 0 ? 0 : buckets.kindFallback / targets.length;
+if (fallbackRatio > 0.4) {
+  console.warn(
+    `menu-help lint warning: ${Math.round(fallbackRatio * 100)}% of entries resolve via kind fallback. Consider adding more specific key/path rows.`
+  );
+}
