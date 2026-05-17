@@ -593,6 +593,16 @@ test("help popup turn scrolls and enter closes without executing menu action", (
   state = routeInput(state, { type: "encoder_turn", id: "main", delta: -1 }, mockBehavior).state;
   assert.equal(state.system.confirm?.scroll, 0);
 
+  for (let i = 0; i < 20; i += 1) {
+    state = routeInput(state, { type: "encoder_turn", id: "main", delta: 1 }, mockBehavior).state;
+  }
+  assert.ok((state.system.confirm?.scroll ?? 0) > 0, "scroll should advance with turns");
+
+  for (let i = 0; i < 20; i += 1) {
+    state = routeInput(state, { type: "encoder_turn", id: "main", delta: -1 }, mockBehavior).state;
+  }
+  assert.equal(state.system.confirm?.scroll, 0, "scroll should clamp at top");
+
   state = routeInput(state, { type: "encoder_press", id: "main" }, mockBehavior).state;
   assert.equal(state.system.confirm, null);
   assert.equal(state.menu.stack.length, 0);
