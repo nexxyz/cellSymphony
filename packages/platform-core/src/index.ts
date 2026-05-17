@@ -1181,7 +1181,7 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
         label: "L1: Life",
         children: [
           { kind: "enum", label: "Step Rate", key: "algorithmStepUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"] },
-          { kind: "enum", label: "Behaviour", key: "activeBehavior", options: listBehaviorIds() },
+          { kind: "enum", label: "Behavior", key: "activeBehavior", options: listBehaviorIds() },
           ...behaviorConfigNodes
         ]
       },
