@@ -33,94 +33,7 @@ export function App() {
   const oledCanvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const oledFrame = frame.oled;
-  const oledImage = useMemo(() => {
-    if (!oledFrame || oledFrame.format !== "rgb565be") return null;
-    const w = oledFrame.width;
-    const h = oledFrame.height;
-    const data = new Uint8ClampedArray(w * h * 4);
-    const px = oledFrame.pixels;
-    for (let i = 0, j = 0; i < px.length; i += 2, j += 4) {
-      const v = (px[i]! << 8) | px[i + 1]!;
-      const r5 = (v >> 11) & 0x1f;
-      const g6 = (v >> 5) & 0x3f;
-      const b5 = v & 0x1f;
-      const r = (r5 << 3) | (r5 >> 2);
-      const g = (g6 << 2) | (g6 >> 4);
-      const b = (b5 << 3) | (b5 >> 2);
-      data[j] = r;
-      data[j + 1] = g;
-      data[j + 2] = b;
-      data[j + 3] = 255;
-    }
-    return new ImageData(data, w, h);
-  }, [oledFrame]);
-
-  useEffect(() => {
-    const unsubscribeState = runtime.subscribe(setSnapshot);
-    const unsubscribeEvents = runtime.subscribeEvents((events) => {
-      void sendEventsToAudio(events, runtime.getSnapshot().masterVolume);
-    });
-    runtime.start();
-    return () => {
-      unsubscribeState();
-      unsubscribeEvents();
-      runtime.stop();
-    };
-  }, []);
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (shouldPreventKeyboardDefault(event)) event.preventDefault();
-      const action = mapKeyboardEventToInputAction(event);
-      if (!action) return;
-      if (action.type === "device_input" && action.input.type === "encoder_turn") {
-        bumpDialPhase(action.input.id, action.input.delta);
-      }
-      runtime.dispatchAction(action);
-    };
-    const onKeyUp = (event: KeyboardEvent) => {
-      const action = mapKeyboardKeyupToInputAction(event);
-      if (action) runtime.dispatchAction(action);
-    };
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("keyup", onKeyUp);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("keyup", onKeyUp);
-    };
-  });
-
-  useEffect(() => {
-    if (!oledImage) return;
-    const canvas = oledCanvasRef.current;
-    if (!canvas) return;
-    canvas.width = oledImage.width;
-    canvas.height = oledImage.height;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.putImageData(oledImage, 0, 0);
-  }, [oledImage]);
-
-  useEffect(() => {
-    if (!dialDrag) return;
-    const onMove = (event: MouseEvent) => {
-      const deltaY = dialDrag.y - event.clientY;
-      const nextAcc = dialDrag.acc + deltaY;
-      if (Math.abs(nextAcc) < 12) {
-        setDialDrag({ ...dialDrag, y: event.clientY, acc: nextAcc });
-        return;
-      }
-      turnWithAcceleration(dialDrag.id, nextAcc > 0 ? 1 : -1, Math.abs(nextAcc));
-      setDialDrag({ ...dialDrag, y: event.clientY, acc: 0 });
-    };
-    const onUp = () => setDialDrag(null);
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-    return () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-  }, [dialDrag]);
+  const oledImage = useMemo(() => toOledImage(oledFrame), [oledFrame]);
 
   function dispatch(input: DeviceInput) {
     if (input.type === "encoder_turn") {
@@ -156,6 +69,11 @@ export function App() {
     setPaintMode(null);
     setPainted(new Set());
   }
+
+  useRuntimeBindings(setSnapshot);
+  useKeyboardBindings(bumpDialPhase);
+  useOledCanvas(oledCanvasRef, oledImage);
+  useDialDragBindings(dialDrag, setDialDrag, turnWithAcceleration);
 
   return (
     <main className="app-shell" onMouseUp={endPaint} onMouseLeave={endPaint}>
@@ -342,4 +260,102 @@ function NeoKey({
       {button.label}
     </button>
   );
+}
+
+function toOledImage(oledFrame: ReturnType<typeof runtime.getSnapshot>["frame"]["oled"]): ImageData | null {
+  if (!oledFrame || oledFrame.format !== "rgb565be") return null;
+  const w = oledFrame.width;
+  const h = oledFrame.height;
+  const data = new Uint8ClampedArray(w * h * 4);
+  const px = oledFrame.pixels;
+  for (let i = 0, j = 0; i < px.length; i += 2, j += 4) {
+    const v = (px[i]! << 8) | px[i + 1]!;
+    const r5 = (v >> 11) & 0x1f;
+    const g6 = (v >> 5) & 0x3f;
+    const b5 = v & 0x1f;
+    data[j] = (r5 << 3) | (r5 >> 2);
+    data[j + 1] = (g6 << 2) | (g6 >> 4);
+    data[j + 2] = (b5 << 3) | (b5 >> 2);
+    data[j + 3] = 255;
+  }
+  return new ImageData(data, w, h);
+}
+
+function useRuntimeBindings(setSnapshot: (snapshot: ReturnType<typeof runtime.getSnapshot>) => void): void {
+  useEffect(() => {
+    const unsubscribeState = runtime.subscribe(setSnapshot);
+    const unsubscribeEvents = runtime.subscribeEvents((events) => {
+      void sendEventsToAudio(events, runtime.getSnapshot().masterVolume);
+    });
+    runtime.start();
+    return () => {
+      unsubscribeState();
+      unsubscribeEvents();
+      runtime.stop();
+    };
+  }, [setSnapshot]);
+}
+
+function useKeyboardBindings(bumpDialPhase: (id: EncoderId | undefined, delta: -1 | 1) => void): void {
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (shouldPreventKeyboardDefault(event)) event.preventDefault();
+      const action = mapKeyboardEventToInputAction(event);
+      if (!action) return;
+      if (action.type === "device_input" && action.input.type === "encoder_turn") {
+        bumpDialPhase(action.input.id, action.input.delta);
+      }
+      runtime.dispatchAction(action);
+    };
+    const onKeyUp = (event: KeyboardEvent) => {
+      const action = mapKeyboardKeyupToInputAction(event);
+      if (action) runtime.dispatchAction(action);
+    };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, [bumpDialPhase]);
+}
+
+function useOledCanvas(ref: { current: HTMLCanvasElement | null }, image: ImageData | null): void {
+  useEffect(() => {
+    if (!image) return;
+    const canvas = ref.current;
+    if (!canvas) return;
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.putImageData(image, 0, 0);
+  }, [image, ref]);
+}
+
+function useDialDragBindings(
+  dialDrag: { id: EncoderId; y: number; acc: number } | null,
+  setDialDrag: (next: { id: EncoderId; y: number; acc: number } | null) => void,
+  turnWithAcceleration: (id: EncoderId, delta: -1 | 1, magnitude: number) => void
+): void {
+  useEffect(() => {
+    if (!dialDrag) return;
+    const onMove = (event: MouseEvent) => {
+      const deltaY = dialDrag.y - event.clientY;
+      const nextAcc = dialDrag.acc + deltaY;
+      if (Math.abs(nextAcc) < 12) {
+        setDialDrag({ ...dialDrag, y: event.clientY, acc: nextAcc });
+        return;
+      }
+      turnWithAcceleration(dialDrag.id, nextAcc > 0 ? 1 : -1, Math.abs(nextAcc));
+      setDialDrag({ ...dialDrag, y: event.clientY, acc: 0 });
+    };
+    const onUp = () => setDialDrag(null);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dialDrag, setDialDrag, turnWithAcceleration]);
 }
