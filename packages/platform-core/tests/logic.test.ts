@@ -566,6 +566,36 @@ test("Fn+Shift+Enter opens contextual help popup", () => {
 
   assert.equal(state.system.confirm?.kind, "help_info");
   assert.equal(state.system.confirm?.options[0], "Close");
+  assert.equal(state.system.confirm?.scroll, 0);
+});
+
+test("help popup turn scrolls and enter closes without executing menu action", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.menu.cursor = 5; // System at root
+
+  state = routeInput(state, { type: "button_shift", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "button_fn", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "encoder_press", id: "main" }, mockBehavior).state;
+
+  assert.equal(state.system.confirm?.kind, "help_info");
+  if (state.system.confirm?.action.kind === "help_info") {
+    state.system.confirm = {
+      ...state.system.confirm,
+      action: { ...state.system.confirm.action, lines: ["l1", "l2", "l3", "l4", "l5", "l6", "l7", "l8"] },
+      scroll: 0
+    };
+  }
+
+  state = routeInput(state, { type: "encoder_turn", id: "main", delta: 1 }, mockBehavior).state;
+  assert.equal(state.system.confirm?.scroll, 1);
+
+  state = routeInput(state, { type: "encoder_turn", id: "main", delta: -1 }, mockBehavior).state;
+  assert.equal(state.system.confirm?.scroll, 0);
+
+  state = routeInput(state, { type: "encoder_press", id: "main" }, mockBehavior).state;
+  assert.equal(state.system.confirm, null);
+  assert.equal(state.menu.stack.length, 0);
 });
 
 test("startup splash close shows help hint toast", () => {

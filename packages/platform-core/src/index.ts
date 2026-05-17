@@ -187,7 +187,7 @@ type PendingAction =
   | { kind: "factory_load" }
   | { kind: "midi_panic" }
   | { kind: "aux_unbind"; encoderId: string }
-  | { kind: "help_info"; title: string; detail: string }
+  | { kind: "help_info"; title: string; lines: string[] }
   | {
       kind: "text_dirty_exit";
       key: string;
@@ -202,6 +202,7 @@ type ConfirmState = {
   action: PendingAction;
   cursor: number;
   options: string[];
+  scroll: number;
 };
 
 type TextEditSession = {
@@ -451,8 +452,15 @@ export function routeInput<TState>(
   if (nextState.system.confirm) {
     const c = nextState.system.confirm;
     if (input.type === "encoder_turn" && isMainEncoderInput(input.id)) {
-      const nextCursor = clamp(c.cursor + input.delta, 0, c.options.length - 1);
-      nextState.system = { ...nextState.system, confirm: { ...c, cursor: nextCursor } };
+      if (c.kind === "help_info" && c.action.kind === "help_info") {
+        const contentSlots = Math.max(1, OLED_TEXT_LINES - 2);
+        const maxScroll = Math.max(0, c.action.lines.length - contentSlots);
+        const nextScroll = clamp(c.scroll + input.delta, 0, maxScroll);
+        nextState.system = { ...nextState.system, confirm: { ...c, scroll: nextScroll } };
+      } else {
+        const nextCursor = clamp(c.cursor + input.delta, 0, c.options.length - 1);
+        nextState.system = { ...nextState.system, confirm: { ...c, cursor: nextCursor } };
+      }
     } else if (input.type === "encoder_press" && isMainEncoderInput(input.id)) {
       const choice = c.options[c.cursor];
       if (c.kind === "aux_unbind" && c.action.kind === "aux_unbind") {
@@ -620,7 +628,8 @@ export function routeInput<TState>(
                 mode: "save"
               },
               cursor: 0,
-              options: ["Save", "Discard"]
+              options: ["Save", "Discard"],
+              scroll: 0
             }
           };
         } else {
@@ -1487,6 +1496,12 @@ function confirmView<TState>(state: PlatformState<TState>): { path: string; line
   const c = state.system.confirm;
   if (!c) return { path: "CONF", lines: [] };
   const title = c.kind === "text_dirty_exit" ? "TEXT" : c.kind === "help_info" ? "HELP" : "CONFIRM";
+  if (c.kind === "help_info" && c.action.kind === "help_info") {
+    const contentSlots = Math.max(1, OLED_TEXT_LINES - 2);
+    const start = clamp(c.scroll, 0, Math.max(0, c.action.lines.length - contentSlots));
+    const body = c.action.lines.slice(start, start + contentSlots).map((line) => fitOledText(line));
+    return { path: title, lines: [...body, "@@> Close"].slice(0, OLED_TEXT_LINES - 1) };
+  }
   const details = confirmDetails(state, c);
   const lines = [fitOledText(details)];
   for (let i = 0; i < c.options.length; i++) {
@@ -1508,7 +1523,7 @@ function confirmDetails<TState>(state: PlatformState<TState>, confirm: ConfirmSt
   if (a.kind === "text_dirty_exit") return "Save changes?";
   if (a.kind === "midi_panic") return "MIDI panic?";
   if (a.kind === "aux_unbind") return "Unbind encoder?";
-  if (a.kind === "help_info") return a.detail;
+  if (a.kind === "help_info") return "Help";
   return "Confirm";
 }
 
@@ -1518,15 +1533,17 @@ function openContextHelp<TState>(state: PlatformState<TState>): PlatformState<TS
   if (!selected || selected.kind === "spacer") return state;
   const target = menuHelpTargetFromNode(view.path, selected);
   const help = resolveMenuHelp(target);
+  const lines = wrapOledText(help.detail, OLED_TEXT_COLUMNS);
   return {
     ...state,
     system: {
       ...state.system,
       confirm: {
         kind: "help_info",
-        action: { kind: "help_info", title: help.title, detail: help.detail },
+        action: { kind: "help_info", title: help.title, lines },
         cursor: 0,
-        options: ["Close"]
+        options: ["Close"],
+        scroll: 0
       }
     }
   };
@@ -1824,7 +1841,8 @@ function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId: strin
         kind: "aux_unbind",
         action: { kind: "aux_unbind", encoderId },
         cursor: 0,
-        options: ["Both", "Click", "Turn", "Cancel"]
+        options: ["Both", "Click", "Turn", "Cancel"],
+        scroll: 0
       }
     }
   });
@@ -1968,7 +1986,6 @@ function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: string,
 
   if (t.kind === "bool") {
     const current = readAnyValue(state, t.key);
-    const nextValue = delta > 0 ? true : delta < 0 ? false : current;
     // Clamp: once at true, can't go further right; once at false, can't go further left
     const clamped = current === true ? (delta > 0 ? true : false) : (delta < 0 ? false : true);
     const nextState = writeAnyValue(state, t.key, clamped);
@@ -1983,7 +2000,7 @@ function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: string,
 function handleAction<TState>(state: PlatformState<TState>, action: ActionSpec, effects: PlatformEffect[]): PlatformState<TState> {
   const openConfirm = (kind: ConfirmKind, pending: PendingAction, options: string[] = ["No", "Yes"]): PlatformState<TState> => ({
     ...state,
-    system: { ...state.system, confirm: { kind, action: pending, cursor: 0, options } }
+    system: { ...state.system, confirm: { kind, action: pending, cursor: 0, options, scroll: 0 } }
   });
   const toast = (message: string): PlatformState<TState> => ({
     ...state,
@@ -2355,7 +2372,8 @@ function actionDetailLine<TState>(state: PlatformState<TState>, item: Extract<Me
 }
 
 function menuHelpTargetFromNode(path: string, node: MenuNode): HelpTarget {
-  const fullPath = `${path} > ${node.label ?? node.kind}`;
+  const nodeLabel = "label" in node ? node.label : node.kind;
+  const fullPath = `${path} > ${nodeLabel}`;
   if (node.kind === "group") {
     return { path: fullPath, key: "", kind: "group", label: node.label ?? "Section" };
   }
@@ -2373,7 +2391,7 @@ function menuHelpTargetFromNode(path: string, node: MenuNode): HelpTarget {
   if (node.kind === "number" || node.kind === "enum" || node.kind === "bool") {
     return { path: fullPath, key: `key:${node.key}`, kind: node.kind, label: node.label ?? "Setting" };
   }
-  return { path: fullPath, key: "", kind: node.kind, label: node.label ?? "Menu Entry" };
+  return { path: fullPath, key: "", kind: node.kind, label: nodeLabel ?? "Menu Entry" };
 }
 
 export function enumerateMenuHelpTargets<TState>(state: PlatformState<TState>): HelpTarget[] {
@@ -2401,6 +2419,39 @@ function fitOledTextToWidth(text: string, width: number): string {
   if (text.length <= width) return text;
   if (width <= 3) return text.slice(0, width);
   return `${text.slice(0, width - 3)}...`;
+}
+
+function wrapOledText(text: string, width: number): string[] {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (normalized.length === 0) return [""];
+  const words = normalized.split(" ");
+  const lines: string[] = [];
+  let current = "";
+  const pushCurrent = () => {
+    if (current.length > 0) lines.push(current);
+    current = "";
+  };
+  for (const word of words) {
+    if (word.length > width) {
+      pushCurrent();
+      for (let i = 0; i < word.length; i += width) {
+        lines.push(word.slice(i, i + width));
+      }
+      continue;
+    }
+    if (current.length === 0) {
+      current = word;
+      continue;
+    }
+    if ((current.length + 1 + word.length) <= width) {
+      current = `${current} ${word}`;
+    } else {
+      lines.push(current);
+      current = word;
+    }
+  }
+  pushCurrent();
+  return lines;
 }
 
 function isMainEncoderInput(id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined): boolean {
