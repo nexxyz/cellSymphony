@@ -20,10 +20,10 @@
 - packages/platform-core/tests/logic.test.ts: 622 LOC
 
 ## Top Complex Functions
-- apps/desktop/src/ui/App.tsx:26 App() complexity=29, loc=243
+- apps/desktop/src/ui/App.tsx:26 App() complexity=17, loc=161
 
 ## Top Long Functions
-- apps/desktop/src/ui/App.tsx:26 App() loc=243, complexity=29
+- apps/desktop/src/ui/App.tsx:26 App() loc=161, complexity=17
 
 ## Naming Consistency (behavior vs behaviour)
 - No `behaviour` identifier tokens found.
