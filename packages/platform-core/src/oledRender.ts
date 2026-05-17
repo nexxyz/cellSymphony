@@ -129,36 +129,38 @@ function setPixel565be(buf: Uint8Array, x: number, y: number, v: number) {
   buf[idx + 1] = v & 0xff;
 }
 
-function fillRect(buf: Uint8Array, x: number, y: number, w: number, h: number, v: number) {
-  for (let yy = 0; yy < h; yy += 1) {
-    for (let xx = 0; xx < w; xx += 1) {
-      setPixel565be(buf, x + xx, y + yy, v);
+type Rect = { x: number; y: number; w: number; h: number };
+
+function fillRect(buf: Uint8Array, rect: Rect, v: number) {
+  for (let yy = 0; yy < rect.h; yy += 1) {
+    for (let xx = 0; xx < rect.w; xx += 1) {
+      setPixel565be(buf, rect.x + xx, rect.y + yy, v);
     }
   }
 }
 
-function drawChar(buf: Uint8Array, x: number, y: number, ch: string, fg: number, bg: number | null) {
+function drawChar(buf: Uint8Array, pos: { x: number; y: number }, ch: string, fg: number, bg: number | null) {
   const code = ch.charCodeAt(0);
   const idx = (code - 32) * 5;
   if (idx < 0 || idx + 4 >= FONT_5X7.length) {
     // draw as space
-    if (bg !== null) fillRect(buf, x, y, 6, 8, bg);
+    if (bg !== null) fillRect(buf, { x: pos.x, y: pos.y, w: 6, h: 8 }, bg);
     return;
   }
-  if (bg !== null) fillRect(buf, x, y, 6, 8, bg);
+  if (bg !== null) fillRect(buf, { x: pos.x, y: pos.y, w: 6, h: 8 }, bg);
   for (let col = 0; col < 5; col += 1) {
     const bits = FONT_5X7[idx + col] ?? 0;
     for (let row = 0; row < 7; row += 1) {
       if (bits & (1 << row)) {
-        setPixel565be(buf, x + col, y + row, fg);
+        setPixel565be(buf, pos.x + col, pos.y + row, fg);
       }
     }
   }
 }
 
-function drawText(buf: Uint8Array, x: number, y: number, text: string, fg: number, bg: number | null) {
+function drawText(buf: Uint8Array, pos: { x: number; y: number }, text: string, fg: number, bg: number | null) {
   for (let i = 0; i < text.length; i += 1) {
-    drawChar(buf, x + i * 6, y, text[i] ?? " ", fg, bg);
+    drawChar(buf, { x: pos.x + i * 6, y: pos.y }, text[i] ?? " ", fg, bg);
   }
 }
 
@@ -194,11 +196,11 @@ function drawTransport(
       }
     }
   } else if (icon === "stop") {
-    fillRect(buf, x0 + 0, y0 + 2, 7, 7, fg);
+    fillRect(buf, { x: x0 + 0, y: y0 + 2, w: 7, h: 7 }, fg);
   } else {
     // pause
-    fillRect(buf, x0 + 0, y0 + 2, 2, 7, fg);
-    fillRect(buf, x0 + 4, y0 + 2, 2, 7, fg);
+    fillRect(buf, { x: x0 + 0, y: y0 + 2, w: 2, h: 7 }, fg);
+    fillRect(buf, { x: x0 + 4, y: y0 + 2, w: 2, h: 7 }, fg);
   }
 
   // event dot
@@ -206,7 +208,7 @@ function drawTransport(
   const dotY = y0 + 4;
   const dotOn = 0xffe0; // bright yellow
   const dotOff = dim;
-  fillRect(buf, dotX - 1, dotY - 1, 3, 3, eventDotOn ? dotOn : dotOff);
+  fillRect(buf, { x: dotX - 1, y: dotY - 1, w: 3, h: 3 }, eventDotOn ? dotOn : dotOff);
 }
 
 export function renderOledFrame(state: OledRenderState): OledFrame {
@@ -221,9 +223,9 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
   if (state.splash) {
     buf.set(state.splash.pixelsRgb565be);
     const top = (state.splash.topText ?? "").slice(0, OLED_TEXT_COLUMNS);
-    if (top.trim().length > 0) drawText(buf, 4, 2, top, 0xffff, null);
+    if (top.trim().length > 0) drawText(buf, { x: 4, y: 2 }, top, 0xffff, null);
     const bottom = state.splash.bottomText ? state.splash.bottomText.slice(0, OLED_TEXT_COLUMNS) : "";
-    if (bottom.trim().length > 0) drawText(buf, 4, OLED_H - 10, bottom, 0xffff, null);
+    if (bottom.trim().length > 0) drawText(buf, { x: 4, y: OLED_H - 10 }, bottom, 0xffff, null);
     return { width: 128, height: 128, format: "rgb565be", pixels: buf };
   }
 
@@ -242,11 +244,11 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
     const clipped = text.padEnd(OLED_TEXT_COLUMNS, " ").slice(0, OLED_TEXT_COLUMNS);
     if (selected) {
       const bgColor = state.lineColors?.[i] ?? invBg; // Use section color as bg
-      fillRect(buf, 0, i * lineHeight, OLED_W, lineHeight, bgColor);
-      drawText(buf, xStart, y, clipped, invFg, null); // Black text
+      fillRect(buf, { x: 0, y: i * lineHeight, w: OLED_W, h: lineHeight }, bgColor);
+      drawText(buf, { x: xStart, y }, clipped, invFg, null); // Black text
     } else {
       const lineColor = state.lineColors?.[i] ?? fg;
-      drawText(buf, xStart, y, clipped, lineColor, null);
+      drawText(buf, { x: xStart, y }, clipped, lineColor, null);
     }
   }
 
