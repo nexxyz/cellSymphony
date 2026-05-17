@@ -1502,7 +1502,7 @@ function confirmView<TState>(state: PlatformState<TState>): { path: string; line
     const body = c.action.lines.slice(start, start + contentSlots).map((line) => fitOledText(line));
     return { path: title, lines: [...body, "@@> Close"].slice(0, OLED_TEXT_LINES - 1) };
   }
-  const details = confirmDetails(state, c);
+  const details = confirmDetails(c);
   const lines = [fitOledText(details)];
   for (let i = 0; i < c.options.length; i++) {
     const prefix = c.cursor === i ? "@@> " : "  ";
@@ -1511,7 +1511,7 @@ function confirmView<TState>(state: PlatformState<TState>): { path: string; line
   return { path: title, lines: lines.slice(0, OLED_TEXT_LINES - 1) };
 }
 
-function confirmDetails<TState>(state: PlatformState<TState>, confirm: ConfirmState): string {
+function confirmDetails(confirm: ConfirmState): string {
   const a = confirm.action;
   if (a.kind === "preset_save") return `Save ${a.name}?`;
   if (a.kind === "preset_delete") return `Delete? ${a.name}`;
@@ -1572,7 +1572,7 @@ function applyAuxUnbindChoice<TState>(state: PlatformState<TState>, encoderId: s
       }
     }
   };
-  return setAuxToast(nextState, nextBinding ? "Unbound" : "Unbound");
+  return setAuxToast(nextState, "Unbound");
 }
 
 function abbreviatePath(path: string): string {

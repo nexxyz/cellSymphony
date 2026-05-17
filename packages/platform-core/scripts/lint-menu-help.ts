@@ -34,9 +34,24 @@ function globMatch(pattern: string, value: string): boolean {
 
 function matches(entry: Entry, target: { path: string; key: string; kind: string }): boolean {
   if (entry.kind && entry.kind !== "*" && entry.kind !== target.kind) return false;
-  if (entry.key && !globMatch(entry.key, target.key)) return false;
-  if (entry.path && !globMatch(entry.path, target.path)) return false;
+  if (entry.key) {
+    if (!globMatch(entry.key, target.key)) return false;
+  } else if (entry.path && !globMatch(entry.path, target.path)) {
+    return false;
+  }
   return true;
+}
+
+function tier(entry: Entry, target: { path: string; key: string; kind: string }): number {
+  if (!matches(entry, target)) return -1;
+  if (entry.key && !entry.key.includes("*")) return 0;
+  if (entry.key && entry.key.includes("*")) {
+    if (entry.key === "action:*" || entry.key === "key:*") return 4;
+    return 1;
+  }
+  if (entry.path && !entry.path.includes("*")) return 2;
+  if (entry.path && entry.path.includes("*")) return 3;
+  return 4;
 }
 
 function isExplicit(entry: Entry): boolean {
@@ -54,7 +69,31 @@ state.system.midiOutputs = [{ id: "out-1", name: "Out Port" }];
 state.system.midiInputs = [{ id: "in-1", name: "In Port" }];
 
 const targets = enumerateMenuHelpTargets(state);
-const misses = targets.filter((t) => !entries.some((e) => isExplicit(e) && matches(e, t)));
+const misses: typeof targets = [];
+const ambiguities: Array<{ target: (typeof targets)[number]; ids: string[] }> = [];
+const buckets = { exactKey: 0, wildcardKey: 0, exactPath: 0, wildcardPath: 0, kindFallback: 0 };
+
+for (const t of targets) {
+  const matched = entries.filter((e) => isExplicit(e) && matches(e, t));
+  if (matched.length === 0) {
+    misses.push(t);
+    continue;
+  }
+  let bestTier = 99;
+  for (const m of matched) {
+    const x = tier(m, t);
+    if (x >= 0 && x < bestTier) bestTier = x;
+  }
+  const best = matched.filter((m) => tier(m, t) === bestTier);
+  if (best.length > 1) {
+    ambiguities.push({ target: t, ids: best.map((b) => b.id) });
+  }
+  if (bestTier === 0) buckets.exactKey += 1;
+  else if (bestTier === 1) buckets.wildcardKey += 1;
+  else if (bestTier === 2) buckets.exactPath += 1;
+  else if (bestTier === 3) buckets.wildcardPath += 1;
+  else buckets.kindFallback += 1;
+}
 
 if (misses.length > 0) {
   console.error("Missing menu help entries:");
@@ -64,4 +103,14 @@ if (misses.length > 0) {
   process.exit(1);
 }
 
-console.log(`menu-help lint passed (${targets.length} menu entries covered)`);
+if (ambiguities.length > 0) {
+  console.error("Ambiguous menu help matches:");
+  for (const a of ambiguities) {
+    console.error(`- kind=${a.target.kind} key=${a.target.key || "(none)"} path=${a.target.path} ids=${a.ids.join(",")}`);
+  }
+  process.exit(1);
+}
+
+console.log(
+  `menu-help lint passed (${targets.length} covered: exactKey=${buckets.exactKey}, wildcardKey=${buckets.wildcardKey}, exactPath=${buckets.exactPath}, wildcardPath=${buckets.wildcardPath}, kindFallback=${buckets.kindFallback})`
+);
