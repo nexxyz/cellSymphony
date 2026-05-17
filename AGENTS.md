@@ -56,6 +56,7 @@ Cell Symphony is a monorepo (pnpm workspaces) combining a TypeScript core engine
 - Any control/menu/runtime behavior change must update this document in the same commit
 - Any menu or feature add/change/remove must also review `docs/menu-help-texts.tsv` and update help entries in the same commit when needed
 - Help entry coverage is enforced by `pnpm --filter @cellsymphony/platform-core lint`; keep TSV entries in sync so lint remains green
+- Quality thresholds are currently staged in warning mode (complexity/LOC/params) and will be promoted to strict errors after initial hotspot cleanup
 - `docs/runtime-boundaries.md` describes layer responsibilities
 - `docs/engineering-quality-requirements.md` defines CI, coverage, and quality gates
 - `docs/implementation-done.md` summarizes the 10-algorithm implementation

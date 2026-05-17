@@ -130,10 +130,10 @@ test("behavior config persists independently per behavior", () => {
   state = selectLabel(state, "L1: Life");
   state = press(state).state;
 
-  // The "Behaviour" menu item should be at a specific position
+  // The "Behavior" menu item should be at a specific position
   // Let's navigate more directly by finding it
-  state = selectLabel(state, "Behaviour");
-  state = press(state).state; // enter edit mode for Behaviour enum
+  state = selectLabel(state, "Behavior");
+  state = press(state).state; // enter edit mode for Behavior enum
 
   // Turn to select brain
   state = turn(state, 1).state; // move from life to next behavior
@@ -220,7 +220,7 @@ test("activeBehavior change with autoSaveDefault on emits store_save_default", (
 
   state = selectLabel(state, "L1: Life");
   state = press(state).state;
-  state = selectLabel(state, "Behaviour");
+  state = selectLabel(state, "Behavior");
   state = press(state).state; // enter edit
   const r = turn(state, 1); // rotate to next behavior (life)
   state = r.state;
@@ -483,7 +483,7 @@ test("aux press spawn action remaps on behavior switch", () => {
 
   state = selectLabel(state, "L1: Life");
   state = press(state).state;
-  state = selectLabel(state, "Behaviour");
+  state = selectLabel(state, "Behavior");
   state = press(state).state;
   state = turn(state, 1).state;
 
@@ -501,7 +501,7 @@ test("aux press spawn action clears on switch to sequencer", () => {
 
   state = selectLabel(state, "L1: Life");
   state = press(state).state;
-  state = selectLabel(state, "Behaviour");
+  state = selectLabel(state, "Behavior");
   state = press(state).state;
   state = turn(state, -1).state;
 

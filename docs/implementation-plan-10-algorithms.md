@@ -6,7 +6,7 @@
 > - `behaviors-shapes/` was replaced by `behaviors-pulse/` (renamed to better reflect wavefront model)
 > - Shapes behavior uses a **wavefront model** (leading edge of active cells with lifespan decay) rather than solid filled shapes
 > - `behaviors-glider/` spawns gliders at intervals rather than being a continuous glider gun
-> - Menu label is "Behaviour" (not "Active") for the active behavior selector
+> - Menu label is "Behavior" (not "Active") for the active behavior selector
 > - Default scanned channel target is 0 (not equally distributed across 0-3)
 >
 > See `docs/menu-and-controls-spec.md` for the authoritative current menu tree.

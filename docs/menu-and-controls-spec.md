@@ -49,7 +49,7 @@ Root (group)
 ```
 L1: Life
 ├── Step Rate: [1/16, 1/8, 1/4, 1/2, 1/1]    ← controls how often onTick() is called
-├── Behaviour: [sequencer | life | brain | ant | bounce | shapes | raindrops | dla | glider]
+├── Behavior: [sequencer | life | brain | ant | bounce | shapes | raindrops | dla | glider]
 └── ... per-behavior dynamic config from active engine's configMenu()
 ```
 

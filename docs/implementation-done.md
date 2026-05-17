@@ -28,7 +28,7 @@ All 10 behavior packages, the pluggable behavior engine architecture, the menu s
 Root
 ├── L1: Life
 │   ├── Step Rate: [1/16, 1/8, 1/4, 1/2, 1/1]
-│   └── Behaviour: [sequencer | life | brain | ant | bounce | shapes | raindrops | dla | glider]
+│   └── Behavior: [sequencer | life | brain | ant | bounce | shapes | raindrops | dla | glider]
 │       └── ... per-behavior config items
 ├── L2: Sense
 │   ├── Scan Mode: [immediate | scanning]
@@ -92,5 +92,5 @@ Root
 | Shapes package name | `behaviors-shapes/` | `behaviors-pulse/` (internal ID: `shapes`) |
 | Shape rendering | Solid filled shapes | Wavefront model (leading edge + lifespan decay) |
 | Glider behavior | Glider gun | Interval-based glider spawner |
-| Menu label | "Active" | "Behaviour" |
+| Menu label | "Active" | "Behavior" |
 | Scanned target default | Equally distributed 0-3 | Channel 0 (same as activate) |
