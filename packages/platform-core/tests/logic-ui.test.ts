@@ -399,6 +399,26 @@ test("help popup turn scrolls and enter closes without executing menu action", (
   assert.equal(state.menu.stack.length, 0);
 });
 
+test("modifier releases are applied while help popup is open", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+
+  state = routeInput(state, { type: "button_shift", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "button_fn", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "encoder_press", id: "main" }, mockBehavior).state;
+  assert.equal(state.system.confirm?.kind, "help_info");
+
+  state = routeInput(state, { type: "button_fn", pressed: false }, mockBehavior).state;
+  state = routeInput(state, { type: "button_shift", pressed: false }, mockBehavior).state;
+  assert.equal(state.system.fnHeld, false);
+  assert.equal(state.system.shiftHeld, false);
+
+  state = routeInput(state, { type: "button_a", pressed: true }, mockBehavior).state;
+  assert.equal(state.system.confirm, null);
+  assert.equal(state.system.fnHeld, false);
+  assert.equal(state.system.shiftHeld, false);
+});
+
 test("startup splash close shows help hint toast", () => {
   let state = createInitialState(mockBehavior);
   state.system.oledMode = "splash";

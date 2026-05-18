@@ -5,7 +5,6 @@ default_number	*		number	Number Setting	Adjusts a numeric value.	Enter edit mode
 default_enum	*		enum	Option Setting	Selects one option from a list.	Enter edit mode, then turn encoder to choose.
 default_bool	*		bool	Toggle Setting	Selects Off or On.	Enter edit mode, then turn encoder to choose.
 default_text	*		text	Text Setting	Edits text for this field.	Use the encoder to move cursor and adjust characters.
-group_any	Menu > *		group	Section	Opens this submenu and shows related settings.	Use Enter to open and Back to return.
 action_any	*	action:*	action	Action	Runs this command.	Use this when you want to execute the highlighted action.
 number_any	*	key:*	number	Number Setting	Adjusts a numeric value.	Enter edit mode, then turn encoder to change it.
 enum_any	*	key:*	enum	Option Setting	Selects one option from a list.	Enter edit mode, then turn encoder to choose.
@@ -35,3 +34,116 @@ midi_sync_mode	System > MIDI > Sync & Clock > Sync Mode	key:midi.syncMode	enum	S
 midi_clock_out	System > MIDI > Sync & Clock > Clock Out	key:midi.clockOutEnabled	bool	Clock Out	Enables outgoing MIDI clock messages.	Useful when other gear should follow this transport.
 midi_clock_in	System > MIDI > Sync & Clock > Clock In	key:midi.clockInEnabled	bool	Clock In	Enables incoming MIDI clock processing.	Required to follow external timing.
 midi_respond_start_stop	System > MIDI > Sync & Clock > Respond Start/Stop	key:midi.respondToStartStop	bool	Respond Start/Stop	When enabled, external MIDI Start/Stop controls transport.	When disabled, transport reacts only to local controls.
+life_section	Menu > L1: Life		group	Life Layer	Configures the active Life behavior and how fast it advances.	Use this area to shape the cellular process before sensing/audio mapping.
+life_step_rate	*	key:algorithmStepUnit	enum	Step Rate	Sets how often the Life algorithm advances per musical time unit.	Faster rates evolve patterns quickly; slower rates make longer-form motion.
+life_behavior	*	key:activeBehavior	enum	Behavior	Selects which Life behavior engine runs on the grid.	Switching behavior reinitializes that behavior's runtime state.
+sense_section	Menu > L2: Sense		group	Sense Layer	Controls how grid activity is interpreted into trigger intents.	This is where scan/event sources get routed toward instruments.
+scan_mode	*	key:scanMode	enum	Scan Mode	Chooses full-grid immediate sensing or cursor-based scanning.	Scanning mode advances a cursor and can create directional note flow.
+scan_axis	*	key:scanAxis	enum	Scan Axis	Sets whether scanning traverses rows or columns.	Combine with Scan Direction to define scan movement.
+scan_unit	*	key:scanUnit	enum	Scan Unit	Sets scan cursor advance rate in musical units.	Smaller units move faster; larger units move slower.
+scan_direction	*	key:scanDirection	enum	Scan Direction	Sets scan travel direction along the selected axis.	Use reverse for back-and-forth style phrasing with manual resets.
+event_enabled	*	key:eventEnabled	bool	Event Triggers	Enables transition triggers such as activate/deactivate.	Disable to ignore transition events and rely on state scanning only.
+state_enabled	*	key:stateEnabled	bool	State Notes	Enables state-based scan triggers from current cell occupancy.	Disable to use only transition events from cell changes.
+targets_group	Menu > L2: Sense > Instrument Targets		group	Instrument Targets	Maps each trigger kind to an action and destination instrument slot.	Use note_off actions for release-style lifecycle behavior.
+map_activate_action	*	key:mapping.activate.action	enum	Activate Action	Defines what happens when a cell becomes active.	Default note_on starts notes on birth/spawn transitions.
+map_activate_channel	*	key:mapping.activate.channel	enum	Activate Instrument	Selects which instrument slot receives activate events.	Displayed as 1..16 in UI and stored as slots 0..15.
+map_stable_action	*	key:mapping.stable.action	enum	Stable Action	Defines behavior for cells that stay active across updates.	Default none avoids constant retriggering from unchanged active cells.
+map_stable_channel	*	key:mapping.stable.channel	enum	Stable Instrument	Selects destination instrument slot for stable triggers.	Use with stable action when you want sustained-state gestures.
+map_deactivate_action	*	key:mapping.deactivate.action	enum	Deactivate Action	Defines what happens when a cell turns inactive.	Default note_off releases matching notes in lifecycle workflows.
+map_deactivate_channel	*	key:mapping.deactivate.channel	enum	Deactivate Instrument	Selects destination instrument slot for deactivate triggers.	Typically points to the same slot used by activate note_on.
+map_scanned_action	*	key:mapping.scanned.action	enum	Scanned Action	Defines behavior when scan encounters a filled cell.	Default note_on makes scanning immediately audible.
+map_scanned_channel	*	key:mapping.scanned.channel	enum	Scanned Instrument	Selects destination instrument slot for scanned-filled triggers.	Use different slots for layered scan/event voicing.
+map_scanned_empty_action	*	key:mapping.scanned_empty.action	enum	Scanned Empty Action	Defines behavior when scan encounters an empty cell.	Default note_off can release held scan notes.
+map_scanned_empty_channel	*	key:mapping.scanned_empty.channel	enum	Scanned Empty Instrument	Selects destination instrument slot for scanned-empty triggers.	Pair with scanned slot for directional hold-and-release patterns.
+voice_section	Menu > L3: Voice		group	Voice Layer	Defines pitch mapping and instrument slot sound engines.	This layer controls how sensed events become audible voices.
+note_mapping_group	Menu > L3: Voice > Note Mapping		group	Note Mapping	Sets pitch quantization, range, and root/scale behavior.	Applied before per-instrument synth shaping.
+pitch_start	*	key:pitch.startingNote	number	Starting Note	Sets the reference note before X/Y pitch step offsets are applied.	Use this as the tonal center anchor.
+pitch_low	*	key:pitch.lowestNote	number	Lowest Note	Sets the lower bound for generated notes.	Notes outside range are handled by Out of Range mode.
+pitch_high	*	key:pitch.highestNote	number	Highest Note	Sets the upper bound for generated notes.	Together with Lowest Note this defines playable range.
+pitch_oor	*	key:pitch.outOfRange	enum	Out of Range	Chooses how pitch indices beyond bounds are handled.	Clamp pins to edges; wrap folds back through the range.
+pitch_scale	*	key:pitch.scale	enum	Scale	Selects scale intervals used for pitch quantization.	Use this to set harmonic language globally.
+pitch_root	*	key:pitch.root	enum	Root	Sets the tonic/root for selected scale quantization.	Changing root transposes quantized output harmonically.
+inst_group	Menu > L3: Voice > Instruments		group	Instruments	Contains the 16 instrument slots used by Sense routing.	Each slot has independent MIDI and synth parameters.
+inst_slot	Menu > L3: Voice > Instruments > Instrument *		group	Instrument Slot	Configures one instrument destination slot.	Sense trigger mappings target these slots.
+inst_type	Menu > L3: Voice > Instruments > Instrument * > Type		enum	Instrument Type	Selects the sound engine type for this slot.	Currently synth is available; sampler can be added later.
+inst_note_behavior	*	key:instruments.*.noteBehavior	enum	Note Behavior	Controls retrigger versus hold behavior for this instrument slot.	Use hold for lifecycle note_off workflows and scanned-empty release.
+inst_midi_enabled	*	key:instruments.*.midi.enabled	bool	MIDI Enabled	Enables external MIDI output for this instrument slot.	Global MIDI must also be enabled in System > MIDI.
+inst_midi_channel	*	key:instruments.*.midi.channel	number	MIDI Channel	Selects outgoing MIDI channel for this instrument slot.	Shown as 1..16 while stored internally as 0..15.
+osc_wave	*	key:instruments.*.synth.osc*.waveform	enum	Oscillator Wave	Selects the oscillator waveform shape.	Use different waves per osc for richer timbre blends.
+osc_level	*	key:instruments.*.synth.osc*.levelPct	number	Oscillator Level	Sets this oscillator's contribution to the voice mix.	Balance osc1/osc2 levels to shape tone body.
+osc_octave	*	key:instruments.*.synth.osc*.octave	number	Oscillator Octave	Offsets oscillator pitch in octave steps.	Useful for layered bass/body/air intervals.
+osc_detune	*	key:instruments.*.synth.osc*.detuneCents	number	Oscillator Detune	Offsets oscillator pitch by cents for beating/width.	Small detune values create motion without changing harmony.
+osc_pw	*	key:instruments.*.synth.osc*.pulseWidthPct	number	Pulse Width	Sets pulse duty cycle when pulse waveform is used.	Ignored for non-pulse waveforms.
+amp_gain	*	key:instruments.*.synth.amp.gainPct	number	Amp Gain	Sets base loudness for this instrument slot.	Use with Master Vol to balance global versus per-slot level.
+amp_vel	*	key:instruments.*.synth.amp.velocitySensitivityPct	number	Velocity Sensitivity	Controls how strongly note velocity affects loudness.	Lower values flatten dynamics; higher values increase response.
+amp_env_adsr	*	key:instruments.*.synth.ampEnv.*	number	Amp Envelope	Shapes loudness over time using ADSR stages.	Attack/Decay/Release are in ms; Sustain is level percentage.
+filt_type	*	key:instruments.*.synth.filter.type	enum	Filter Type	Selects the filter response mode for this slot.	Use alongside cutoff/resonance and filter envelope depth.
+filt_cutoff	*	key:instruments.*.synth.filter.cutoffHz	number	Filter Cutoff	Sets base cutoff frequency for tone brightness.	Higher values pass more high content.
+filt_res	*	key:instruments.*.synth.filter.resonance	number	Filter Resonance	Boosts emphasis near cutoff frequency.	High resonance can create pronounced tonal peaks.
+filt_env_amt	*	key:instruments.*.synth.filter.envAmountPct	number	Filter Env Amount	Sets how much filter envelope modulates cutoff.	Positive values open with envelope; negative values invert.
+filt_keytrack	*	key:instruments.*.synth.filter.keyTrackingPct	number	Filter Key Tracking	Sets how cutoff follows played pitch across notes.	Higher values keep timbre more consistent by pitch.
+filt_env_adsr	*	key:instruments.*.synth.filterEnv.*	number	Filter Envelope	Shapes filter movement over time using ADSR stages.	Use with Env Amount for plucks, swells, and contour motion.
+playback_section	Menu > Playback		group	Playback	Transport tempo and timing controls.	These settings affect scheduler pacing and clock behavior.
+bpm_help	*	key:transport.bpm	number	BPM	Sets master tempo in beats per minute.	Affects internal clock rate and algorithm pulse timing.
+sys_audio_group	Menu > System > Audio		group	Audio	Global output level controls.	Applies after per-instrument voice shaping.
+master_vol	*	key:masterVolume	number	Master Volume	Sets overall output volume scaling.	Use this for final level trim without changing patch balance.
+presets_group	Menu > System > Presets		group	Presets	Save, load, and manage configuration snapshots.	Use defaults for boot state and library for named variants.
+default_save	System > Presets > Default > Save Default	action:default_save	action	Save Default	Stores current state as startup default payload.	Use with Auto Save when you want edits to persist automatically.
+default_load	System > Presets > Default > Load Default	action:default_load	action	Load Default	Loads the saved default payload into current state.	Replaces current runtime settings immediately.
+autosave_default	*	key:autoSaveDefault	bool	Auto Save Default	When enabled, config edits also update default storage.	Use this for always-remember-last-state behavior.
+sound_group	Menu > System > Sound		group	Sound	Global note shaping applied to generated note_on events.	Useful when you want broad behavior without touching each instrument.
+note_length	*	key:sound.noteLengthMs	number	Note Length	Default note duration when note_on has no explicit length.	Hold-mode notes may bypass duration and wait for note_off.
+velocity_scale	*	key:sound.velocityScalePct	number	Velocity Scale	Scales velocity values globally after mapping.	Use to tame or boost overall dynamic output.
+velocity_curve	*	key:sound.velocityCurve	enum	Velocity Curve	Applies response curve to velocity scaling.	Soft raises low velocities; hard emphasizes stronger hits.
+ui_group	Menu > System > UI Settings		group	UI Settings	Display and lighting behavior for the device/simulator UI.	These do not change musical generation.
+screen_sleep	*	key:screenSleepSeconds	number	Screen Sleep	Sets idle timeout before OLED sleep.	Set 0 to keep display always on.
+display_bright	*	key:displayBrightness	number	Display Brightness	Sets OLED brightness level.	Higher values improve visibility at cost of brightness.
+grid_bright	*	key:gridBrightness	number	Grid Brightness	Sets grid LED brightness scaling.	Lower values are useful for dark environments.
+button_bright	*	key:buttonBrightness	number	Button Brightness	Sets NeoKey/button LED brightness scaling.	Helps match hardware feel to ambient light.
+sense_x_axis_group	Menu > L2: Sense > X Axis		group	X Axis Modulation	Maps X position into pitch/velocity/filter modulation lanes.	Use offsets and ranges to reshape horizontal influence.
+sense_x_pitch_group	Menu > L2: Sense > X Axis > Pitch Steps		group	X Pitch Steps	Controls pitch stepping derived from X position.	Disable to remove X-axis pitch influence.
+sense_x_velocity_group	Menu > L2: Sense > X Axis > Velocity		group	X Velocity Lane	Maps X position to velocity output range.	Use this for left-right dynamic shaping.
+sense_x_cutoff_group	Menu > L2: Sense > X Axis > Filter Cutoff		group	X Cutoff Lane	Maps X position to CC74 cutoff modulation range.	Works when filter cutoff lane is enabled.
+sense_x_res_group	Menu > L2: Sense > X Axis > Filter Resonance		group	X Resonance Lane	Maps X position to CC71 resonance modulation range.	Use carefully to avoid excessive resonance peaks.
+sense_y_axis_group	Menu > L2: Sense > Y Axis		group	Y Axis Modulation	Maps Y position into pitch/velocity/filter modulation lanes.	Use alongside X axis for two-dimensional mapping.
+sense_y_pitch_group	Menu > L2: Sense > Y Axis > Pitch Steps		group	Y Pitch Steps	Controls pitch stepping derived from Y position.	Disable to remove Y-axis pitch influence.
+sense_y_velocity_group	Menu > L2: Sense > Y Axis > Velocity		group	Y Velocity Lane	Maps Y position to velocity output range.	Useful for top-bottom accent patterns.
+sense_y_cutoff_group	Menu > L2: Sense > Y Axis > Filter Cutoff		group	Y Cutoff Lane	Maps Y position to CC74 cutoff modulation range.	Combine with X lane for richer filter motion.
+sense_y_res_group	Menu > L2: Sense > Y Axis > Filter Resonance		group	Y Resonance Lane	Maps Y position to CC71 resonance modulation range.	Lower ranges are usually easier to control musically.
+voice_x_axis_group	Menu > L3: Voice > X Axis		group	Voice X Axis	Alternate X-axis modulation settings at Voice layer.	Use this when you want different mapping emphasis in Voice context.
+voice_x_pitch_group	Menu > L3: Voice > X Axis > Pitch Steps		group	Voice X Pitch Steps	Controls X-based pitch stepping in Voice layer.	Can diverge from Sense defaults for performance tuning.
+voice_x_velocity_group	Menu > L3: Voice > X Axis > Velocity		group	Voice X Velocity Lane	Controls X-based velocity modulation in Voice layer.	Use to rebalance loudness response per performance profile.
+voice_x_cutoff_group	Menu > L3: Voice > X Axis > Filter Cutoff		group	Voice X Cutoff Lane	Controls X-based cutoff modulation in Voice layer.	Affects generated CC74 values.
+voice_x_res_group	Menu > L3: Voice > X Axis > Filter Resonance		group	Voice X Resonance Lane	Controls X-based resonance modulation in Voice layer.	Affects generated CC71 values.
+voice_y_axis_group	Menu > L3: Voice > Y Axis		group	Voice Y Axis	Alternate Y-axis modulation settings at Voice layer.	Use for per-context modulation tuning.
+voice_y_pitch_group	Menu > L3: Voice > Y Axis > Pitch Steps		group	Voice Y Pitch Steps	Controls Y-based pitch stepping in Voice layer.	Higher steps create larger vertical interval jumps.
+voice_y_velocity_group	Menu > L3: Voice > Y Axis > Velocity		group	Voice Y Velocity Lane	Controls Y-based velocity modulation in Voice layer.	Use to weight top/bottom cell dynamics.
+voice_y_cutoff_group	Menu > L3: Voice > Y Axis > Filter Cutoff		group	Voice Y Cutoff Lane	Controls Y-based cutoff modulation in Voice layer.	Affects generated CC74 values.
+voice_y_res_group	Menu > L3: Voice > Y Axis > Filter Resonance		group	Voice Y Resonance Lane	Controls Y-based resonance modulation in Voice layer.	Affects generated CC71 values.
+system_group	Menu > System		group	System	Global configuration area for audio, presets, MIDI, and UI.	Use this for environment and persistence behavior.
+presets_library_group	Menu > System > Presets > Library		group	Preset Library	Named save/load/rename/delete workflow for patch states.	Use Refresh if external files were changed.
+save_as_group	Menu > System > Presets > Library > Save As		group	Save As	Creates a preset from the current runtime state.	Enter a name then run Save to write it.
+load_group	Menu > System > Presets > Library > Load		group	Load Preset	Lists available presets to load into current state.	Loading replaces current runtime config.
+rename_group	Menu > System > Presets > Library > Rename		group	Rename Preset	Select a preset then edit new name before applying.	Useful for versioning variants.
+delete_group	Menu > System > Presets > Library > Delete		group	Delete Preset	Select a preset to delete from storage.	Deletion requires confirmation.
+default_group_specific	Menu > System > Presets > Default		group	Default Preset	Controls boot/default payload save and load behavior.	Auto Save can keep default synced with edits.
+factory_group	Menu > System > Presets > Factory		group	Factory Preset	Loads built-in factory baseline configuration.	Use this as a safe recovery starting point.
+midi_group	Menu > System > MIDI		group	MIDI	Global MIDI routing, ports, and clock behavior.	Per-instrument MIDI enable/channel are in Voice > Instruments.
+midi_out_group	Menu > System > MIDI > MIDI Out		group	MIDI Output	Selects target output device for outgoing MIDI events.	Disconnect clears the selected output.
+midi_in_group	Menu > System > MIDI > MIDI In		group	MIDI Input	Selects input device for incoming clock/start/stop.	Disconnect disables input source selection.
+midi_sync_group	Menu > System > MIDI > Sync & Clock		group	Sync & Clock	Configures transport clock source and clock I/O behavior.	Set external mode to follow incoming MIDI clock.
+life_spawn_count	*	key:behaviorConfig.life.randomCellsPerTick	number	Spawn Count	Sets how many random cells are injected per spawn event.	Higher values create denser, more chaotic growth bursts.
+life_spawn_interval	*	key:behaviorConfig.life.randomTickInterval	number	Spawn Interval	Sets tick interval between automatic random spawn bursts.	Lower values spawn more frequently.
+axis_pitch_enabled	*	key:x.pitch.enabled	bool	X Pitch Enabled	Enables pitch stepping derived from X position.	Disable to remove horizontal pitch influence.
+axis_pitch_steps_x	*	key:x.pitch.steps	number	X Pitch Steps	Sets semitone-step influence per X grid step.	Larger values create wider horizontal intervals.
+axis_vel_enabled_x	*	key:x.velocity.enabled	bool	X Velocity Enabled	Enables velocity modulation from X position.	Disable for fixed mapped velocity from trigger target.
+axis_cut_enabled_x	*	key:x.filterCutoff.enabled	bool	X Cutoff Enabled	Enables cutoff CC modulation from X position.	Outputs CC74 when enabled.
+axis_res_enabled_x	*	key:x.filterResonance.enabled	bool	X Resonance Enabled	Enables resonance CC modulation from X position.	Outputs CC71 when enabled.
+axis_pitch_enabled_y	*	key:y.pitch.enabled	bool	Y Pitch Enabled	Enables pitch stepping derived from Y position.	Disable to remove vertical pitch influence.
+axis_pitch_steps_y	*	key:y.pitch.steps	number	Y Pitch Steps	Sets semitone-step influence per Y grid step.	Larger values create wider vertical intervals.
+axis_vel_enabled_y	*	key:y.velocity.enabled	bool	Y Velocity Enabled	Enables velocity modulation from Y position.	Disable for fixed mapped velocity from trigger target.
+axis_cut_enabled_y	*	key:y.filterCutoff.enabled	bool	Y Cutoff Enabled	Enables cutoff CC modulation from Y position.	Outputs CC74 when enabled.
+axis_res_enabled_y	*	key:y.filterResonance.enabled	bool	Y Resonance Enabled	Enables resonance CC modulation from Y position.	Outputs CC71 when enabled.
+draft_name_field	*	key:system.draftName	text	Preset Name Field	Text field used for Save As and Rename preset flows.	Save/Apply actions consume this value as the target preset name.
+preset_rename_apply	Menu > System > Presets > Library > Rename > Apply	action:preset_rename_apply	action	Apply Rename	Runs rename from selected preset to entered New Name.	Requires a valid selected source preset.
+factory_load_action	Menu > System > Presets > Factory > Load Fact. Default	action:factory_load	action	Load Factory Default	Loads built-in factory default configuration.	Use this to quickly recover a known baseline state.

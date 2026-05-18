@@ -249,7 +249,7 @@ function NeoKey({
     <button
       type="button"
       onClick={(event) => {
-        if (button.key === "shift") {
+        if (button.key === "shift" || button.key === "fn") {
           event.preventDefault();
           return;
         }
@@ -257,12 +257,15 @@ function NeoKey({
       }}
       onMouseDown={() => {
         if (button.key === "shift") runtime.dispatchAction({ type: "shift", active: true });
+        if (button.key === "fn") runtime.dispatchAction({ type: "fn", active: true });
       }}
       onMouseUp={() => {
         if (button.key === "shift") runtime.dispatchAction({ type: "shift", active: false });
+        if (button.key === "fn") runtime.dispatchAction({ type: "fn", active: false });
       }}
       onMouseLeave={() => {
         if (button.key === "shift") runtime.dispatchAction({ type: "shift", active: false });
+        if (button.key === "fn") runtime.dispatchAction({ type: "fn", active: false });
       }}
       className={`neokey-${button.key} ${snapshot.neoKeyLeds[button.key]}`}
       style={{ opacity: Math.max(0.25, snapshot.buttonBrightness / 100) }}
@@ -321,11 +324,17 @@ function useKeyboardBindings(bumpDialPhase: (id: EncoderId | undefined, delta: -
       const action = mapKeyboardKeyupToInputAction(event);
       if (action) runtime.dispatchAction(action);
     };
+    const onBlur = () => {
+      runtime.dispatchAction({ type: "shift", active: false });
+      runtime.dispatchAction({ type: "fn", active: false });
+    };
     window.addEventListener("keydown", onKey);
     window.addEventListener("keyup", onKeyUp);
+    window.addEventListener("blur", onBlur);
     return () => {
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("keyup", onKeyUp);
+      window.removeEventListener("blur", onBlur);
     };
   }, [bumpDialPhase]);
 }

@@ -45,6 +45,8 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
 
   if (nextState.system.confirm) {
     const c = nextState.system.confirm;
+    if (input.type === "button_shift") nextState.system = { ...nextState.system, shiftHeld: pressed(input) };
+    if (input.type === "button_fn") nextState.system = { ...nextState.system, fnHeld: pressed(input) };
     if (input.type === "encoder_turn" && deps.isMainEncoderInput(input.id)) {
       if (c.kind === "help_info" && c.action.kind === "help_info") {
         const contentSlots = Math.max(1, 8 - 2);
