@@ -7,17 +7,14 @@
 - Function params warn/hard: 4/6
 
 ## Summary
-- Files scanned: 54
-- Functions scanned (named function declarations): 28
-- Large files (> 500 LOC): 3
+- Files scanned: 71
+- Functions scanned (named function declarations): 30
+- Large files (> 500 LOC): 0
 - Complex functions (> 10): 1
 - Long functions (> 60 LOC): 1
 - Wide signatures (> 4 params): 2
 
 ## Top Large Files
-- packages/platform-core/src/index.ts: 2403 LOC
-- packages/platform-core/tests/features.test.ts: 741 LOC
-- packages/platform-core/tests/logic.test.ts: 622 LOC
 
 ## Top Complex Functions
 - apps/desktop/src/ui/App.tsx:26 App() complexity=17, loc=161
