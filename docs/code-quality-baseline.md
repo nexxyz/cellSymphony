@@ -12,7 +12,7 @@
 - Large files (> 500 LOC): 0
 - Complex functions (> 10): 1
 - Long functions (> 60 LOC): 1
-- Wide signatures (> 4 params): 2
+- Wide signatures (> 4 params): 0
 
 ## Top Large Files
 

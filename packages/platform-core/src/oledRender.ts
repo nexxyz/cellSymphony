@@ -139,28 +139,35 @@ function fillRect(buf: Uint8Array, rect: Rect, v: number) {
   }
 }
 
-function drawChar(buf: Uint8Array, pos: { x: number; y: number }, ch: string, fg: number, bg: number | null) {
+type TextStyle = { fg: number; bg: number | null };
+type DrawCharParams = { pos: { x: number; y: number }; ch: string; style: TextStyle };
+
+function drawChar(buf: Uint8Array, params: DrawCharParams) {
+  const { pos, ch, style } = params;
   const code = ch.charCodeAt(0);
   const idx = (code - 32) * 5;
   if (idx < 0 || idx + 4 >= FONT_5X7.length) {
     // draw as space
-    if (bg !== null) fillRect(buf, { x: pos.x, y: pos.y, w: 6, h: 8 }, bg);
+    if (style.bg !== null) fillRect(buf, { x: pos.x, y: pos.y, w: 6, h: 8 }, style.bg);
     return;
   }
-  if (bg !== null) fillRect(buf, { x: pos.x, y: pos.y, w: 6, h: 8 }, bg);
+  if (style.bg !== null) fillRect(buf, { x: pos.x, y: pos.y, w: 6, h: 8 }, style.bg);
   for (let col = 0; col < 5; col += 1) {
     const bits = FONT_5X7[idx + col] ?? 0;
     for (let row = 0; row < 7; row += 1) {
       if (bits & (1 << row)) {
-        setPixel565be(buf, pos.x + col, pos.y + row, fg);
+        setPixel565be(buf, pos.x + col, pos.y + row, style.fg);
       }
     }
   }
 }
 
-function drawText(buf: Uint8Array, pos: { x: number; y: number }, text: string, fg: number, bg: number | null) {
+type DrawTextParams = { pos: { x: number; y: number }; text: string; style: TextStyle };
+
+function drawText(buf: Uint8Array, params: DrawTextParams) {
+  const { pos, text, style } = params;
   for (let i = 0; i < text.length; i += 1) {
-    drawChar(buf, { x: pos.x + i * 6, y: pos.y }, text[i] ?? " ", fg, bg);
+    drawChar(buf, { pos: { x: pos.x + i * 6, y: pos.y }, ch: text[i] ?? " ", style });
   }
 }
 
@@ -223,16 +230,17 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
   if (state.splash) {
     buf.set(state.splash.pixelsRgb565be);
     const top = (state.splash.topText ?? "").slice(0, OLED_TEXT_COLUMNS);
-    if (top.trim().length > 0) drawText(buf, { x: 4, y: 2 }, top, 0xffff, null);
+    if (top.trim().length > 0) drawText(buf, { pos: { x: 4, y: 2 }, text: top, style: { fg: 0xffff, bg: null } });
     const bottom = state.splash.bottomText ? state.splash.bottomText.slice(0, OLED_TEXT_COLUMNS) : "";
-    if (bottom.trim().length > 0) drawText(buf, { x: 4, y: OLED_H - 10 }, bottom, 0xffff, null);
+    if (bottom.trim().length > 0) drawText(buf, { pos: { x: 4, y: OLED_H - 10 }, text: bottom, style: { fg: 0xffff, bg: null } });
     return { width: 128, height: 128, format: "rgb565be", pixels: buf };
   }
 
   const fg = 0xffff;
-  const bg = 0x0000;
   const invFg = 0x0000;
   const invBg = 0xffff;
+  const normalStyleBase: TextStyle = { fg, bg: null };
+  const selectedStyle: TextStyle = { fg: invFg, bg: null };
 
   const lineHeight = Math.floor(OLED_H / OLED_TEXT_LINES); // 16
   const xStart = 4;
@@ -241,14 +249,18 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
     const { selected, text } = decodeSelected(line);
     const y = i * lineHeight + 4;
     // Clamp to 20 cols.
-    const clipped = text.padEnd(OLED_TEXT_COLUMNS, " ").slice(0, OLED_TEXT_COLUMNS);
+    const clipped = text.slice(0, OLED_TEXT_COLUMNS);
     if (selected) {
       const bgColor = state.lineColors?.[i] ?? invBg; // Use section color as bg
       fillRect(buf, { x: 0, y: i * lineHeight, w: OLED_W, h: lineHeight }, bgColor);
-      drawText(buf, { x: xStart, y }, clipped, invFg, null); // Black text
+      drawText(buf, { pos: { x: xStart, y }, text: clipped, style: selectedStyle }); // Black text
     } else {
       const lineColor = state.lineColors?.[i] ?? fg;
-      drawText(buf, { x: xStart, y }, clipped, lineColor, null);
+      drawText(buf, {
+        pos: { x: xStart, y },
+        text: clipped,
+        style: lineColor === fg ? normalStyleBase : { fg: lineColor, bg: null }
+      });
     }
   }
 
@@ -260,7 +272,7 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
     // Reserve the rightmost area for transport indicator.
     const maxChars = 17; // 17*6 + xStart(4) ~= 106px
     const msg = state.toast.slice(0, maxChars);
-    drawText(buf, { x: 4, y: OLED_H - 10 }, msg.padEnd(maxChars, " ").slice(0, maxChars), fg, null);
+    drawText(buf, { pos: { x: 4, y: OLED_H - 10 }, text: msg.slice(0, maxChars), style: normalStyleBase });
   }
 
   return { width: 128, height: 128, format: "rgb565be", pixels: buf };
