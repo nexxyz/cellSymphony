@@ -6,7 +6,7 @@ import { applyModulation } from "./musicTransforms";
 import { dedupeSimultaneousNotes, toGridSnapshot } from "./runtimeHelpers";
 import { mod } from "./coreUtils";
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
-import type { Direction, NoteUnit, PlatformState, RuntimeConfig } from "./index";
+import type { PlatformState, RuntimeConfig, Direction, NoteUnit } from "./platformTypes";
 
 const PPQN = 24;
 
@@ -131,6 +131,7 @@ function noteUnitToPulses(unit: NoteUnit): number {
     case "1/1":
       return 96;
   }
+  return 24;
 }
 
 function advanceScanIndex(current: number, direction: Direction, size: number): number {

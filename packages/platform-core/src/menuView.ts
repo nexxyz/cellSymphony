@@ -1,6 +1,6 @@
 import { abbreviatePath, formatMenuItemLines, getSectionColor, getSectionColorFromPath } from "./menuPresentation";
 import { clamp } from "./coreUtils";
-import type { ConfirmState, MenuNode, MenuState, PlatformState } from "./index";
+import type { ConfirmState, MenuNode, MenuState, PlatformState } from "./platformTypes";
 
 export function visibleChildren<TState>(node: MenuNode, state: PlatformState<TState>): MenuNode[] {
   if (node.kind !== "group") return [];

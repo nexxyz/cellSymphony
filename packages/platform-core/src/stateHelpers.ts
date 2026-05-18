@@ -2,7 +2,7 @@ import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { TransportFrame } from "@cellsymphony/device-contracts";
 import { clamp, mod, readNestedValue, readValue, writeNestedValue, writeValue } from "./coreUtils";
-import type { ConfigPayload, MenuNode, PlatformState, SystemState } from "./index";
+import type { ConfigPayload, MenuNode, PlatformState, SystemState } from "./platformTypes";
 
 export function textEditTurn<TState>(state: PlatformState<TState>, node: Extract<MenuNode, { kind: "text" }>, delta: -1 | 1): PlatformState<TState> {
   const raw = String(readAnyValue(state, node.key) ?? "");

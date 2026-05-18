@@ -1,6 +1,6 @@
 import { GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
-import type { RootName, RuntimeConfig, ScaleId, ValueLaneConfig } from "./index";
+import type { RootName, RuntimeConfig, ScaleId, ValueLaneConfig } from "./platformTypes";
 
 export function applyModulation(intents: { x: number; y: number; degree: number; kind: any }[], events: MusicalEvent[], cfg: RuntimeConfig): MusicalEvent[] {
   const out: MusicalEvent[] = [];
@@ -159,6 +159,7 @@ function scaleIntervals(scale: ScaleId): number[] {
     case "harmonic_minor":
       return [0, 2, 3, 5, 7, 8, 11];
   }
+  return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
 }
 
 function clamp(value: number, min: number, max: number): number {
