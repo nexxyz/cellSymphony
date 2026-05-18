@@ -81,7 +81,7 @@ test("behavior config number param edit via menu", () => {
   state = press(state).state; // exit edit
 
   const val = (state.runtimeConfig.behaviorConfig as any).life?.randomCellsPerTick;
-  assert.equal(val, 0, "randomCellsPerTick should be 0 (decremented from default)");
+  assert.equal(val, 11, "randomCellsPerTick should be 11 (decremented from default 12)");
 });
 
 test("behavior config enum param edit via menu", () => {
@@ -190,6 +190,27 @@ test("autoSaveDefault off does not emit store_save_default", () => {
 
   const hasAutoSave = r.effects.some((e) => e.type === "store_save_default");
   assert.equal(hasAutoSave, false, "should NOT emit store_save_default effect");
+});
+
+test("enabling autoSaveDefault emits immediate save when exiting edit", () => {
+  let state = makeState();
+  state.runtimeConfig.autoSaveDefault = false;
+
+  state = selectLabel(state, "System");
+  state = press(state).state;
+  state = selectLabel(state, "Presets");
+  state = press(state).state;
+  state = selectLabel(state, "Default");
+  state = press(state).state;
+  state = selectLabel(state, "Auto Save");
+  state = press(state).state; // enter edit
+  state = turn(state, 1).state; // false -> true
+
+  const exit = press(state);
+  state = exit.state;
+  const hasAutoSave = exit.effects.some((e) => e.type === "store_save_default");
+  assert.equal(state.runtimeConfig.autoSaveDefault, true);
+  assert.equal(hasAutoSave, true, "should emit store_save_default when exiting auto-save edit in ON state");
 });
 
 test("auto-save payload contains post-edit state", () => {

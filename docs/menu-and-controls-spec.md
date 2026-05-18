@@ -58,8 +58,8 @@ Behavior-specific config items (from `configMenu()`):
 | Behavior | Config Items | Type/Options |
 |---|---|---|
 | sequencer | *(none)* | — |
-| life | Random Cells/Tick: [0..10] | number, step 1 |
-| life | Random Interval: [1, 2, 4, 8, 16] | enum |
+| life | Spawn Count: [0..20] | number, step 1 (default 12) |
+| life | Spawn Interval: [1..20] | number, step 1 (default 4) |
 | life | !Spawn Random [S] | action, shared route `trigger.life.spawn_now` |
 | brain | Fire Threshold: [1..6] | number, step 1 |
 | brain | !Seed Random [S] | action, shared route `trigger.life.spawn_now` |
@@ -120,7 +120,7 @@ L2: Sense
 │       ├── Grid Offset: [-7..7] step 1
 │       └── Curve: [linear | curve]
 └── Y Axis (group)
-    └── (same sub-structure as X Axis, keys use y.* prefix, defaults: Pitch Steps steps=8)
+    └── (same sub-structure as X Axis, keys use y.* prefix, defaults: Pitch Steps steps=2)
 ```
 
 ### L3: Voice
@@ -128,12 +128,12 @@ L2: Sense
 ```
 L3: Voice
 ├── Note Mapping (group)
-│   ├── Starting Note: [0..127] step 1   default 48 (C3)
+│   ├── Starting Note: [0..127] step 1   default 36 (C2)
 │   ├── Lowest Note: [0..127] step 1     default 36 (C2)
-│   ├── Highest Note: [0..127] step 1    default 84 (C6)
+│   ├── Highest Note: [0..127] step 1    default 74 (D5)
 │   ├── Out of Range: [clamp | wrap]     default clamp
 │   ├── Scale: [chromatic | major | natural_minor | dorian | mixolydian | major_pentatonic | minor_pentatonic | harmonic_minor]  default major_pentatonic
-│   └── Root: [C | C# | D | D# | E | F | F# | G | G# | A | A# | B]  default C
+│   └── Root: [C | C# | D | D# | E | F | F# | G | G# | A | A# | B]  default D
 ├── Instruments (group)
 │   ├── Instrument 1..16 (group)
 │   │   ├── Type: [synth]
@@ -142,6 +142,8 @@ L3: Voice
 │   │   │   ├── Enabled: [on | off]       default off
 │   │   │   └── Channel: [1..16]
 │   │   └── Synth (group)
+│   │       ├── Preset (group)
+│   │       │   └── Load (group)          ← per-slot synth preset load with confirm
 │   │       ├── Oscillator (group)
 │   │       │   ├── Osc 1 (group)
 │   │       │   └── Osc 2 (group)
@@ -243,7 +245,7 @@ Brightness is scaled by the Grid Brightness setting.
 - Location: System > Presets > Default > Auto Save
 - When enabled: every config change (via turnMenu, pressMenu, or turnAuxEncoder) emits a `store_save_default` effect, persisting the entire `ConfigPayload` (activeBehavior + runtimeConfig + mappingConfig)
 - Disabled by default
-- Toggling Auto Save itself does NOT trigger an auto-save
+- Toggling Auto Save on triggers an immediate save when you exit that menu row
 
 ## Aux Encoder Binding
 

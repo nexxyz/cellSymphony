@@ -64,25 +64,49 @@ function writePresets(next: PresetsV2) {
 function readDefault(): DefaultV2 | null {
   const parsed = safeParseJson(localStorage.getItem(DEFAULT_KEY));
   if (parsed && typeof parsed === "object" && (parsed as any).schemaVersion === 2 && (parsed as any).payload) {
-    return parsed as DefaultV2;
+    const migrated = migrateDefaultPayload((parsed as any).payload as ConfigPayload);
+    const next: DefaultV2 = { schemaVersion: 2, payload: migrated };
+    localStorage.setItem(DEFAULT_KEY, JSON.stringify(next));
+    return next;
   }
 
   // Migrate from v1 key if present.
   const v1 = safeParseJson(localStorage.getItem(DEFAULT_KEY_V1));
   if (v1 && typeof v1 === "object" && (v1 as any).schemaVersion === 1 && (v1 as any).payload) {
-    const migrated: DefaultV2 = { schemaVersion: 2, payload: (v1 as any).payload as ConfigPayload };
+    const migrated: DefaultV2 = { schemaVersion: 2, payload: migrateDefaultPayload((v1 as any).payload as ConfigPayload) };
     localStorage.setItem(DEFAULT_KEY, JSON.stringify(migrated));
     return migrated;
   }
 
   // Back-compat: tolerate direct payload.
   if (v1 && typeof v1 === "object" && !(v1 as any).schemaVersion) {
-    const migrated: DefaultV2 = { schemaVersion: 2, payload: v1 as ConfigPayload };
+    const migrated: DefaultV2 = { schemaVersion: 2, payload: migrateDefaultPayload(v1 as ConfigPayload) };
     localStorage.setItem(DEFAULT_KEY, JSON.stringify(migrated));
     return migrated;
   }
 
   return null;
+}
+
+function migrateDefaultPayload(payload: ConfigPayload): ConfigPayload {
+  const rt: any = payload?.runtimeConfig ?? {};
+  const yPitch: any = rt?.y?.pitch ?? {};
+  if (yPitch.steps === 1) {
+    return {
+      ...payload,
+      runtimeConfig: {
+        ...payload.runtimeConfig,
+        y: {
+          ...(payload.runtimeConfig as any).y,
+          pitch: {
+            ...(payload.runtimeConfig as any).y?.pitch,
+            steps: 2
+          }
+        }
+      }
+    };
+  }
+  return payload;
 }
 
 function writeDefault(next: DefaultV2) {

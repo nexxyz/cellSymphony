@@ -51,6 +51,9 @@ export function handleMenuAction<TState>(state: PlatformState<TState>, action: a
   if (action.type === "default_save") return openConfirm("save_default", { kind: "default_save" });
   if (action.type === "default_load") return openConfirm("load_default", { kind: "default_load" });
   if (action.type === "factory_load") return openConfirm("load_factory", { kind: "factory_load" });
+  if (action.type === "synth_preset_load") {
+    return openConfirm("load_synth_preset", { kind: "synth_preset_load", slot: action.slot, presetId: action.presetId, presetLabel: action.presetLabel }, ["Cancel", "Confirm"]);
+  }
   if (action.type === "midi_select_output") {
     const nextCfg = deps.writeValue(state.runtimeConfig, "midi.outId", action.id);
     effects.push({ type: "midi_select_output", id: action.id });

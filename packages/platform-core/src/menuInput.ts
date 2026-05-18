@@ -7,6 +7,7 @@ type PressDeps<TState> = {
   handleAction: (state: PlatformState<TState>, action: any, effects: PlatformEffect[]) => PlatformState<TState>;
   readAnyValue: (state: PlatformState<TState>, key: string) => unknown;
   formatTimestamp: (nowMs: number) => string;
+  extractConfigPayload: (state: PlatformState<TState>) => any;
 };
 
 export function pressMenuInput<TState>(state: PlatformState<TState>, effects: PlatformEffect[], deps: PressDeps<TState>): PlatformState<TState> {
@@ -49,6 +50,9 @@ export function pressMenuInput<TState>(state: PlatformState<TState>, effects: Pl
     return { ...state, system: { ...state.system, nameCursor: nextCursor } };
   }
 
+  if (state.menu.editing && selected.kind === "bool" && selected.key === "autoSaveDefault" && state.runtimeConfig.autoSaveDefault) {
+    effects.push({ type: "store_save_default", payload: deps.extractConfigPayload(state) });
+  }
   return { ...state, menu: { ...state.menu, editing: !state.menu.editing } };
 }
 

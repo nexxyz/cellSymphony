@@ -64,7 +64,33 @@ pitch_oor	*	key:pitch.outOfRange	enum	Out of Range	Chooses how pitch indices bey
 pitch_scale	*	key:pitch.scale	enum	Scale	Selects scale intervals used for pitch quantization.	Use this to set harmonic language globally.
 pitch_root	*	key:pitch.root	enum	Root	Sets the tonic/root for selected scale quantization.	Changing root transposes quantized output harmonically.
 inst_group	Menu > L3: Voice > Instruments		group	Instruments	Contains the 16 instrument slots used by Sense routing.	Each slot has independent MIDI and synth parameters.
-inst_slot	Menu > L3: Voice > Instruments > Instrument *		group	Instrument Slot	Configures one instrument destination slot.	Sense trigger mappings target these slots.
+inst_midi_group	Menu > L3: Voice > Instruments > Instrument * > MIDI		group	Instrument MIDI	Per-slot external MIDI routing controls.	Enable and select channel when this slot should transmit MIDI out.
+inst_slot_1	Menu > L3: Voice > Instruments > Instrument 1		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_2	Menu > L3: Voice > Instruments > Instrument 2		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_3	Menu > L3: Voice > Instruments > Instrument 3		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_4	Menu > L3: Voice > Instruments > Instrument 4		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_5	Menu > L3: Voice > Instruments > Instrument 5		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_6	Menu > L3: Voice > Instruments > Instrument 6		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_7	Menu > L3: Voice > Instruments > Instrument 7		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_8	Menu > L3: Voice > Instruments > Instrument 8		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_9	Menu > L3: Voice > Instruments > Instrument 9		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_10	Menu > L3: Voice > Instruments > Instrument 10		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_11	Menu > L3: Voice > Instruments > Instrument 11		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_12	Menu > L3: Voice > Instruments > Instrument 12		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_13	Menu > L3: Voice > Instruments > Instrument 13		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_14	Menu > L3: Voice > Instruments > Instrument 14		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_15	Menu > L3: Voice > Instruments > Instrument 15		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_slot_16	Menu > L3: Voice > Instruments > Instrument 16		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
+inst_synth_group	Menu > L3: Voice > Instruments > Instrument * > Synth		group	Synth	Per-slot synth engine parameters.	Use Preset for fast starting points, then shape osc/amp/filter sections.
+inst_synth_osc_group	Menu > L3: Voice > Instruments > Instrument * > Synth > Oscillator		group	Oscillator	Primary tone source section for this synth slot.	Blend osc1 and osc2 to set core timbre.
+inst_synth_osc1_group	Menu > L3: Voice > Instruments > Instrument * > Synth > Oscillator > Osc 1		group	Oscillator 1	Controls first oscillator voice.	Use with Oscillator 2 for layered tone shaping.
+inst_synth_osc2_group	Menu > L3: Voice > Instruments > Instrument * > Synth > Oscillator > Osc 2		group	Oscillator 2	Controls second oscillator voice.	Detune/octave offsets create width and harmonic spread.
+inst_synth_vol_group	Menu > L3: Voice > Instruments > Instrument * > Synth > Volume		group	Volume	Amplitude and loudness contour controls.	Use Amp and Envelope to define dynamics.
+inst_synth_amp_group	Menu > L3: Voice > Instruments > Instrument * > Synth > Volume > Amp		group	Amp	Base gain and velocity response controls.	Sets how loud notes are before master volume.
+inst_synth_amp_env_group	Menu > L3: Voice > Instruments > Instrument * > Synth > Volume > Envelope		group	Amp Envelope	ADSR loudness contour for the slot.	Shapes attack, sustain body, and release tail.
+inst_synth_filter_group	Menu > L3: Voice > Instruments > Instrument * > Synth > Filter		group	Filter	Frequency-shaping section for this slot.	Use cutoff/resonance and filter envelope for movement.
+inst_synth_filter_core_group	Menu > L3: Voice > Instruments > Instrument * > Synth > Filter > Filter		group	Filter Core	Core filter parameters and tracking controls.	Determines spectral emphasis and envelope response depth.
+inst_synth_filter_env_group	Menu > L3: Voice > Instruments > Instrument * > Synth > Filter > Envelope		group	Filter Envelope	ADSR contour that modulates filter movement.	Works together with Env Amount.
 inst_type	Menu > L3: Voice > Instruments > Instrument * > Type		enum	Instrument Type	Options: synth (current), with future engine types such as sampler. synth is a two-oscillator subtractive voice with amp/filter envelopes and per-slot MIDI routing.	Use synth for fully generated tones from trigger events; when new engine types arrive, this selector swaps the editable parameter set for that slot.
 inst_note_behavior	*	key:instruments.*.noteBehavior	enum	Note Behavior	Controls retrigger versus hold behavior for this instrument slot.	Use hold for lifecycle note_off workflows and scanned-empty release.
 inst_midi_enabled	*	key:instruments.*.midi.enabled	bool	MIDI Enabled	Enables external MIDI output for this instrument slot.	Global MIDI must also be enabled in System > MIDI.
@@ -90,7 +116,7 @@ master_vol	*	key:masterVolume	number	Master Volume	Sets overall output volume sc
 presets_group	Menu > System > Presets		group	Presets	Save, load, and manage configuration snapshots.	Use defaults for boot state and library for named variants.
 default_save	System > Presets > Default > Save Default	action:default_save	action	Save Default	Stores current state as startup default payload.	Use with Auto Save when you want edits to persist automatically.
 default_load	System > Presets > Default > Load Default	action:default_load	action	Load Default	Loads the saved default payload into current state.	Replaces current runtime settings immediately.
-autosave_default	*	key:autoSaveDefault	bool	Auto Save Default	When enabled, config edits also update default storage.	Use this for always-remember-last-state behavior.
+autosave_default	*	key:autoSaveDefault	bool	Auto Save Default	When enabled, config edits also update default storage.	Turning this on and exiting the row saves the current config immediately.
 sound_group	Menu > System > Sound		group	Sound	Global note shaping applied to generated note_on events.	Useful when you want broad behavior without touching each instrument.
 note_length	*	key:sound.noteLengthMs	number	Note Length	Default note duration when note_on has no explicit length.	Hold-mode notes may bypass duration and wait for note_off.
 velocity_scale	*	key:sound.velocityScalePct	number	Velocity Scale	Scales velocity values globally after mapping.	Use to tame or boost overall dynamic output.
@@ -147,3 +173,6 @@ axis_res_enabled_y	*	key:y.filterResonance.enabled	bool	Y Resonance Enabled	Enab
 draft_name_field	*	key:system.draftName	text	Preset Name Field	Text field used for Save As and Rename preset flows.	Save/Apply actions consume this value as the target preset name.
 preset_rename_apply	Menu > System > Presets > Library > Rename > Apply	action:preset_rename_apply	action	Apply Rename	Runs rename from selected preset to entered New Name.	Requires a valid selected source preset.
 factory_load_action	Menu > System > Presets > Factory > Load Fact. Default	action:factory_load	action	Load Factory Default	Loads built-in factory default configuration.	Use this to quickly recover a known baseline state.
+synth_preset_group	Menu > L3: Voice > Instruments > Instrument * > Synth > Preset		group	Synth Preset	Preset tools for this instrument slot's synth parameters.	Use Load to replace the slot's synth block with a named preset.
+synth_preset_load_group	Menu > L3: Voice > Instruments > Instrument * > Synth > Preset > Load		group	Load Synth Preset	Lists available synth presets for this instrument slot.	Selecting a preset asks for confirmation before overwriting synth settings.
+synth_preset_load_action	Menu > L3: Voice > Instruments > Instrument * > Synth > Preset > Load > *	action:synth_preset_load	action	Load Synth Preset	Loads the chosen synth preset into this instrument slot.	A confirmation step protects against accidental overwrite.

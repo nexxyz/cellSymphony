@@ -63,16 +63,18 @@ export type ActionSpec =
   | { type: "preset_load"; name: string } | { type: "preset_delete"; name: string }
   | { type: "preset_rename_pick"; name: string } | { type: "preset_rename_apply" }
   | { type: "default_save" } | { type: "default_load" } | { type: "factory_load" }
+  | { type: "synth_preset_load"; slot: number; presetId: string; presetLabel: string }
   | { type: "midi_select_output"; id: string | null } | { type: "midi_select_input"; id: string | null }
   | { type: "midi_panic" } | { type: "behavior_action"; behaviorId: string; actionType: string };
 
 export type MenuState = { stack: number[]; cursor: number; editing: boolean };
 export type ConfigPayload = { activeBehavior: string; runtimeConfig: RuntimeConfig; mappingConfig: MappingConfig };
-export type ConfirmKind = "overwrite_preset" | "delete_preset" | "rename_preset" | "load_preset" | "load_default" | "load_factory" | "save_default" | "text_dirty_exit" | "midi_panic" | "aux_unbind" | "help_info";
+export type ConfirmKind = "overwrite_preset" | "delete_preset" | "rename_preset" | "load_preset" | "load_default" | "load_factory" | "save_default" | "load_synth_preset" | "text_dirty_exit" | "midi_panic" | "aux_unbind" | "help_info";
 type TextConfirmMode = "save" | "discard";
 export type PendingAction =
   | { kind: "preset_save"; name: string } | { kind: "preset_delete"; name: string } | { kind: "preset_load"; name: string }
   | { kind: "preset_rename"; from: string; to: string } | { kind: "default_save" } | { kind: "default_load" } | { kind: "factory_load" } | { kind: "midi_panic" }
+  | { kind: "synth_preset_load"; slot: number; presetId: string; presetLabel: string }
   | { kind: "aux_unbind"; encoderId: string } | { kind: "help_info"; title: string; lines: string[] }
   | { kind: "text_dirty_exit"; key: string; original: string; saveAction?: ActionSpec; backAfter: boolean; mode: TextConfirmMode };
 export type ConfirmState = { kind: ConfirmKind; action: PendingAction; cursor: number; options: string[]; scroll: number };

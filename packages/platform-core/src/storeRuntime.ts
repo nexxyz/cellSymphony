@@ -27,13 +27,25 @@ export function applyConfigPayload<TState>(
   next.runtimeConfig = safe.runtimeConfig;
   next.mappingConfig = safe.mappingConfig;
   const resolved = deps.resolveBehavior(safe.activeBehavior);
-  if (resolved.id !== behavior.id || resolved.id !== state.activeBehavior) {
-    next.behaviorState = resolved.init({});
+  const behaviorCfgSource = ((safe.runtimeConfig as any).behaviorConfig?.[resolved.id] ?? {}) as Record<string, unknown>;
+  const behaviorCfg: Record<string, unknown> = {};
+  if (resolved.configMenu) {
+    for (const item of resolved.configMenu(resolved.init({}))) {
+      const v = behaviorCfgSource[item.key];
+      if (v !== undefined) behaviorCfg[item.key] = v;
+    }
   }
+  next.behaviorState = resolved.init(behaviorCfg);
   next.scanPulseAccumulator = 0;
   next.algorithmPulseAccumulator = 0;
   next.ppqnPulseRemainder = 0;
   next.scanIndex = 0;
+  next.system = {
+    ...next.system,
+    heldNotes: [],
+    pendingResync: false,
+    externalPpqnPulse: 0
+  };
   return next as PlatformState<TState>;
 }
 

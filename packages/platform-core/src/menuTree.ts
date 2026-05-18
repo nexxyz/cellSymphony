@@ -1,5 +1,6 @@
 import { listBehaviorIds, type BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { MenuNode, PlatformState } from "./index";
+import { SYNTH_PRESETS } from "./synthPresets";
 
 type MenuTreeDeps<TState> = {
   resolveBehavior: (id: string) => BehaviorEngine<any, any>;
@@ -103,6 +104,21 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
                     kind: "group",
                     label: "Synth",
                     children: [
+                      {
+                        kind: "group",
+                        label: "Preset",
+                        children: [
+                          {
+                            kind: "group",
+                            label: "Load",
+                            children: SYNTH_PRESETS.map((preset) => ({
+                              kind: "action",
+                              label: preset.label,
+                              action: { type: "synth_preset_load", slot: idx, presetId: preset.id, presetLabel: preset.label }
+                            }))
+                          }
+                        ]
+                      },
                       {
                         kind: "group",
                         label: "Oscillator",

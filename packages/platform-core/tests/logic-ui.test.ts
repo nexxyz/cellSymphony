@@ -135,11 +135,11 @@ test("additive pitch uses shared starting/lowest/highest", () => {
   }
 });
 
-test("default note mapping range is C2 to C6 with C3 start", () => {
+test("default note mapping range is C2 to D5 with C2 start", () => {
   const state = createInitialState(mockBehavior);
   assert.equal(state.runtimeConfig.pitch.lowestNote, 36);
-  assert.equal(state.runtimeConfig.pitch.startingNote, 48);
-  assert.equal(state.runtimeConfig.pitch.highestNote, 84);
+  assert.equal(state.runtimeConfig.pitch.startingNote, 36);
+  assert.equal(state.runtimeConfig.pitch.highestNote, 74);
 });
 
 test("config save default requires confirmation before emitting effect", () => {

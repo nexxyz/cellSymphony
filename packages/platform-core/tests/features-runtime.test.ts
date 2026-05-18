@@ -39,6 +39,7 @@ const mockBehavior: BehaviorEngine<MockState, unknown> = {
   deserialize: (data) => data as MockState
 };
 
+
 function makeState() {
   const s = createInitialState(mockBehavior);
   s.system.oledMode = "normal";
@@ -91,6 +92,39 @@ test("applyConfigPayload reinitializes behavior state when behavior changes", ()
 
   const restored = applyConfigPayload(state, payload, lifeBehavior);
   assert.equal(restored.activeBehavior, "sequencer");
+});
+
+test("applyConfigPayload reinitializes behavior state for same behavior id using saved behaviorConfig", () => {
+  let state = createInitialState(lifeBehavior);
+  const payload = extractConfigPayload(state);
+  payload.activeBehavior = "life";
+  (payload.runtimeConfig.behaviorConfig as any).life = { randomCellsPerTick: 11, randomTickInterval: 2 };
+
+  const restored = applyConfigPayload(state, payload, lifeBehavior);
+  assert.equal(restored.activeBehavior, "life");
+  assert.equal((restored.behaviorState as any).randomCellsPerTick, 11);
+  assert.equal((restored.behaviorState as any).randomTickInterval, 2);
+});
+
+test("applyConfigPayload clears transient runtime state on load", () => {
+  let state = makeState();
+  state.scanPulseAccumulator = 99;
+  state.algorithmPulseAccumulator = 77;
+  state.ppqnPulseRemainder = 0.5;
+  state.scanIndex = 12;
+  state.system.heldNotes = ["0:60"];
+  state.system.pendingResync = true;
+  state.system.externalPpqnPulse = 42;
+  const payload = extractConfigPayload(state);
+
+  const restored = applyConfigPayload(state, payload, mockBehavior);
+  assert.equal(restored.scanPulseAccumulator, 0);
+  assert.equal(restored.algorithmPulseAccumulator, 0);
+  assert.equal(restored.ppqnPulseRemainder, 0);
+  assert.equal(restored.scanIndex, 0);
+  assert.deepEqual(restored.system.heldNotes, []);
+  assert.equal(restored.system.pendingResync, false);
+  assert.equal(restored.system.externalPpqnPulse, 0);
 });
 
 test("algorithmStepUnit is included in config payload", () => {
@@ -185,6 +219,36 @@ test("stable target is separate from activate and deactivate", () => {
   assert.equal(state.mappingConfig.activate.channel, 0);
   assert.equal(state.mappingConfig.stable.channel, 2);
   assert.notEqual(state.mappingConfig.activate.channel, state.mappingConfig.stable.channel);
+});
+
+test("loading synth preset from Voice menu requires confirm and applies to target slot", () => {
+  let state = makeState();
+  const beforeGain = (state.runtimeConfig as any).instruments?.[0]?.synth?.amp?.gainPct;
+
+  state = selectLabel(state, "L3: Voice");
+  state = press(state).state;
+  state = selectLabel(state, "Instruments");
+  state = press(state).state;
+  state = selectLabel(state, "Instrument 1");
+  state = press(state).state;
+  state = selectLabel(state, "Synth");
+  state = press(state).state;
+  state = selectLabel(state, "Preset");
+  state = press(state).state;
+  state = selectLabel(state, "Load");
+  state = press(state).state;
+  state = selectLabel(state, "Soft Pad");
+  state = press(state).state;
+
+  assert.equal(state.system.confirm?.kind, "load_synth_preset");
+
+  state = routeInput(state, { type: "encoder_turn", delta: 1 } as DeviceInput, mockBehavior).state;
+  state = routeInput(state, { type: "encoder_press" } as DeviceInput, mockBehavior).state;
+
+  assert.equal(state.system.confirm, null);
+  const afterGain = (state.runtimeConfig as any).instruments?.[0]?.synth?.amp?.gainPct;
+  assert.notEqual(afterGain, beforeGain);
+  assert.equal(afterGain, 72);
 });
 
 // ─── Spacer skipping ──────────────────────────────────────────────

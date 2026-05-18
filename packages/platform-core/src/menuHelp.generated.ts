@@ -595,13 +595,247 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "Each slot has independent MIDI and synth parameters."
   },
   {
-    "id": "inst_slot",
-    "path": "Menu > L3: Voice > Instruments > Instrument *",
+    "id": "inst_midi_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > MIDI",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument MIDI",
+    "line1": "Per-slot external MIDI routing controls.",
+    "line2": "Enable and select channel when this slot should transmit MIDI out."
+  },
+  {
+    "id": "inst_slot_1",
+    "path": "Menu > L3: Voice > Instruments > Instrument 1",
     "key": "",
     "kind": "group",
     "title": "Instrument Slot",
-    "line1": "Configures one instrument destination slot.",
-    "line2": "Sense trigger mappings target these slots."
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_2",
+    "path": "Menu > L3: Voice > Instruments > Instrument 2",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_3",
+    "path": "Menu > L3: Voice > Instruments > Instrument 3",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_4",
+    "path": "Menu > L3: Voice > Instruments > Instrument 4",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_5",
+    "path": "Menu > L3: Voice > Instruments > Instrument 5",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_6",
+    "path": "Menu > L3: Voice > Instruments > Instrument 6",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_7",
+    "path": "Menu > L3: Voice > Instruments > Instrument 7",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_8",
+    "path": "Menu > L3: Voice > Instruments > Instrument 8",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_9",
+    "path": "Menu > L3: Voice > Instruments > Instrument 9",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_10",
+    "path": "Menu > L3: Voice > Instruments > Instrument 10",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_11",
+    "path": "Menu > L3: Voice > Instruments > Instrument 11",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_12",
+    "path": "Menu > L3: Voice > Instruments > Instrument 12",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_13",
+    "path": "Menu > L3: Voice > Instruments > Instrument 13",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_14",
+    "path": "Menu > L3: Voice > Instruments > Instrument 14",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_15",
+    "path": "Menu > L3: Voice > Instruments > Instrument 15",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_slot_16",
+    "path": "Menu > L3: Voice > Instruments > Instrument 16",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Slot",
+    "line1": "Configures one destination instrument slot.",
+    "line2": "Sense mappings route trigger actions into these slots."
+  },
+  {
+    "id": "inst_synth_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth",
+    "key": "",
+    "kind": "group",
+    "title": "Synth",
+    "line1": "Per-slot synth engine parameters.",
+    "line2": "Use Preset for fast starting points, then shape osc/amp/filter sections."
+  },
+  {
+    "id": "inst_synth_osc_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth > Oscillator",
+    "key": "",
+    "kind": "group",
+    "title": "Oscillator",
+    "line1": "Primary tone source section for this synth slot.",
+    "line2": "Blend osc1 and osc2 to set core timbre."
+  },
+  {
+    "id": "inst_synth_osc1_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth > Oscillator > Osc 1",
+    "key": "",
+    "kind": "group",
+    "title": "Oscillator 1",
+    "line1": "Controls first oscillator voice.",
+    "line2": "Use with Oscillator 2 for layered tone shaping."
+  },
+  {
+    "id": "inst_synth_osc2_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth > Oscillator > Osc 2",
+    "key": "",
+    "kind": "group",
+    "title": "Oscillator 2",
+    "line1": "Controls second oscillator voice.",
+    "line2": "Detune/octave offsets create width and harmonic spread."
+  },
+  {
+    "id": "inst_synth_vol_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth > Volume",
+    "key": "",
+    "kind": "group",
+    "title": "Volume",
+    "line1": "Amplitude and loudness contour controls.",
+    "line2": "Use Amp and Envelope to define dynamics."
+  },
+  {
+    "id": "inst_synth_amp_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth > Volume > Amp",
+    "key": "",
+    "kind": "group",
+    "title": "Amp",
+    "line1": "Base gain and velocity response controls.",
+    "line2": "Sets how loud notes are before master volume."
+  },
+  {
+    "id": "inst_synth_amp_env_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth > Volume > Envelope",
+    "key": "",
+    "kind": "group",
+    "title": "Amp Envelope",
+    "line1": "ADSR loudness contour for the slot.",
+    "line2": "Shapes attack, sustain body, and release tail."
+  },
+  {
+    "id": "inst_synth_filter_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth > Filter",
+    "key": "",
+    "kind": "group",
+    "title": "Filter",
+    "line1": "Frequency-shaping section for this slot.",
+    "line2": "Use cutoff/resonance and filter envelope for movement."
+  },
+  {
+    "id": "inst_synth_filter_core_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth > Filter > Filter",
+    "key": "",
+    "kind": "group",
+    "title": "Filter Core",
+    "line1": "Core filter parameters and tracking controls.",
+    "line2": "Determines spectral emphasis and envelope response depth."
+  },
+  {
+    "id": "inst_synth_filter_env_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth > Filter > Envelope",
+    "key": "",
+    "kind": "group",
+    "title": "Filter Envelope",
+    "line1": "ADSR contour that modulates filter movement.",
+    "line2": "Works together with Env Amount."
   },
   {
     "id": "inst_type",
@@ -835,7 +1069,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "kind": "bool",
     "title": "Auto Save Default",
     "line1": "When enabled, config edits also update default storage.",
-    "line2": "Use this for always-remember-last-state behavior."
+    "line2": "Turning this on and exiting the row saves the current config immediately."
   },
   {
     "id": "sound_group",
@@ -1340,5 +1574,32 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "title": "Load Factory Default",
     "line1": "Loads built-in factory default configuration.",
     "line2": "Use this to quickly recover a known baseline state."
+  },
+  {
+    "id": "synth_preset_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth > Preset",
+    "key": "",
+    "kind": "group",
+    "title": "Synth Preset",
+    "line1": "Preset tools for this instrument slot's synth parameters.",
+    "line2": "Use Load to replace the slot's synth block with a named preset."
+  },
+  {
+    "id": "synth_preset_load_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth > Preset > Load",
+    "key": "",
+    "kind": "group",
+    "title": "Load Synth Preset",
+    "line1": "Lists available synth presets for this instrument slot.",
+    "line2": "Selecting a preset asks for confirmation before overwriting synth settings."
+  },
+  {
+    "id": "synth_preset_load_action",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Synth > Preset > Load > *",
+    "key": "action:synth_preset_load",
+    "kind": "action",
+    "title": "Load Synth Preset",
+    "line1": "Loads the chosen synth preset into this instrument slot.",
+    "line2": "A confirmation step protects against accidental overwrite."
   }
 ];

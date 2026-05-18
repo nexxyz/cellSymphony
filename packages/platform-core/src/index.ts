@@ -33,6 +33,7 @@ import { currentMenuView as renderCurrentMenuView, locate, visibleChildren } fro
 import { pressMenuInput, turnMenuInput } from "./menuInput";
 import { applyAuxUnbindChoice, assignAuxEncoder, pressAuxEncoder, turnAuxEncoder } from "./auxInput";
 import { handleMenuAction } from "./actions";
+import { getSynthPreset } from "./synthPresets";
 import {
   factoryPayload,
   formatTimestamp,
@@ -192,6 +193,24 @@ function executeConfirmed<TState>(
   if (action.kind === "midi_panic") {
     effects.push({ type: "midi_panic" });
     return state;
+  }
+  if (action.kind === "synth_preset_load") {
+    const preset = getSynthPreset(action.presetId as any);
+    if (!preset) return state;
+    const instruments = Array.isArray(state.runtimeConfig.instruments) ? state.runtimeConfig.instruments.slice() : [];
+    const slot = Math.max(0, Math.min(15, action.slot | 0));
+    const current = instruments[slot];
+    if (!current) return state;
+    instruments[slot] = { ...current, synth: structuredClone(preset.synth) };
+    const next = {
+      ...state,
+      runtimeConfig: { ...state.runtimeConfig, instruments },
+      system: { ...state.system, toast: { message: `Loaded synth: ${preset.label}`, untilMs: Date.now() + 2000 } }
+    };
+    if (next.runtimeConfig.autoSaveDefault) {
+      effects.push({ type: "store_save_default", payload: extractConfigPayload(next) });
+    }
+    return next;
   }
   if (action.kind === "text_dirty_exit") {
     // Save path for a text exit prompt.
@@ -393,7 +412,8 @@ function pressMenu<TState>(state: PlatformState<TState>, effects: PlatformEffect
     menuTree,
     handleAction,
     readAnyValue,
-    formatTimestamp
+    formatTimestamp,
+    extractConfigPayload
   });
 }
 
