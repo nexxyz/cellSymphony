@@ -260,7 +260,7 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
     // Reserve the rightmost area for transport indicator.
     const maxChars = 17; // 17*6 + xStart(4) ~= 106px
     const msg = state.toast.slice(0, maxChars);
-    drawText(buf, 4, OLED_H - 10, msg.padEnd(maxChars, " ").slice(0, maxChars), fg, null);
+    drawText(buf, { x: 4, y: OLED_H - 10 }, msg.padEnd(maxChars, " ").slice(0, maxChars), fg, null);
   }
 
   return { width: 128, height: 128, format: "rgb565be", pixels: buf };

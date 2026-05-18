@@ -1,0 +1,110 @@
+import type { ActionSpec, MenuNode, PlatformState } from "./index";
+
+export const COLOR_LIFE = 0x8ED1;
+export const COLOR_SENSE = 0x8D5C;
+export const COLOR_VOICE = 0xC59B;
+export const COLOR_SEPIA = 0xB50D;
+
+export function abbreviatePath(path: string): string {
+  const map: Record<string, string> = {
+    Menu: "MENU",
+    L1: "L1",
+    L2: "L2",
+    L3: "L3",
+    Playback: "PLAY",
+    System: "SYS"
+  };
+  if (!path || path === "Menu") return "MENU";
+  return path
+    .split("/")
+    .map((part) => map[part] ?? part)
+    .join("/");
+}
+
+export function getSectionColorFromPath(path: string): number {
+  if (path.startsWith("L1") || path.includes("L1:")) return COLOR_LIFE;
+  if (path.startsWith("L2") || path.includes("L2:")) return COLOR_SENSE;
+  if (path.startsWith("L3") || path.includes("L3:")) return COLOR_VOICE;
+  if (path.includes("Playback") || path.includes("PLAY")) return COLOR_SEPIA;
+  if (path.includes("System") || path.includes("SYS")) return COLOR_SEPIA;
+  if (path.includes("Menu") || path.includes("MENU")) return COLOR_SEPIA;
+  return 0xffff;
+}
+
+export function getSectionColor(nodeLabel: string): number {
+  if (nodeLabel.startsWith("L1:") || nodeLabel === "L1: Life") return COLOR_LIFE;
+  if (nodeLabel.startsWith("L2:") || nodeLabel === "L2: Sense") return COLOR_SENSE;
+  if (nodeLabel.startsWith("L3:") || nodeLabel === "L3: Voice") return COLOR_VOICE;
+  if (nodeLabel === "Playback") return COLOR_SEPIA;
+  if (nodeLabel === "System") return COLOR_SEPIA;
+  return 0xffff;
+}
+
+export function isSpawnActionType(actionType: string): boolean {
+  return actionType === "spawnRandom"
+    || actionType === "seedRandom"
+    || actionType === "spawnAnt"
+    || actionType === "addBall"
+    || actionType === "spawnPulse"
+    || actionType === "dropNow"
+    || actionType === "seedCluster"
+    || actionType === "spawnGlider";
+}
+
+export function spawnActionTypeForBehavior(behaviorId: string): string | null {
+  if (behaviorId === "life") return "spawnRandom";
+  if (behaviorId === "brain") return "seedRandom";
+  if (behaviorId === "ant") return "spawnAnt";
+  if (behaviorId === "bounce") return "addBall";
+  if (behaviorId === "pulse") return "spawnPulse";
+  if (behaviorId === "raindrops") return "dropNow";
+  if (behaviorId === "dla") return "seedCluster";
+  if (behaviorId === "glider") return "spawnGlider";
+  return null;
+}
+
+function isSharedActionSpec(action: ActionSpec): boolean {
+  return action.type === "behavior_action" && isSpawnActionType(action.actionType);
+}
+
+export function formatActionMenuLabel(item: Extract<MenuNode, { kind: "action" }>): string {
+  const shared = isSharedActionSpec(item.action);
+  return `!${item.label}${shared ? " [S]" : ""}`;
+}
+
+function actionDetailLine<TState>(state: PlatformState<TState>, item: Extract<MenuNode, { kind: "action" }>): string | null {
+  if (item.action.type === "preset_save_current") {
+    return state.system.currentPresetName ?? "(none loaded)";
+  }
+  return null;
+}
+
+export function formatMenuItemLines<TState>(
+  item: MenuNode,
+  state: PlatformState<TState>,
+  selected: boolean,
+  editing: boolean,
+  fitText: (text: string) => string,
+  readAnyValue: (state: PlatformState<TState>, key: string) => unknown,
+  formatDisplayValue: (key: string, value: unknown) => string
+): string[] {
+  if (item.kind === "spacer") return [""];
+  const mark = selected ? "@@" : "";
+  if (item.kind === "group") return [`${mark}> ${item.label}`];
+  if (item.kind === "action") {
+    if (selected) {
+      const detail = actionDetailLine(state, item);
+      if (detail) return [`${mark} ${formatActionMenuLabel(item)}`, `${mark}  ${fitText(detail)}`];
+    }
+    return [`${mark} ${formatActionMenuLabel(item)}`];
+  }
+  if (item.kind === "text") {
+    const value = String(readAnyValue(state, item.key) ?? "");
+    const display = value.length === 0 ? "(empty)" : value;
+    if (selected) return [`${mark} ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitText(display)}`];
+    return [`  ${item.label}`];
+  }
+  const value = formatDisplayValue(item.key, readAnyValue(state, item.key));
+  if (selected) return [`${mark} ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitText(value)}`];
+  return [`  ${item.label}`];
+}

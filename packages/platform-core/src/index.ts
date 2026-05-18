@@ -29,6 +29,14 @@ import { loadDefaultMappingConfig, mapIntentsToMusicalEvents, type MappingConfig
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import { resolveMenuHelp, type HelpTarget } from "./menuHelp";
 import { menuHelpTargetFromNode } from "./menuHelpTargets";
+import {
+  abbreviatePath,
+  formatMenuItemLines,
+  getSectionColor,
+  getSectionColorFromPath,
+  isSpawnActionType,
+  spawnActionTypeForBehavior
+} from "./menuPresentation";
 
 // Register available behaviors
 registerBehavior(sequencerBehavior);
@@ -134,7 +142,7 @@ export type MenuNode =
   | { kind: "spacer" }
 ;
 
-type ActionSpec =
+export type ActionSpec =
   | { type: "refresh_presets" }
   | { type: "preset_save_current" }
   | { type: "preset_save" }
@@ -1440,12 +1448,12 @@ function currentMenuView<TState>(state: PlatformState<TState>): { path: string; 
   const bodyBudget = Math.max(1, OLED_TEXT_LINES - 1);
   let start = cursor;
   let end = cursor + 1;
-  let rowCount = formatMenuItemLines(siblings[cursor], state, true, menu.editing).length;
+  let rowCount = formatMenuItemLines(siblings[cursor], state, true, menu.editing, fitOledText, readAnyValue, formatDisplayValue).length;
 
   while (rowCount < bodyBudget && (start > 0 || end < siblings.length)) {
     let grew = false;
     if (start > 0) {
-      const prevRows = formatMenuItemLines(siblings[start - 1], state, false, false).length;
+      const prevRows = formatMenuItemLines(siblings[start - 1], state, false, false, fitOledText, readAnyValue, formatDisplayValue).length;
       if (rowCount + prevRows <= bodyBudget || end >= siblings.length) {
         start -= 1;
         rowCount += prevRows;
@@ -1454,7 +1462,7 @@ function currentMenuView<TState>(state: PlatformState<TState>): { path: string; 
     }
     if (rowCount >= bodyBudget) break;
     if (end < siblings.length) {
-      const nextRows = formatMenuItemLines(siblings[end], state, false, false).length;
+      const nextRows = formatMenuItemLines(siblings[end], state, false, false, fitOledText, readAnyValue, formatDisplayValue).length;
       if (rowCount + nextRows <= bodyBudget || start === 0) {
         end += 1;
         rowCount += nextRows;
@@ -1471,7 +1479,7 @@ function currentMenuView<TState>(state: PlatformState<TState>): { path: string; 
   for (let i = start; i < end; i += 1) {
     const item = siblings[i];
     const isSelected = i === cursor && menu.editing;
-    const itemLines = formatMenuItemLines(item, state, i === cursor, isSelected);
+    const itemLines = formatMenuItemLines(item, state, i === cursor, isSelected, fitOledText, readAnyValue, formatDisplayValue);
 
     // Skip spacers - they add empty lines
     if (item.kind === "spacer") {
@@ -1576,111 +1584,6 @@ function applyAuxUnbindChoice<TState>(state: PlatformState<TState>, encoderId: s
   return setAuxToast(nextState, "Unbound");
 }
 
-function abbreviatePath(path: string): string {
-  const map: Record<string, string> = {
-    Menu: "MENU",
-    L1: "L1",
-    L2: "L2",
-    L3: "L3",
-    Playback: "PLAY",
-    System: "SYS"
-  };
-  if (!path || path === "Menu") return "MENU";
-  return path
-    .split("/")
-    .map((part) => map[part] ?? part)
-    .join("/");
-}
-
-// Pastel colors for menu sections (Plants + Water -> Flowers)
-const COLOR_LIFE = 0x8ED1;      // Pastel Green (R=140, G=220, B=140)
-const COLOR_SENSE = 0x8D5C;     // Pastel Blue (R=140, G=170, B=230)
-const COLOR_VOICE = 0xC59B;     // Pastel Lavender (R=200, G=180, B=220)
-const COLOR_SEPIA = 0xB50D;     // Sepia (R=180, G=160, B=110)
-
-function getSectionColorFromPath(path: string): number {
-  if (path.startsWith("L1") || path.includes("L1:")) return COLOR_LIFE;
-  if (path.startsWith("L2") || path.includes("L2:")) return COLOR_SENSE;
-  if (path.startsWith("L3") || path.includes("L3:")) return COLOR_VOICE;
-  // Sepia section (handles "Playback", "PLAY", "System", "SYS", "Menu", "MENU")
-  if (path.includes("Playback") || path.includes("PLAY")) return COLOR_SEPIA;
-  if (path.includes("System") || path.includes("SYS")) return COLOR_SEPIA;
-  if (path.includes("Menu") || path.includes("MENU")) return COLOR_SEPIA;
-  return 0xffff; // White default
-}
-
-function getSectionColor(nodeLabel: string): number {
-  if (nodeLabel.startsWith("L1:") || nodeLabel === "L1: Life") return COLOR_LIFE;
-  if (nodeLabel.startsWith("L2:") || nodeLabel === "L2: Sense") return COLOR_SENSE;
-  if (nodeLabel.startsWith("L3:") || nodeLabel === "L3: Voice") return COLOR_VOICE;
-  if (nodeLabel === "Playback") return COLOR_SEPIA;
-  if (nodeLabel === "System") return COLOR_SEPIA;
-  return 0xffff; // White default
-}
-
-function formatMenuItemLines<TState>(item: MenuNode, state: PlatformState<TState>, selected: boolean, editing: boolean): string[] {
-  if (item.kind === "spacer") {
-    return [""]; // Spacer = empty line
-  }
-  const mark = selected ? "@@" : "";
-  if (item.kind === "group") {
-    return [`${mark}> ${item.label}`];
-  }
-  if (item.kind === "action") {
-    if (selected) {
-      const detail = actionDetailLine(state, item);
-      if (detail) {
-        return [`${mark} ${formatActionMenuLabel(item)}`, `${mark}  ${fitOledText(detail)}`];
-      }
-    }
-    return [`${mark} ${formatActionMenuLabel(item)}`];
-  }
-  if (item.kind === "text") {
-    const value = String(readAnyValue(state, item.key) ?? "");
-    const display = value.length === 0 ? "(empty)" : value;
-    if (selected) {
-      return [`${mark} ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitOledText(display)}`];
-    }
-    return [`  ${item.label}`];
-  }
-  const value = formatDisplayValue(item.key, readAnyValue(state, item.key));
-  if (selected) {
-    return [`${mark} ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitOledText(value)}`];
-  }
-  return [`  ${item.label}`];
-}
-
-function formatActionMenuLabel(item: Extract<MenuNode, { kind: "action" }>): string {
-  const shared = isSharedActionSpec(item.action);
-  return `!${item.label}${shared ? " [S]" : ""}`;
-}
-
-function isSharedActionSpec(action: ActionSpec): boolean {
-  return action.type === "behavior_action" && isSpawnActionType(action.actionType);
-}
-
-function isSpawnActionType(actionType: string): boolean {
-  return actionType === "spawnRandom"
-    || actionType === "seedRandom"
-    || actionType === "spawnAnt"
-    || actionType === "addBall"
-    || actionType === "spawnPulse"
-    || actionType === "dropNow"
-    || actionType === "seedCluster"
-    || actionType === "spawnGlider";
-}
-
-function spawnActionTypeForBehavior(behaviorId: string): string | null {
-  if (behaviorId === "life") return "spawnRandom";
-  if (behaviorId === "brain") return "seedRandom";
-  if (behaviorId === "ant") return "spawnAnt";
-  if (behaviorId === "bounce") return "addBall";
-  if (behaviorId === "pulse") return "spawnPulse";
-  if (behaviorId === "raindrops") return "dropNow";
-  if (behaviorId === "dla") return "seedCluster";
-  if (behaviorId === "glider") return "spawnGlider";
-  return null;
-}
 
 function locate<TState>(root: MenuNode, state: PlatformState<TState>, menu: MenuState): { node: MenuNode; siblings: MenuNode[]; path: string } {
   let node = root;
@@ -2363,13 +2266,6 @@ function fitOledMenuLine(line: string): string {
     return `@@> ${fitOledTextToWidth(line.slice(4), OLED_TEXT_COLUMNS - 2)}`;
   }
   return `@@${fitOledTextToWidth(line.slice(2), OLED_TEXT_COLUMNS)}`;
-}
-
-function actionDetailLine<TState>(state: PlatformState<TState>, item: Extract<MenuNode, { kind: "action" }>): string | null {
-  if (item.action.type === "preset_save_current") {
-    return state.system.currentPresetName ?? "(none loaded)";
-  }
-  return null;
 }
 
 export function enumerateMenuHelpTargets<TState>(state: PlatformState<TState>): HelpTarget[] {
