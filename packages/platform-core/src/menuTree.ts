@@ -12,6 +12,7 @@ type MenuTreeDeps<TState> = {
 
 export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTreeDeps<TState>): MenuNode {
   const activeEngine = deps.resolveBehavior(state.runtimeConfig.activeBehavior);
+  const instrumentSlotOptions = Array.from({ length: 16 }, (_, i) => String(i));
   const behaviorConfigNodes: MenuNode[] = [];
   if (activeEngine.configMenu) {
     const items = activeEngine.configMenu(state.behaviorState as any);
@@ -42,8 +43,23 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
           { kind: "enum", label: "Scan Unit", key: "scanUnit", options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c) => c.scanMode === "scanning" },
           { kind: "enum", label: "Scan Direction", key: "scanDirection", options: ["forward", "reverse"], visible: (c) => c.scanMode === "scanning" },
           { kind: "bool", label: "Event Triggers", key: "eventEnabled" },
-          { kind: "enum", label: "Event Pattern", key: "eventParity", options: ["none", "activate_even_deactivate_odd"] },
           { kind: "bool", label: "State Notes", key: "stateEnabled" },
+          {
+            kind: "group",
+            label: "Instrument Targets",
+            children: [
+              { kind: "enum", label: "Activate Action", key: "mapping.activate.action", options: ["none", "note_on", "note_off"] },
+              { kind: "enum", label: "Activate Instrument", key: "mapping.activate.channel", options: instrumentSlotOptions },
+              { kind: "enum", label: "Stable Action", key: "mapping.stable.action", options: ["none", "note_on", "note_off"] },
+              { kind: "enum", label: "Stable Instrument", key: "mapping.stable.channel", options: instrumentSlotOptions },
+              { kind: "enum", label: "Deactivate Action", key: "mapping.deactivate.action", options: ["none", "note_on", "note_off"] },
+              { kind: "enum", label: "Deactivate Instrument", key: "mapping.deactivate.channel", options: instrumentSlotOptions },
+              { kind: "enum", label: "Scanned Action", key: "mapping.scanned.action", options: ["none", "note_on", "note_off"] },
+              { kind: "enum", label: "Scanned Instrument", key: "mapping.scanned.channel", options: instrumentSlotOptions },
+              { kind: "enum", label: "Scanned Empty Action", key: "mapping.scanned_empty.action", options: ["none", "note_on", "note_off"] },
+              { kind: "enum", label: "Scanned Empty Instrument", key: "mapping.scanned_empty.channel", options: instrumentSlotOptions }
+            ]
+          },
           deps.axisGroup("X Axis", "x", 1),
           deps.axisGroup("Y Axis", "y", 8)
         ]
@@ -64,10 +80,114 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
               { kind: "enum", label: "Root", key: "pitch.root", options: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] }
             ]
           },
-          { kind: "enum", label: "Activate Target", key: "mapping.activate.channel", options: ["0", "1", "2", "3"] },
-          { kind: "enum", label: "Stable Target", key: "mapping.stable.channel", options: ["0", "1", "2", "3"] },
-          { kind: "enum", label: "Deactivate Target", key: "mapping.deactivate.channel", options: ["0", "1", "2", "3"] },
-          { kind: "enum", label: "Scanned Target", key: "mapping.scanned.channel", options: ["0", "1", "2", "3"] },
+          {
+            kind: "group",
+            label: "Instruments",
+            children: Array.from({ length: 16 }, (_, idx) => {
+              const prefix = `instruments.${idx}`;
+              return {
+                kind: "group",
+                label: `Instrument ${idx + 1}`,
+                children: [
+                  { kind: "enum", label: "Type", key: `${prefix}.type`, options: ["synth"] },
+                  { kind: "enum", label: "Note Behavior", key: `${prefix}.noteBehavior`, options: ["oneshot", "hold"] },
+                  {
+                    kind: "group",
+                    label: "MIDI",
+                    children: [
+                      { kind: "bool", label: "Enabled", key: `${prefix}.midi.enabled` },
+                      { kind: "number", label: "Channel", key: `${prefix}.midi.channel`, min: 0, max: 15, step: 1 }
+                    ]
+                  },
+                  {
+                    kind: "group",
+                    label: "Synth",
+                    children: [
+                      {
+                        kind: "group",
+                        label: "Oscillator",
+                        children: [
+                          {
+                            kind: "group",
+                            label: "Osc 1",
+                            children: [
+                              { kind: "enum", label: "Wave", key: `${prefix}.synth.osc1.waveform`, options: ["sine", "triangle", "saw", "square", "pulse"] },
+                              { kind: "number", label: "Level", key: `${prefix}.synth.osc1.levelPct`, min: 0, max: 100, step: 1 },
+                              { kind: "number", label: "Octave", key: `${prefix}.synth.osc1.octave`, min: -2, max: 2, step: 1 },
+                              { kind: "number", label: "Detune", key: `${prefix}.synth.osc1.detuneCents`, min: -50, max: 50, step: 1 },
+                              { kind: "number", label: "Pulse Width", key: `${prefix}.synth.osc1.pulseWidthPct`, min: 5, max: 95, step: 1 }
+                            ]
+                          },
+                          {
+                            kind: "group",
+                            label: "Osc 2",
+                            children: [
+                              { kind: "enum", label: "Wave", key: `${prefix}.synth.osc2.waveform`, options: ["sine", "triangle", "saw", "square", "pulse"] },
+                              { kind: "number", label: "Level", key: `${prefix}.synth.osc2.levelPct`, min: 0, max: 100, step: 1 },
+                              { kind: "number", label: "Octave", key: `${prefix}.synth.osc2.octave`, min: -2, max: 2, step: 1 },
+                              { kind: "number", label: "Detune", key: `${prefix}.synth.osc2.detuneCents`, min: -50, max: 50, step: 1 },
+                              { kind: "number", label: "Pulse Width", key: `${prefix}.synth.osc2.pulseWidthPct`, min: 5, max: 95, step: 1 }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        kind: "group",
+                        label: "Volume",
+                        children: [
+                          {
+                            kind: "group",
+                            label: "Amp",
+                            children: [
+                              { kind: "number", label: "Gain", key: `${prefix}.synth.amp.gainPct`, min: 0, max: 100, step: 1 },
+                              { kind: "number", label: "Vel Sens", key: `${prefix}.synth.amp.velocitySensitivityPct`, min: 0, max: 100, step: 1 }
+                            ]
+                          },
+                          {
+                            kind: "group",
+                            label: "Envelope",
+                            children: [
+                              { kind: "number", label: "Attack", key: `${prefix}.synth.ampEnv.attackMs`, min: 0, max: 5000, step: 5 },
+                              { kind: "number", label: "Decay", key: `${prefix}.synth.ampEnv.decayMs`, min: 0, max: 5000, step: 5 },
+                              { kind: "number", label: "Sustain", key: `${prefix}.synth.ampEnv.sustainPct`, min: 0, max: 100, step: 1 },
+                              { kind: "number", label: "Release", key: `${prefix}.synth.ampEnv.releaseMs`, min: 0, max: 8000, step: 5 }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        kind: "group",
+                        label: "Filter",
+                        children: [
+                          {
+                            kind: "group",
+                            label: "Filter",
+                            children: [
+                              { kind: "enum", label: "Type", key: `${prefix}.synth.filter.type`, options: ["lowpass", "highpass", "bandpass", "notch"] },
+                              { kind: "number", label: "Cutoff", key: `${prefix}.synth.filter.cutoffHz`, min: 80, max: 16000, step: 20 },
+                              { kind: "number", label: "Res", key: `${prefix}.synth.filter.resonance`, min: 0, max: 100, step: 1 },
+                              { kind: "number", label: "Env Amt", key: `${prefix}.synth.filter.envAmountPct`, min: -100, max: 100, step: 1 },
+                              { kind: "number", label: "Key Track", key: `${prefix}.synth.filter.keyTrackingPct`, min: 0, max: 100, step: 1 }
+                            ]
+                          },
+                          {
+                            kind: "group",
+                            label: "Envelope",
+                            children: [
+                              { kind: "number", label: "Attack", key: `${prefix}.synth.filterEnv.attackMs`, min: 0, max: 5000, step: 5 },
+                              { kind: "number", label: "Decay", key: `${prefix}.synth.filterEnv.decayMs`, min: 0, max: 5000, step: 5 },
+                              { kind: "number", label: "Sustain", key: `${prefix}.synth.filterEnv.sustainPct`, min: 0, max: 100, step: 1 },
+                              { kind: "number", label: "Release", key: `${prefix}.synth.filterEnv.releaseMs`, min: 0, max: 8000, step: 5 }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              } satisfies MenuNode;
+            })
+          },
           deps.axisGroup("X Axis", "x", 1),
           deps.axisGroup("Y Axis", "y", 3)
         ]

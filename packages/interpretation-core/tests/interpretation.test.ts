@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  applyParityGating,
   extractTransitions,
   interpretGrid,
   type GridSnapshot
@@ -21,30 +20,36 @@ test("extractTransitions detects activations and deactivations", () => {
   ]);
 });
 
-test("parity gating keeps activates on even ticks and deactivates on odd ticks", () => {
-  const transitions = [
-    { x: 0, y: 0, kind: "activate" as const },
-    { x: 1, y: 0, kind: "deactivate" as const }
-  ];
-
-  assert.deepEqual(applyParityGating(transitions, 0), [{ x: 0, y: 0, kind: "activate" }]);
-  assert.deepEqual(applyParityGating(transitions, 1), [{ x: 1, y: 0, kind: "deactivate" }]);
-});
-
 test("interpretGrid combines event and scan-row state intents with degrees", () => {
   const previous: GridSnapshot = { width: 3, height: 3, cells: [false, false, false, false, false, false, false, false, false] };
   const next: GridSnapshot = { width: 3, height: 3, cells: [false, false, false, true, true, false, false, false, false] };
 
   const intents = interpretGrid(previous, next, 1, {
     id: "combined",
-    event: { enabled: true, parity: "none" },
+    event: { enabled: true },
     state: { enabled: true, tick: { mode: "scan_row_active" } },
     x: { mode: "scale_step", step: 2 },
     y: { mode: "scale_step", step: 3 }
   });
 
-  assert.equal(intents.length, 4);
+  assert.equal(intents.length, 5);
   const scanned = intents.filter((i) => i.kind === "scanned");
   assert.equal(scanned.length, 2);
+  assert.equal(intents.filter((i) => i.kind === "scanned_empty").length, 1);
   assert.ok(intents.every((i) => i.degree >= 0));
+});
+
+test("scan-row emits scanned_empty for dead cells", () => {
+  const previous: GridSnapshot = { width: 3, height: 3, cells: [false, false, false, false, false, false, false, false, false] };
+  const next: GridSnapshot = { width: 3, height: 3, cells: [false, false, false, true, false, true, false, false, false] };
+  const intents = interpretGrid(previous, next, 1, {
+    id: "scan-empty",
+    event: { enabled: false },
+    state: { enabled: true, tick: { mode: "scan_row_active" } },
+    x: { mode: "ignore" },
+    y: { mode: "ignore" }
+  });
+  assert.equal(intents.length, 3);
+  assert.equal(intents.filter((i) => i.kind === "scanned").length, 2);
+  assert.equal(intents.filter((i) => i.kind === "scanned_empty").length, 1);
 });

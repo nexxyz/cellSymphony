@@ -91,7 +91,9 @@ function advanceEngineByPulses<TState>(state: PlatformState<TState>, behavior: B
     const intents = interpretGrid(beforeGrid, afterGrid, interpretationTick, profile);
     const mapped = mapIntentsToMusicalEvents(intents, withScaleSteps(next.mappingConfig, next.runtimeConfig));
     const modulated = applyModulation(intents, mapped, next.runtimeConfig);
-    events.push(...dedupeSimultaneousNotes(modulated));
+    const shaped = applyNoteBehavior(modulated, next);
+    events.push(...dedupeSimultaneousNotes(shaped.events));
+    next.system = { ...next.system, heldNotes: shaped.heldNotes };
   }
 
   next.transport = { ...next.transport, tick: next.transport.tick + 1 };
@@ -149,15 +151,46 @@ function withScaleSteps(mapping: any, cfg: RuntimeConfig): any {
 
 function profileFromConfig(cfg: RuntimeConfig): InterpretationProfile {
   const tick: TickStrategy = cfg.scanMode === "immediate"
-    ? { mode: "whole_grid_transitions", parity: cfg.eventParity }
+    ? { mode: "whole_grid_transitions" }
     : { mode: cfg.scanAxis === "columns" ? "scan_column_active" : "scan_row_active" };
   const axisX: AxisStrategy = cfg.x.pitch.enabled ? { mode: "scale_step", step: Math.abs(cfg.x.pitch.steps) } : { mode: "timing_only" };
   const axisY: AxisStrategy = cfg.y.pitch.enabled ? { mode: "scale_step", step: Math.abs(cfg.y.pitch.steps) } : { mode: "timing_only" };
   return {
     id: "menu_profile",
-    event: { enabled: cfg.eventEnabled, parity: cfg.eventParity },
+    event: { enabled: cfg.eventEnabled },
     state: { enabled: cfg.stateEnabled, tick },
     x: axisX,
     y: axisY
   };
+}
+
+function applyNoteBehavior<TState>(events: MusicalEvent[], state: PlatformState<TState>): { events: MusicalEvent[]; heldNotes: string[] } {
+  const held = new Set(state.system.heldNotes ?? []);
+  const out: MusicalEvent[] = [];
+  const instruments: any[] = Array.isArray((state.runtimeConfig as any).instruments) ? ((state.runtimeConfig as any).instruments as any[]) : [];
+  for (const e of events) {
+    if (e.type === "note_on") {
+      const key = `${e.channel}:${e.note}`;
+      const behavior = instruments[e.channel]?.noteBehavior === "hold" ? "hold" : "oneshot";
+      if (behavior === "hold" && held.has(key)) {
+        continue;
+      }
+      if (behavior === "hold") {
+        held.add(key);
+        out.push({ ...e, durationMs: undefined });
+      } else {
+        out.push(e);
+      }
+      continue;
+    }
+    if (e.type === "note_off") {
+      const key = `${e.channel}:${e.note}`;
+      if (!held.has(key)) continue;
+      held.delete(key);
+      out.push(e);
+      continue;
+    }
+    out.push(e);
+  }
+  return { events: out, heldNotes: [...held] };
 }

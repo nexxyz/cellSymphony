@@ -85,8 +85,18 @@ L2: Sense
 ├── Scan Unit: [1/16, 1/8, 1/4, 1/2, 1/1] ← visible when scanning
 ├── Scan Direction: [forward | reverse]    ← visible when scanning
 ├── Event Triggers: [on | off]
-├── Event Pattern: [none | activate_even_deactivate_odd]
 ├── State Notes: [on | off]
+├── Instrument Targets (group)
+│   ├── Activate Action: [none | note_on | note_off]
+│   ├── Activate Instrument: [1..16]
+│   ├── Stable Action: [none | note_on | note_off]
+│   ├── Stable Instrument: [1..16]
+│   ├── Deactivate Action: [none | note_on | note_off]
+│   ├── Deactivate Instrument: [1..16]
+│   ├── Scanned Action: [none | note_on | note_off]
+│   ├── Scanned Instrument: [1..16]
+│   ├── Scanned Empty Action: [none | note_on | note_off]
+│   └── Scanned Empty Instrument: [1..16]
 ├── X Axis (group)
 │   ├── Pitch Steps (group)
 │   │   ├── Enabled: [on | off]
@@ -124,10 +134,19 @@ L3: Voice
 │   ├── Out of Range: [clamp | wrap]     default clamp
 │   ├── Scale: [chromatic | major | natural_minor | dorian | mixolydian | major_pentatonic | minor_pentatonic | harmonic_minor]  default major_pentatonic
 │   └── Root: [C | C# | D | D# | E | F | F# | G | G# | A | A# | B]  default C
-├── Activate Target: [0 | 1 | 2 | 3]     ← algorithm: cell became active
-├── Stable Target: [0 | 1 | 2 | 3]       ← algorithm: cell stays active
-├── Deactivate Target: [0 | 1 | 2 | 3]   ← algorithm: cell became inactive
-├── Scanned Target: [0 | 1 | 2 | 3]      ← scanning layer: cell found active (only in scanning mode)
+├── Instruments (group)
+│   ├── Instrument 1..16 (group)
+│   │   ├── Type: [synth]
+│   │   ├── Note Behavior: [oneshot | hold] default oneshot
+│   │   ├── MIDI (group)
+│   │   │   ├── Enabled: [on | off]       default off
+│   │   │   └── Channel: [1..16]
+│   │   └── Synth (group)
+│   │       ├── Oscillator (group)
+│   │       │   ├── Osc 1 (group)
+│   │       │   └── Osc 2 (group)
+│   │       ├── Volume (group)           ← includes amp envelope
+│   │       └── Filter (group)           ← includes filter envelope
 ├── X Axis (group)
 │   └── (same sub-structure as L2 X Axis)
 └── Y Axis (group)

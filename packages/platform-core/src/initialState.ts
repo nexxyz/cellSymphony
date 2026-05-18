@@ -3,6 +3,29 @@ import { loadDefaultMappingConfig } from "@cellsymphony/mapping-core";
 import type { PlatformState, RuntimeConfig } from "./platformTypes";
 
 export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
+  const defaultEnv = { attackMs: 5, decayMs: 120, sustainPct: 70, releaseMs: 180 } as const;
+  const mkOsc = (waveform: "sine" | "saw" | "square" | "pulse" | "triangle") => ({
+    waveform,
+    levelPct: 80,
+    octave: 0 as const,
+    detuneCents: 0,
+    pulseWidthPct: 50
+  });
+  const defaultSynth: RuntimeConfig["instruments"][number]["synth"] = {
+    osc1: mkOsc("saw"),
+    osc2: mkOsc("square"),
+    amp: { gainPct: 80, velocitySensitivityPct: 100 },
+    ampEnv: defaultEnv,
+    filter: { type: "lowpass", cutoffHz: 8000, resonance: 20, envAmountPct: 0, keyTrackingPct: 0 },
+    filterEnv: defaultEnv
+  };
+  const instruments = Array.from({ length: 16 }, (_, idx) => ({
+    type: "synth" as const,
+    noteBehavior: "oneshot" as const,
+    midi: { enabled: false, channel: idx },
+    synth: structuredClone(defaultSynth)
+  }));
+
   const runtimeConfig: RuntimeConfig = {
     masterVolume: 73,
     displayBrightness: 75,
@@ -28,7 +51,6 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       return [id, defaults];
     })),
     eventEnabled: true,
-    eventParity: "activate_even_deactivate_odd",
     stateEnabled: true,
     pitch: { startingNote: 48, lowestNote: 36, highestNote: 84, outOfRange: "clamp", scale: "major_pentatonic", root: "C" },
     x: {
@@ -42,7 +64,8 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       velocity: { enabled: false, from: 20, to: 100, gridOffset: 0, curve: "linear" },
       filterCutoff: { enabled: false, from: 20, to: 127, gridOffset: 0, curve: "linear" },
       filterResonance: { enabled: false, from: 10, to: 90, gridOffset: 0, curve: "linear" }
-    }
+    },
+    instruments
   };
   return {
     transport: { playing: false, bpm: 120, tick: 0, ppqnPulse: 0 },
@@ -77,7 +100,8 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       oledSplashText: "Starting up",
       oledSplashUntilMs: Date.now() + 1000,
       lastInteractionMs: Date.now(),
-      auxBindings: {}
+      auxBindings: {},
+      heldNotes: []
     },
     scanIndex: 0,
     scanPulseAccumulator: 0,

@@ -4,6 +4,7 @@ import { OLED_HEIGHT, OLED_WIDTH } from "@cellsymphony/platform-core";
 import { mapKeyboardEventToInputAction, mapKeyboardKeyupToInputAction, shouldPreventKeyboardDefault } from "../runtime/inputAdapters/keyboardAdapter";
 import { sendEventsToAudio } from "../runtime/outputAdapters/audioSink";
 import { createSimulatorRuntime } from "../runtime/simulatorRuntime";
+import { nativeAudioBridge } from "../audio/nativeAudioBridge";
 
 const runtime = createSimulatorRuntime();
 type EncoderId = "main" | "aux1" | "aux2" | "aux3" | "aux4";
@@ -31,6 +32,7 @@ export function App() {
   const [dialPhase, setDialPhase] = useState<Record<string, number>>({ main: 0, aux1: 0, aux2: 0, aux3: 0, aux4: 0 });
   const frame = snapshot.frame;
   const oledCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const lastInstrumentsJson = useRef<string>("");
 
   const oledFrame = frame.oled;
   const oledImage = useMemo(() => toOledImage(oledFrame), [oledFrame]);
@@ -74,6 +76,14 @@ export function App() {
   useKeyboardBindings(bumpDialPhase);
   useOledCanvas(oledCanvasRef, oledImage);
   useDialDragBindings(dialDrag, setDialDrag, turnWithAcceleration);
+
+  useEffect(() => {
+    const instruments = (snapshot as any).instruments ?? [];
+    const json = JSON.stringify(instruments);
+    if (json === lastInstrumentsJson.current) return;
+    lastInstrumentsJson.current = json;
+    void nativeAudioBridge.setInstruments(instruments);
+  }, [snapshot]);
 
   return (
     <main className="app-shell" onMouseUp={endPaint} onMouseLeave={endPaint}>

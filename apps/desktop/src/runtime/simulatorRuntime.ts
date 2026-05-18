@@ -3,6 +3,7 @@ import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { DeviceInput } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import {
+  applyConfigPayload,
   applyStoreResult,
   createInitialState,
   emergencyBrake,
@@ -68,7 +69,8 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       },
       displayBrightness: (next as any).runtimeConfig.displayBrightness ?? 75,
       buttonBrightness: (next as any).runtimeConfig.buttonBrightness ?? 75,
-      masterVolume: (next as any).runtimeConfig.masterVolume ?? 100
+      masterVolume: (next as any).runtimeConfig.masterVolume ?? 100,
+      instruments: Array.isArray((next as any).runtimeConfig.instruments) ? ((next as any).runtimeConfig.instruments as unknown[]) : []
     };
   }
 
@@ -128,18 +130,34 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
     const cfg = state.runtimeConfig.midi;
     if (!cfg.enabled || !cfg.outId) return;
     if (!state.transport.playing) return;
+    const instruments: any[] = Array.isArray((state.runtimeConfig as any).instruments)
+      ? ((state.runtimeConfig as any).instruments as any[])
+      : [];
     for (const e of events) {
+      const slot = Math.max(0, Math.min(15, (e as any).channel | 0));
+      const inst = instruments[slot];
+      const instMidiEnabled = inst?.midi?.enabled === true;
+      if (!instMidiEnabled) continue;
+      const instMidiChannel = Math.max(0, Math.min(15, (inst?.midi?.channel ?? slot) | 0));
       if (e.type === "note_on") {
-        const ch = Math.max(0, Math.min(15, e.channel | 0));
+        const ch = instMidiChannel;
         const note = Math.max(0, Math.min(127, e.note | 0));
         const vel = Math.max(1, Math.min(127, e.velocity | 0));
         scheduleMidi(new Uint8Array([0x90 | ch, note, vel]), nowMs);
-        const len = Math.max(1, Math.min(10_000, e.durationMs ?? 120));
-        scheduleMidi(new Uint8Array([0x80 | ch, note, 0]), nowMs + len);
+        if (typeof e.durationMs === "number") {
+          const len = Math.max(1, Math.min(10_000, e.durationMs));
+          scheduleMidi(new Uint8Array([0x80 | ch, note, 0]), nowMs + len);
+        }
+        continue;
+      }
+      if (e.type === "note_off") {
+        const ch = instMidiChannel;
+        const note = Math.max(0, Math.min(127, e.note | 0));
+        scheduleMidi(new Uint8Array([0x80 | ch, note, 0]), nowMs);
         continue;
       }
       if (e.type === "cc") {
-        const ch = Math.max(0, Math.min(15, e.channel | 0));
+        const ch = instMidiChannel;
         const cc = Math.max(0, Math.min(127, e.controller | 0));
         const val = Math.max(0, Math.min(127, e.value | 0));
         scheduleMidi(new Uint8Array([0xb0 | ch, cc, val]), nowMs);
@@ -206,6 +224,13 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
   }
 
   const store = createLocalStorageConfigStore();
+  {
+    const payload = store.loadDefault();
+    if (payload) {
+      const loaded = applyConfigPayload(state, payload, activeBehavior());
+      state = { ...loaded, system: { ...loaded.system, currentPresetName: null } };
+    }
+  }
   const tauriMidi = new TauriMidiService();
 
   let selectedOutId: string | null = null;

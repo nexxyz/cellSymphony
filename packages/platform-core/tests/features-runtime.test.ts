@@ -121,31 +121,33 @@ test("behavior onTick is called when accumulator reaches step threshold", () => 
   assert.equal(result.state.behaviorState.tickCount, 1, "onTick should be called once per step");
 });
 
-// ─── Voice Menu with 4 Targets ────────────────────────────────────
+// ─── Sense Menu Instrument Targets ────────────────────────────────
 
-test("L3: Voice has 4 target channels accessible via menu", () => {
+test("L2: Sense has 4 instrument targets accessible via menu", () => {
   let state = makeState();
 
   // Verify targets exist and can be edited through the menu
-  state = selectLabel(state, "L3: Voice");
+  state = selectLabel(state, "L2: Sense");
   state = press(state).state;
-  state = selectLabel(state, "Activate Target");
+  state = selectLabel(state, "Instrument Targets");
+  state = press(state).state;
+  state = selectLabel(state, "Activate Instrument");
   state = press(state).state; // enter edit
   state = turn(state, 1).state; // 0 → "1"
   state = press(state).state; // exit edit
   assert.equal(String(state.mappingConfig.activate.channel), "1");
 
-  state = selectLabel(state, "Stable Target");
+  state = selectLabel(state, "Stable Instrument");
   state = press(state).state;
   state = turn(state, 1).state;
   state = press(state).state;
 
-  state = selectLabel(state, "Deactivate Target");
+  state = selectLabel(state, "Deactivate Instrument");
   state = press(state).state;
   state = turn(state, 1).state;
   state = press(state).state;
 
-  state = selectLabel(state, "Scanned Target");
+  state = selectLabel(state, "Scanned Instrument");
   state = press(state).state;
   state = turn(state, 1).state;
   state = press(state).state;
@@ -160,19 +162,24 @@ test("L3: Voice has 4 target channels accessible via menu", () => {
 test("stable target is separate from activate and deactivate", () => {
   let state = makeState();
 
-  state = selectLabel(state, "L3: Voice");
+  state = selectLabel(state, "L2: Sense");
+  state = press(state).state;
+  state = selectLabel(state, "Instrument Targets");
   state = press(state).state;
 
   // Set activate to channel 0
-  state = selectLabel(state, "Activate Target");
+  state = selectLabel(state, "Activate Instrument");
   state = press(state).state;
-  state = turn(state, 0).state; // back to 0
+  // Ensure we're at 0 by turning down a couple times.
+  state = turn(state, -1).state;
+  state = turn(state, -1).state;
   state = press(state).state;
 
   // Set stable to channel 2
-  state = selectLabel(state, "Stable Target");
+  state = selectLabel(state, "Stable Instrument");
   state = press(state).state;
-  state = turn(state, 2).state; // set to 2
+  state = turn(state, 1).state;
+  state = turn(state, 1).state;
   state = press(state).state;
 
   assert.equal(state.mappingConfig.activate.channel, 0);

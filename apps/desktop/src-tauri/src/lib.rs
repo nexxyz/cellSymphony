@@ -1,10 +1,10 @@
 use std::sync::mpsc::{self, Sender};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 use midir::{Ignore, MidiInput, MidiInputConnection, MidiOutput};
-use realtime_engine::synth::{render_note_preview, NoteTrigger, Waveform};
-use rodio::{buffer::SamplesBuffer, OutputStream, OutputStreamHandle, Sink};
+use realtime_engine::synth::{InstrumentsConfig, SynthEngine};
+use rodio::{OutputStream, OutputStreamHandle, Sink};
 use serde::Deserialize;
 use tauri::Emitter;
 
@@ -19,6 +19,8 @@ enum MusicalEventPayload {
         #[serde(default, rename = "durationMs")]
         duration_ms: Option<u32>,
     },
+    #[serde(rename = "note_off")]
+    NoteOff { channel: u8, note: u8 },
     #[serde(rename = "cc")]
     Cc {
         channel: u8,
@@ -36,7 +38,7 @@ struct AudioRuntime {
 
 #[derive(Clone, Copy)]
 struct QueuedNote {
-    channel: u8,
+    instrument_slot: u8,
     note: u8,
     velocity: u8,
     duration_ms: u32,
@@ -45,17 +47,15 @@ struct QueuedNote {
 #[derive(Clone, Copy)]
 enum QueuedAudioEvent {
     Note(QueuedNote),
+    NoteOff {
+        instrument_slot: u8,
+        note: u8,
+    },
     Cc {
-        channel: u8,
+        instrument_slot: u8,
         controller: u8,
         value: u8,
     },
-}
-
-#[derive(Clone, Copy)]
-struct FilterState {
-    cutoff_hz: f32,
-    resonance: f32,
 }
 
 impl AudioRuntime {
@@ -68,39 +68,83 @@ impl AudioRuntime {
         })
     }
 
-    fn trigger_note(
-        &self,
-        channel: u8,
-        note: u8,
-        velocity: u8,
-        duration_ms: u32,
-        filter: FilterState,
-    ) -> Result<(), String> {
-        let waveform = match channel {
-            1 => Waveform::Pulse { duty: 0.5 },
-            _ => Waveform::Sine,
-        };
-        let data = render_note_preview(
-            NoteTrigger {
-                midi_note: note,
-                velocity,
-                duration_ms,
-                waveform,
-                lowpass_cutoff_hz: filter.cutoff_hz,
-                lowpass_resonance: filter.resonance,
-            },
-            48_000,
-        );
-        let source = SamplesBuffer::new(1, 48_000, data);
+    fn start_engine(&self, engine: Arc<Mutex<SynthEngine>>) -> Result<(), String> {
+        let source = EngineSource::new(engine, 48_000);
         let sink = Sink::try_new(&self.handle).map_err(|e| format!("sink create failed: {e}"))?;
         sink.append(source);
+        sink.play();
         sink.detach();
         Ok(())
     }
 }
 
+struct EngineSource {
+    engine: Arc<Mutex<SynthEngine>>,
+    sample_rate: u32,
+    buf: Vec<f32>,
+    idx: usize,
+}
+
+impl EngineSource {
+    fn new(engine: Arc<Mutex<SynthEngine>>, sample_rate: u32) -> Self {
+        Self {
+            engine,
+            sample_rate,
+            buf: Vec::new(),
+            idx: 0,
+        }
+    }
+
+    fn refill(&mut self) {
+        const BLOCK: usize = 128;
+        self.buf.clear();
+        self.buf.reserve(BLOCK);
+        if let Ok(mut eng) = self.engine.lock() {
+            for _ in 0..BLOCK {
+                self.buf.push(eng.next_sample());
+            }
+        } else {
+            for _ in 0..BLOCK {
+                self.buf.push(0.0);
+            }
+        }
+        self.idx = 0;
+    }
+}
+
+impl Iterator for EngineSource {
+    type Item = f32;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.idx >= self.buf.len() {
+            self.refill();
+        }
+        let v = self.buf.get(self.idx).copied().unwrap_or(0.0);
+        self.idx += 1;
+        Some(v)
+    }
+}
+
+impl rodio::Source for EngineSource {
+    fn current_frame_len(&self) -> Option<usize> {
+        None
+    }
+
+    fn channels(&self) -> u16 {
+        1
+    }
+
+    fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    fn total_duration(&self) -> Option<std::time::Duration> {
+        None
+    }
+}
+
 struct AppState {
     trigger_tx: Sender<QueuedAudioEvent>,
+    engine: Arc<Mutex<SynthEngine>>,
     midi_out: Mutex<Option<midir::MidiOutputConnection>>,
     midi_in: Mutex<Option<MidiInputConnection<()>>>,
 }
@@ -244,12 +288,11 @@ fn trigger_musical_event(
             velocity,
             duration_ms,
         } => {
-            let _ = channel;
-            let duration = duration_ms.unwrap_or(120).clamp(10, 5000);
+            let duration = duration_ms.unwrap_or(86_400_000).clamp(10, 86_400_000);
             state
                 .trigger_tx
                 .send(QueuedAudioEvent::Note(QueuedNote {
-                    channel: channel.clamp(0, 15),
+                    instrument_slot: channel.clamp(0, 15),
                     note: note.min(127),
                     velocity: velocity.clamp(1, 127),
                     duration_ms: duration,
@@ -263,18 +306,41 @@ fn trigger_musical_event(
         } => state
             .trigger_tx
             .send(QueuedAudioEvent::Cc {
-                channel: channel.clamp(0, 15),
+                instrument_slot: channel.clamp(0, 15),
                 controller,
                 value,
+            })
+            .map_err(|e| format!("audio queue send failed: {e}")),
+        MusicalEventPayload::NoteOff { channel, note } => state
+            .trigger_tx
+            .send(QueuedAudioEvent::NoteOff {
+                instrument_slot: channel.clamp(0, 15),
+                note: note.min(127),
             })
             .map_err(|e| format!("audio queue send failed: {e}")),
         MusicalEventPayload::Unsupported => Ok(()),
     }
 }
 
+#[tauri::command]
+fn audio_set_instruments(
+    config: InstrumentsConfig,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let mut eng = state
+        .engine
+        .lock()
+        .map_err(|_| "audio engine mutex poisoned".to_string())?;
+    eng.set_instruments(config);
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let (trigger_tx, trigger_rx) = mpsc::channel::<QueuedAudioEvent>();
+
+    let engine = Arc::new(Mutex::new(SynthEngine::new(48_000)));
+    let engine2 = engine.clone();
 
     thread::spawn(move || {
         let audio = match AudioRuntime::new() {
@@ -285,40 +351,41 @@ pub fn run() {
             }
         };
 
-        let mut filter = FilterState {
-            cutoff_hz: 8_000.0,
-            resonance: 0.2,
-        };
+        if let Err(error) = audio.start_engine(engine2.clone()) {
+            eprintln!("audio engine start failed: {error}");
+            return;
+        }
 
         while let Ok(event) = trigger_rx.recv() {
             match event {
                 QueuedAudioEvent::Note(note) => {
-                    if let Err(error) = audio.trigger_note(
-                        note.channel,
-                        note.note,
-                        note.velocity,
-                        note.duration_ms,
-                        filter,
-                    ) {
-                        eprintln!("audio trigger failed: {error}");
+                    if let Ok(mut eng) = engine2.lock() {
+                        eng.note_on(
+                            note.instrument_slot,
+                            note.note,
+                            note.velocity,
+                            note.duration_ms,
+                        );
                     }
                 }
                 QueuedAudioEvent::Cc {
-                    channel,
+                    instrument_slot,
                     controller,
                     value,
                 } => {
-                    let _ = channel;
-                    if controller == 74 {
-                        let norm = (value as f32 / 127.0).clamp(0.0, 1.0);
-                        filter.cutoff_hz = 120.0 + norm * 15_880.0;
+                    if let Ok(mut eng) = engine2.lock() {
+                        if controller == 120 || controller == 123 {
+                            eng.all_notes_off();
+                        }
+                        eng.cc(instrument_slot, controller, value);
                     }
-                    if controller == 71 {
-                        filter.resonance = (value as f32 / 127.0).clamp(0.0, 1.0);
-                    }
-                    if controller == 120 || controller == 123 {
-                        filter.cutoff_hz = 8_000.0;
-                        filter.resonance = 0.2;
+                }
+                QueuedAudioEvent::NoteOff {
+                    instrument_slot,
+                    note,
+                } => {
+                    if let Ok(mut eng) = engine2.lock() {
+                        eng.note_off(instrument_slot, note);
                     }
                 }
             }
@@ -328,11 +395,13 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState {
             trigger_tx,
+            engine,
             midi_out: Mutex::new(None),
             midi_in: Mutex::new(None),
         })
         .invoke_handler(tauri::generate_handler![
             trigger_musical_event,
+            audio_set_instruments,
             midi_list_outputs,
             midi_list_inputs,
             midi_select_output,

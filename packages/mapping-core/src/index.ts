@@ -3,6 +3,7 @@ import type { MusicalEvent } from "@cellsymphony/musical-events";
 import defaults from "./config/default-mapping.json";
 
 export type TriggerTarget = {
+  action: "none" | "note_on" | "note_off";
   channel: number;
   velocity: number;
   durationMs: number;
@@ -21,6 +22,7 @@ export type MappingConfig = {
   deactivate: TriggerTarget;
   stable: TriggerTarget;
   scanned: TriggerTarget;
+  scanned_empty: TriggerTarget;
 };
 
 export function loadDefaultMappingConfig(): MappingConfig {
@@ -29,22 +31,24 @@ export function loadDefaultMappingConfig(): MappingConfig {
 
 export function mapIntentsToMusicalEvents(intents: CellTriggerIntent[], config: MappingConfig): MusicalEvent[] {
   const safe = validateConfig(config);
-  return intents.map((intent) => {
+  const out: MusicalEvent[] = [];
+  for (const intent of intents) {
     const note = noteFromDegree(intent.degree, safe);
     const target = targetForKind(intent.kind, safe);
-    return {
-      type: "note_on",
-      channel: target.channel,
-      note,
-      velocity: target.velocity,
-      durationMs: target.durationMs
-    } satisfies MusicalEvent;
-  });
+    if (target.action === "none") continue;
+    if (target.action === "note_off") {
+      out.push({ type: "note_off", channel: target.channel, note });
+      continue;
+    }
+    out.push({ type: "note_on", channel: target.channel, note, velocity: target.velocity, durationMs: target.durationMs });
+  }
+  return out;
 }
 
 function targetForKind(kind: CellTriggerKind, config: MappingConfig): TriggerTarget {
   if (kind === "activate") return config.activate;
   if (kind === "deactivate") return config.deactivate;
+  if (kind === "scanned_empty") return config.scanned_empty;
   if (kind === "scanned") return config.scanned;
   return config.stable;
 }
@@ -81,12 +85,14 @@ function validateConfig(config: MappingConfig): MappingConfig {
     activate: sanitizeTarget(config.activate),
     deactivate: sanitizeTarget(config.deactivate),
     stable: sanitizeTarget(config.stable ?? config.activate),
-    scanned: sanitizeTarget(config.scanned ?? config.activate)
+    scanned: sanitizeTarget(config.scanned ?? config.activate),
+    scanned_empty: sanitizeTarget(config.scanned_empty ?? config.deactivate ?? config.activate)
   };
 }
 
 function sanitizeTarget(target: TriggerTarget): TriggerTarget {
   return {
+    action: target.action === "note_off" || target.action === "none" ? target.action : "note_on",
     channel: clamp(Math.floor(target.channel), 0, 15),
     velocity: clamp(Math.floor(target.velocity), 1, 127),
     durationMs: clamp(Math.floor(target.durationMs), 1, 8000)

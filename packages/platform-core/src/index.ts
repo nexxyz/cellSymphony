@@ -483,7 +483,7 @@ export function emergencyBrake<TState>(state: PlatformState<TState>): { state: P
     state: {
       ...state,
       transport: { ...state.transport, playing: false, ppqnPulse: 0 },
-      system: { ...state.system, stopLatched: true, transportFlash: "none", transportFlashUntilMs: 0 },
+      system: { ...state.system, stopLatched: true, transportFlash: "none", transportFlashUntilMs: 0, heldNotes: [] },
       scanIndex: origin,
       scanPulseAccumulator: 0,
       algorithmPulseAccumulator: 0,

@@ -14,13 +14,48 @@ type PitchLaneConfig = { enabled: boolean; steps: number };
 export type ValueLaneConfig = { enabled: boolean; from: number; to: number; gridOffset: number; curve: Curve };
 type AxisModConfig = { pitch: PitchLaneConfig; velocity: ValueLaneConfig; filterCutoff: ValueLaneConfig; filterResonance: ValueLaneConfig };
 
+export type EnvConfig = { attackMs: number; decayMs: number; sustainPct: number; releaseMs: number };
+
+export type OscConfig = {
+  waveform: "sine" | "saw" | "square" | "pulse" | "triangle";
+  levelPct: number;
+  octave: -2 | -1 | 0 | 1 | 2;
+  detuneCents: number;
+  pulseWidthPct: number;
+};
+
+export type FilterConfig = {
+  type: "lowpass" | "highpass" | "bandpass" | "notch";
+  cutoffHz: number;
+  resonance: number;
+  envAmountPct: number;
+  keyTrackingPct: number;
+};
+
+export type SynthConfig = {
+  osc1: OscConfig;
+  osc2: OscConfig;
+  amp: { gainPct: number; velocitySensitivityPct: number };
+  ampEnv: EnvConfig;
+  filter: FilterConfig;
+  filterEnv: EnvConfig;
+};
+
+export type InstrumentSlotConfig = {
+  type: "synth";
+  noteBehavior: "oneshot" | "hold";
+  midi: { enabled: boolean; channel: number };
+  synth: SynthConfig;
+};
+
 export type RuntimeConfig = {
   masterVolume: number; displayBrightness: number; gridBrightness: number; buttonBrightness: number; screenSleepSeconds: number;
   midi: { enabled: boolean; outId: string | null; clockOutEnabled: boolean; inId: string | null; clockInEnabled: boolean; syncMode: "internal" | "external"; respondToStartStop: boolean };
   sound: { noteLengthMs: number; velocityScalePct: number; velocityCurve: "linear" | "soft" | "hard" };
   scanMode: ScanMode; scanAxis: ScanAxis; scanUnit: NoteUnit; scanDirection: Direction; algorithmStepUnit: NoteUnit;
-  activeBehavior: string; autoSaveDefault: boolean; behaviorConfig: Record<string, unknown>; eventEnabled: boolean; eventParity: "none" | "activate_even_deactivate_odd"; stateEnabled: boolean;
+  activeBehavior: string; autoSaveDefault: boolean; behaviorConfig: Record<string, unknown>; eventEnabled: boolean; stateEnabled: boolean;
   pitch: PitchSettings; x: AxisModConfig; y: AxisModConfig;
+  instruments: InstrumentSlotConfig[];
 };
 
 export type ActionSpec =
@@ -53,6 +88,7 @@ export type SystemState = {
   transportFlash: "none" | "beat" | "measure"; transportFlashUntilMs: number; textEdit: TextEditSession | null;
   midiOutputs: MidiPortInfo[]; midiInputs: MidiPortInfo[]; midiStatus: string | null; externalPpqnPulse: number; pendingResync: boolean; pausedByUser: boolean;
   oledMode: "normal" | "splash" | "off"; oledSplashText: string; oledSplashUntilMs: number; lastInteractionMs: number; auxBindings: Record<string, AuxBinding | null>;
+  heldNotes: string[];
 };
 
 export type PlatformEffectBase =

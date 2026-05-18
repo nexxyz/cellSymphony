@@ -42,13 +42,13 @@ test("interpretation supports event and state trigger paths", () => {
 
   const intents = interpretGrid(previous, next, 0, {
     id: "test",
-    event: { enabled: true, parity: "none" },
+    event: { enabled: true },
     state: { enabled: true, tick: { mode: "scan_column_active" } },
     x: { mode: "scale_step", step: 1 },
     y: { mode: "scale_step", step: 3 }
   });
 
-  assert.deepEqual(intents.map((i) => i.kind).sort(), ["activate", "deactivate", "scanned"]);
+  assert.deepEqual(intents.map((i) => i.kind).sort(), ["activate", "deactivate", "scanned", "scanned_empty"]);
 });
 
 test("mapping routes trigger kinds to configured targets", () => {
@@ -64,7 +64,7 @@ test("mapping routes trigger kinds to configured targets", () => {
 
   assert.equal(events.length, 3);
   assert.equal(events[0].type, "note_on");
-  assert.equal(events[1].type, "note_on");
+  assert.equal(events[1].type, "note_off");
   assert.equal(events[2].type, "note_on");
   if (events[0].type === "note_on" && events[1].type === "note_on" && events[2].type === "note_on") {
     assert.equal(events[0].channel, mapping.activate.channel);
@@ -197,7 +197,7 @@ test("velocity modulation mode changes output velocity", () => {
   let state = createInitialState(mockBehavior);
   state.transport.playing = true;
   state.runtimeConfig.algorithmStepUnit = "1/16";
-  state.runtimeConfig.eventParity = "none";
+  state.mappingConfig.deactivate.action = "note_on";
   state.runtimeConfig.x.velocity.enabled = true;
   state.runtimeConfig.x.velocity.from = 20;
   state.runtimeConfig.x.velocity.to = 100;
@@ -213,7 +213,7 @@ test("filter modulation mode emits cutoff/resonance CC", () => {
   let state = createInitialState(mockBehavior);
   state.transport.playing = true;
   state.runtimeConfig.algorithmStepUnit = "1/16";
-  state.runtimeConfig.eventParity = "none";
+  state.mappingConfig.deactivate.action = "note_on";
   state.runtimeConfig.x.filterCutoff.enabled = true;
   state.runtimeConfig.y.filterResonance.enabled = true;
   const result = tick(state, mockBehavior);

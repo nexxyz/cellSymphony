@@ -20,6 +20,7 @@ export type SimulatorSnapshot = {
   displayBrightness: number;
   buttonBrightness: number;
   masterVolume: number;
+  instruments: unknown[];
 };
 
 export type RuntimeListener = (snapshot: SimulatorSnapshot) => void;

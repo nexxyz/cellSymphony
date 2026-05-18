@@ -1,82 +1,743 @@
+use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
 
-#[derive(Clone, Copy, Debug)]
-pub enum Waveform {
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WaveformId {
     Sine,
-    Pulse { duty: f32 },
+    Triangle,
+    Saw,
+    Square,
+    Pulse,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FilterType {
+    Lowpass,
+    Highpass,
+    Bandpass,
+    Notch,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct EnvConfig {
+    #[serde(rename = "attackMs")]
+    pub attack_ms: f32,
+    #[serde(rename = "decayMs")]
+    pub decay_ms: f32,
+    #[serde(rename = "sustainPct")]
+    pub sustain_pct: f32,
+    #[serde(rename = "releaseMs")]
+    pub release_ms: f32,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct OscConfig {
+    pub waveform: WaveformId,
+    #[serde(rename = "levelPct")]
+    pub level_pct: f32,
+    pub octave: i32,
+    #[serde(rename = "detuneCents")]
+    pub detune_cents: f32,
+    #[serde(rename = "pulseWidthPct")]
+    pub pulse_width_pct: f32,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct FilterConfig {
+    #[serde(rename = "type")]
+    pub kind: FilterType,
+    #[serde(rename = "cutoffHz")]
+    pub cutoff_hz: f32,
+    pub resonance: f32,
+    #[serde(rename = "envAmountPct")]
+    pub env_amount_pct: f32,
+    #[serde(rename = "keyTrackingPct")]
+    pub key_tracking_pct: f32,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct SynthConfig {
+    pub osc1: OscConfig,
+    pub osc2: OscConfig,
+    pub amp: AmpConfig,
+    #[serde(rename = "ampEnv")]
+    pub amp_env: EnvConfig,
+    pub filter: FilterConfig,
+    #[serde(rename = "filterEnv")]
+    pub filter_env: EnvConfig,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct AmpConfig {
+    #[serde(rename = "gainPct")]
+    pub gain_pct: f32,
+    #[serde(rename = "velocitySensitivityPct")]
+    pub velocity_sensitivity_pct: f32,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InstrumentSlotConfig {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub synth: SynthConfig,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InstrumentsConfig {
+    pub instruments: Vec<InstrumentSlotConfig>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum EnvStage {
+    Attack,
+    Decay,
+    Sustain,
+    Release,
+    Off,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct NoteTrigger {
-    pub midi_note: u8,
-    pub velocity: u8,
-    pub duration_ms: u32,
-    pub waveform: Waveform,
-    pub lowpass_cutoff_hz: f32,
-    pub lowpass_resonance: f32,
+struct EnvState {
+    stage: EnvStage,
+    level: f32,
+    stage_pos: u32,
+    stage_len: u32,
+    sustain: f32,
+    release_start: f32,
 }
 
-pub fn render_note_preview(trigger: NoteTrigger, sample_rate: u32) -> Vec<f32> {
-    let freq = midi_note_to_hz(trigger.midi_note);
-    let samples = ((trigger.duration_ms as f32 / 1000.0) * sample_rate as f32).max(1.0) as usize;
-    let amp = trigger.velocity as f32 / 127.0;
-    let release = (samples / 6).max(8);
-
-    let mut out = Vec::with_capacity(samples);
-    let cutoff = trigger.lowpass_cutoff_hz.clamp(80.0, 16_000.0);
-    let alpha = (2.0 * PI * cutoff / sample_rate as f32).clamp(0.001, 0.99);
-    let resonance = trigger.lowpass_resonance.clamp(0.0, 1.0);
-    let mut last = 0.0_f32;
-
-    for i in 0..samples {
-        let t = i as f32 / sample_rate as f32;
-        let phase = (freq * t).fract();
-        let wave = match trigger.waveform {
-            Waveform::Sine => (2.0 * PI * freq * t).sin(),
-            Waveform::Pulse { duty } => {
-                if phase < duty.clamp(0.05, 0.95) {
-                    1.0
-                } else {
-                    -1.0
-                }
-            }
-        };
-        let env = if i + release >= samples {
-            let remain = (samples - i) as f32 / release as f32;
-            remain.clamp(0.0, 1.0)
+impl EnvState {
+    fn note_on(cfg: EnvConfig, sample_rate: u32) -> Self {
+        let a = ms_to_samples(cfg.attack_ms, sample_rate);
+        let d = ms_to_samples(cfg.decay_ms, sample_rate);
+        let sustain = (cfg.sustain_pct / 100.0).clamp(0.0, 1.0);
+        let stage = if a == 0 {
+            EnvStage::Decay
         } else {
-            1.0
+            EnvStage::Attack
         };
-        let dry = wave * amp * env * 0.2;
-        let filtered = last + alpha * (dry - last);
-        last = filtered;
-        out.push(filtered * (1.0 - 0.35 * resonance));
+        let stage_len = if stage == EnvStage::Attack { a } else { d };
+        Self {
+            stage,
+            level: if stage == EnvStage::Attack { 0.0 } else { 1.0 },
+            stage_pos: 0,
+            stage_len,
+            sustain,
+            release_start: 0.0,
+        }
     }
-    out
+
+    fn begin_release(&mut self, cfg: EnvConfig, sample_rate: u32) {
+        if self.stage == EnvStage::Release || self.stage == EnvStage::Off {
+            return;
+        }
+        self.stage = EnvStage::Release;
+        self.stage_pos = 0;
+        self.stage_len = ms_to_samples(cfg.release_ms, sample_rate).max(1);
+        self.release_start = self.level;
+    }
+
+    fn next(&mut self) -> f32 {
+        match self.stage {
+            EnvStage::Attack => {
+                if self.stage_len == 0 {
+                    self.stage = EnvStage::Decay;
+                    self.stage_pos = 0;
+                    self.stage_len = 0;
+                    self.level = 1.0;
+                    return self.level;
+                }
+                let t = (self.stage_pos as f32) / (self.stage_len as f32);
+                self.level = t.clamp(0.0, 1.0);
+                self.stage_pos = self.stage_pos.saturating_add(1);
+                if self.stage_pos >= self.stage_len {
+                    self.stage = EnvStage::Decay;
+                    self.stage_pos = 0;
+                    self.stage_len = 0;
+                    self.level = 1.0;
+                }
+                self.level
+            }
+            EnvStage::Decay => {
+                if self.stage_len == 0 {
+                    self.stage = EnvStage::Sustain;
+                    self.level = self.sustain;
+                    return self.level;
+                }
+                let t = (self.stage_pos as f32) / (self.stage_len as f32);
+                self.level = (1.0 + (self.sustain - 1.0) * t).clamp(0.0, 1.0);
+                self.stage_pos = self.stage_pos.saturating_add(1);
+                if self.stage_pos >= self.stage_len {
+                    self.stage = EnvStage::Sustain;
+                    self.level = self.sustain;
+                }
+                self.level
+            }
+            EnvStage::Sustain => self.level,
+            EnvStage::Release => {
+                let t = (self.stage_pos as f32) / (self.stage_len as f32);
+                self.level = (self.release_start * (1.0 - t)).clamp(0.0, 1.0);
+                self.stage_pos = self.stage_pos.saturating_add(1);
+                if self.stage_pos >= self.stage_len {
+                    self.stage = EnvStage::Off;
+                    self.level = 0.0;
+                }
+                self.level
+            }
+            EnvStage::Off => 0.0,
+        }
+    }
+
+    fn is_off(&self) -> bool {
+        self.stage == EnvStage::Off
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct BiquadState {
+    x1: f32,
+    x2: f32,
+    y1: f32,
+    y2: f32,
+}
+
+impl BiquadState {
+    fn new() -> Self {
+        Self {
+            x1: 0.0,
+            x2: 0.0,
+            y1: 0.0,
+            y2: 0.0,
+        }
+    }
+
+    fn process(
+        &mut self,
+        x: f32,
+        mode: FilterType,
+        cutoff_hz: f32,
+        q: f32,
+        sample_rate: u32,
+    ) -> f32 {
+        let cutoff = cutoff_hz.clamp(20.0, 20_000.0);
+        let qv = q.clamp(0.25, 20.0);
+        let w0 = 2.0 * PI * cutoff / (sample_rate as f32);
+        let cos_w0 = w0.cos();
+        let sin_w0 = w0.sin();
+        let alpha = sin_w0 / (2.0 * qv);
+
+        let (b0, b1, b2, a0, a1, a2) = match mode {
+            FilterType::Lowpass => (
+                (1.0 - cos_w0) * 0.5,
+                1.0 - cos_w0,
+                (1.0 - cos_w0) * 0.5,
+                1.0 + alpha,
+                -2.0 * cos_w0,
+                1.0 - alpha,
+            ),
+            FilterType::Highpass => (
+                (1.0 + cos_w0) * 0.5,
+                -(1.0 + cos_w0),
+                (1.0 + cos_w0) * 0.5,
+                1.0 + alpha,
+                -2.0 * cos_w0,
+                1.0 - alpha,
+            ),
+            FilterType::Bandpass => (alpha, 0.0, -alpha, 1.0 + alpha, -2.0 * cos_w0, 1.0 - alpha),
+            FilterType::Notch => (
+                1.0,
+                -2.0 * cos_w0,
+                1.0,
+                1.0 + alpha,
+                -2.0 * cos_w0,
+                1.0 - alpha,
+            ),
+        };
+
+        let nb0 = b0 / a0;
+        let nb1 = b1 / a0;
+        let nb2 = b2 / a0;
+        let na1 = a1 / a0;
+        let na2 = a2 / a0;
+        let y = nb0 * x + nb1 * self.x1 + nb2 * self.x2 - na1 * self.y1 - na2 * self.y2;
+        self.x2 = self.x1;
+        self.x1 = x;
+        self.y2 = self.y1;
+        self.y1 = y;
+        y
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Voice {
+    active: bool,
+    instrument_slot: u8,
+    midi_note: u8,
+    velocity: u8,
+    note_off_sample: u64,
+    freq_hz: f32,
+    phase1: f32,
+    phase2: f32,
+    amp_env: EnvState,
+    filt_env: EnvState,
+    filt: BiquadState,
+}
+
+impl Voice {
+    fn off() -> Self {
+        Self {
+            active: false,
+            instrument_slot: 0,
+            midi_note: 0,
+            velocity: 0,
+            note_off_sample: 0,
+            freq_hz: 440.0,
+            phase1: 0.0,
+            phase2: 0.0,
+            amp_env: EnvState {
+                stage: EnvStage::Off,
+                level: 0.0,
+                stage_pos: 0,
+                stage_len: 0,
+                sustain: 0.0,
+                release_start: 0.0,
+            },
+            filt_env: EnvState {
+                stage: EnvStage::Off,
+                level: 0.0,
+                stage_pos: 0,
+                stage_len: 0,
+                sustain: 0.0,
+                release_start: 0.0,
+            },
+            filt: BiquadState::new(),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+struct InstrumentMod {
+    cutoff_cc: f32,
+    resonance_cc: f32,
+}
+
+impl InstrumentMod {
+    fn new() -> Self {
+        Self {
+            cutoff_cc: 0.0,
+            resonance_cc: 0.0,
+        }
+    }
+}
+
+pub struct SynthEngine {
+    sample_rate: u32,
+    sample_clock: u64,
+    instruments: [SynthConfig; 16],
+    mods: [InstrumentMod; 16],
+    voices: [[Voice; 8]; 16],
+}
+
+impl SynthEngine {
+    pub fn new(sample_rate: u32) -> Self {
+        let default = default_synth_config();
+        Self {
+            sample_rate,
+            sample_clock: 0,
+            instruments: [default; 16],
+            mods: [InstrumentMod::new(); 16],
+            voices: [[Voice::off(); 8]; 16],
+        }
+    }
+
+    pub fn set_instruments(&mut self, cfg: InstrumentsConfig) {
+        for (idx, slot) in cfg.instruments.into_iter().enumerate() {
+            if idx >= 16 {
+                break;
+            }
+            if slot.kind != "synth" {
+                continue;
+            }
+            self.instruments[idx] = slot.synth;
+        }
+    }
+
+    pub fn note_on(&mut self, instrument_slot: u8, midi_note: u8, velocity: u8, duration_ms: u32) {
+        let slot = (instrument_slot as usize).min(15);
+        let v = velocity.max(1);
+        let duration_samples = ms_to_samples(duration_ms as f32, self.sample_rate).max(1) as u64;
+        let note_off_sample = self.sample_clock.saturating_add(duration_samples);
+        let freq = midi_note_to_hz(midi_note);
+
+        let pool = &mut self.voices[slot];
+        let mut voice_index: Option<usize> = None;
+        for (i, voice) in pool.iter().enumerate() {
+            if !voice.active {
+                voice_index = Some(i);
+                break;
+            }
+        }
+        let i = voice_index.unwrap_or_else(|| Self::steal_voice_index(pool));
+
+        let cfg = self.instruments[slot];
+        let amp_env = EnvState::note_on(cfg.amp_env, self.sample_rate);
+        let filt_env = EnvState::note_on(cfg.filter_env, self.sample_rate);
+        pool[i] = Voice {
+            active: true,
+            instrument_slot: slot as u8,
+            midi_note,
+            velocity: v,
+            note_off_sample,
+            freq_hz: freq,
+            phase1: 0.0,
+            phase2: 0.0,
+            amp_env,
+            filt_env,
+            filt: BiquadState::new(),
+        };
+    }
+
+    pub fn cc(&mut self, instrument_slot: u8, controller: u8, value: u8) {
+        let slot = (instrument_slot as usize).min(15);
+        if controller == 74 {
+            self.mods[slot].cutoff_cc = (value as f32 / 127.0).clamp(0.0, 1.0);
+        } else if controller == 71 {
+            self.mods[slot].resonance_cc = (value as f32 / 127.0).clamp(0.0, 1.0);
+        } else if controller == 120 || controller == 123 {
+            self.mods[slot] = InstrumentMod::new();
+        }
+    }
+
+    pub fn note_off(&mut self, instrument_slot: u8, midi_note: u8) {
+        let slot = (instrument_slot as usize).min(15);
+        let cfg = self.instruments[slot];
+        for voice in self.voices[slot].iter_mut() {
+            if !voice.active {
+                continue;
+            }
+            if voice.midi_note != midi_note {
+                continue;
+            }
+            voice.amp_env.begin_release(cfg.amp_env, self.sample_rate);
+            voice
+                .filt_env
+                .begin_release(cfg.filter_env, self.sample_rate);
+            voice.note_off_sample = self.sample_clock;
+        }
+    }
+
+    pub fn all_notes_off(&mut self) {
+        for slot in 0..16 {
+            let cfg = self.instruments[slot];
+            for voice in self.voices[slot].iter_mut() {
+                if !voice.active {
+                    continue;
+                }
+                voice.amp_env.begin_release(cfg.amp_env, self.sample_rate);
+                voice
+                    .filt_env
+                    .begin_release(cfg.filter_env, self.sample_rate);
+                voice.note_off_sample = self.sample_clock;
+            }
+        }
+    }
+
+    pub fn next_sample(&mut self) -> f32 {
+        let mut out = 0.0_f32;
+        for pool in self.voices.iter_mut() {
+            for v in pool.iter_mut() {
+                if !v.active {
+                    continue;
+                }
+                let slot = (v.instrument_slot as usize).min(15);
+                let cfg = self.instruments[slot];
+
+                if self.sample_clock >= v.note_off_sample {
+                    v.amp_env.begin_release(cfg.amp_env, self.sample_rate);
+                    v.filt_env.begin_release(cfg.filter_env, self.sample_rate);
+                }
+
+                let amp_env = v.amp_env.next();
+                let filt_env = v.filt_env.next();
+                if v.amp_env.is_off() {
+                    v.active = false;
+                    continue;
+                }
+
+                let vel = (v.velocity as f32 / 127.0).clamp(0.0, 1.0);
+                let vel_sens = (cfg.amp.velocity_sensitivity_pct / 100.0).clamp(0.0, 1.0);
+                let vel_gain = (1.0 - vel_sens) + vel_sens * vel;
+                let gain = (cfg.amp.gain_pct / 100.0).clamp(0.0, 1.0);
+
+                let osc1 = osc_sample(cfg.osc1, v.freq_hz, &mut v.phase1, self.sample_rate);
+                let osc2 = osc_sample(cfg.osc2, v.freq_hz, &mut v.phase2, self.sample_rate);
+                let dry = (osc1 + osc2) * 0.5;
+
+                let cutoff_base = cfg.filter.cutoff_hz;
+                let env_amt = (cfg.filter.env_amount_pct / 100.0).clamp(-1.0, 1.0);
+                let cutoff_env = cutoff_base * (1.0 + env_amt * filt_env).max(0.0);
+                let cutoff_cc = self.mods[slot].cutoff_cc;
+                let cutoff = if cutoff_cc > 0.0 {
+                    120.0 + cutoff_cc * 15_880.0
+                } else {
+                    cutoff_env
+                };
+                let res_mod = self.mods[slot].resonance_cc;
+                let resonance = if res_mod > 0.0 {
+                    res_mod * 100.0
+                } else {
+                    cfg.filter.resonance
+                };
+                let q = 0.5 + (resonance.clamp(0.0, 100.0) / 100.0) * 11.5;
+                let filtered = v
+                    .filt
+                    .process(dry, cfg.filter.kind, cutoff, q, self.sample_rate);
+
+                let sample = filtered * amp_env * vel_gain * gain * 0.35;
+                out += sample;
+            }
+        }
+
+        self.sample_clock = self.sample_clock.saturating_add(1);
+        out.clamp(-1.0, 1.0)
+    }
+
+    fn steal_voice_index(pool: &[Voice; 8]) -> usize {
+        let mut best_i = 0;
+        let mut best_score = f32::MAX;
+        for (i, v) in pool.iter().enumerate() {
+            if !v.active {
+                return i;
+            }
+            let score = v.amp_env.level;
+            if score < best_score {
+                best_score = score;
+                best_i = i;
+            }
+        }
+        best_i
+    }
+
+    #[cfg(test)]
+    fn active_voice_count_for_slot(&self, slot: usize) -> usize {
+        self.voices[slot].iter().filter(|v| v.active).count()
+    }
+}
+
+fn ms_to_samples(ms: f32, sample_rate: u32) -> u32 {
+    if ms <= 0.0 {
+        return 0;
+    }
+    ((ms / 1000.0) * (sample_rate as f32)).round().max(0.0) as u32
 }
 
 fn midi_note_to_hz(note: u8) -> f32 {
     440.0 * 2.0_f32.powf((note as f32 - 69.0) / 12.0)
 }
 
+fn osc_sample(cfg: OscConfig, base_freq: f32, phase: &mut f32, sample_rate: u32) -> f32 {
+    let octave_mul = 2.0_f32.powi(cfg.octave.clamp(-2, 2));
+    let detune_mul = 2.0_f32.powf(cfg.detune_cents.clamp(-1200.0, 1200.0) / 1200.0);
+    let freq = base_freq * octave_mul * detune_mul;
+    let inc = (freq / (sample_rate as f32)).clamp(0.0, 0.5);
+    *phase = (*phase + inc).fract();
+
+    let raw = match cfg.waveform {
+        WaveformId::Sine => (2.0 * PI * *phase).sin(),
+        WaveformId::Triangle => 4.0 * (*phase - 0.5).abs() - 1.0,
+        WaveformId::Saw => 2.0 * *phase - 1.0,
+        WaveformId::Square => {
+            if *phase < 0.5 {
+                1.0
+            } else {
+                -1.0
+            }
+        }
+        WaveformId::Pulse => {
+            let duty = (cfg.pulse_width_pct / 100.0).clamp(0.05, 0.95);
+            if *phase < duty {
+                1.0
+            } else {
+                -1.0
+            }
+        }
+    };
+
+    let level = (cfg.level_pct / 100.0).clamp(0.0, 1.0);
+    raw * level
+}
+
+pub fn default_synth_config() -> SynthConfig {
+    SynthConfig {
+        osc1: OscConfig {
+            waveform: WaveformId::Saw,
+            level_pct: 80.0,
+            octave: 0,
+            detune_cents: 0.0,
+            pulse_width_pct: 50.0,
+        },
+        osc2: OscConfig {
+            waveform: WaveformId::Square,
+            level_pct: 80.0,
+            octave: 0,
+            detune_cents: 0.0,
+            pulse_width_pct: 50.0,
+        },
+        amp: AmpConfig {
+            gain_pct: 80.0,
+            velocity_sensitivity_pct: 100.0,
+        },
+        amp_env: EnvConfig {
+            attack_ms: 5.0,
+            decay_ms: 120.0,
+            sustain_pct: 70.0,
+            release_ms: 180.0,
+        },
+        filter: FilterConfig {
+            kind: FilterType::Lowpass,
+            cutoff_hz: 8000.0,
+            resonance: 20.0,
+            env_amount_pct: 0.0,
+            key_tracking_pct: 0.0,
+        },
+        filter_env: EnvConfig {
+            attack_ms: 5.0,
+            decay_ms: 120.0,
+            sustain_pct: 70.0,
+            release_ms: 180.0,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{render_note_preview, NoteTrigger, Waveform};
+    use super::{
+        default_synth_config, FilterType, InstrumentSlotConfig, InstrumentsConfig, SynthEngine,
+    };
 
     #[test]
     fn generates_samples() {
-        let pcm = render_note_preview(
-            NoteTrigger {
-                midi_note: 60,
-                velocity: 100,
-                duration_ms: 100,
-                waveform: Waveform::Sine,
-                lowpass_cutoff_hz: 8_000.0,
-                lowpass_resonance: 0.2,
-            },
-            48_000,
-        );
-        assert!(!pcm.is_empty());
-        assert!(pcm.iter().any(|v| *v != 0.0));
+        let mut engine = SynthEngine::new(48_000);
+        engine.note_on(0, 60, 100, 120);
+        let mut any = false;
+        for _ in 0..1024 {
+            let s = engine.next_sample();
+            if s != 0.0 {
+                any = true;
+                break;
+            }
+        }
+        assert!(any);
+    }
+
+    #[test]
+    fn applies_instrument_config() {
+        let mut engine = SynthEngine::new(48_000);
+        let cfg = default_synth_config();
+        engine.set_instruments(InstrumentsConfig {
+            instruments: vec![InstrumentSlotConfig {
+                kind: "synth".to_string(),
+                synth: cfg,
+            }],
+        });
+        engine.note_on(0, 60, 100, 120);
+        let s = engine.next_sample();
+        assert!(s.is_finite());
+    }
+
+    #[test]
+    fn all_filter_types_generate_finite_non_silent_audio() {
+        let modes = [
+            FilterType::Lowpass,
+            FilterType::Highpass,
+            FilterType::Bandpass,
+            FilterType::Notch,
+        ];
+
+        for mode in modes {
+            let mut engine = SynthEngine::new(48_000);
+            let mut cfg = default_synth_config();
+            cfg.filter.kind = mode;
+            cfg.filter.cutoff_hz = 2_000.0;
+            cfg.filter.resonance = 45.0;
+
+            engine.set_instruments(InstrumentsConfig {
+                instruments: vec![InstrumentSlotConfig {
+                    kind: "synth".to_string(),
+                    synth: cfg,
+                }],
+            });
+
+            engine.note_on(0, 64, 110, 220);
+            let mut had_nonzero = false;
+            for _ in 0..4096 {
+                let s = engine.next_sample();
+                assert!(s.is_finite(), "sample must be finite for mode {mode:?}");
+                if s.abs() > 1.0e-6 {
+                    had_nonzero = true;
+                }
+            }
+
+            assert!(
+                had_nonzero,
+                "expected non-silent output for filter mode {mode:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn maintains_eight_voices_per_instrument_slot() {
+        let mut engine = SynthEngine::new(48_000);
+        for i in 0..8 {
+            engine.note_on(0, 60 + i, 100, 2_000);
+            engine.note_on(1, 72 + i, 100, 2_000);
+        }
+
+        assert_eq!(engine.active_voice_count_for_slot(0), 8);
+        assert_eq!(engine.active_voice_count_for_slot(1), 8);
+    }
+
+    #[test]
+    fn voice_steal_is_scoped_to_instrument_slot() {
+        let mut engine = SynthEngine::new(48_000);
+        for i in 0..8 {
+            engine.note_on(0, 60 + i, 100, 2_000);
+            engine.note_on(1, 72 + i, 100, 2_000);
+        }
+        engine.note_on(0, 90, 100, 2_000);
+
+        assert_eq!(engine.active_voice_count_for_slot(0), 8);
+        assert_eq!(engine.active_voice_count_for_slot(1), 8);
+    }
+
+    #[test]
+    fn note_off_releases_matching_slot_note() {
+        let mut engine = SynthEngine::new(48_000);
+        engine.note_on(0, 60, 100, 50_000);
+        for _ in 0..64 {
+            let _ = engine.next_sample();
+        }
+        engine.note_off(0, 60);
+        for _ in 0..20_000 {
+            let _ = engine.next_sample();
+        }
+        assert_eq!(engine.active_voice_count_for_slot(0), 0);
+    }
+
+    #[test]
+    fn all_notes_off_releases_all_slots() {
+        let mut engine = SynthEngine::new(48_000);
+        for i in 0..4 {
+            engine.note_on(0, 60 + i, 100, 50_000);
+            engine.note_on(1, 72 + i, 100, 50_000);
+        }
+        engine.all_notes_off();
+        for _ in 0..20_000 {
+            let _ = engine.next_sample();
+        }
+        assert_eq!(engine.active_voice_count_for_slot(0), 0);
+        assert_eq!(engine.active_voice_count_for_slot(1), 0);
     }
 }

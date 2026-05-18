@@ -6,21 +6,31 @@
   "rowStepDegrees": 3,
   "columnStepDegrees": 1,
   "activate": {
+    "action": "note_on",
     "channel": 0,
     "velocity": 96,
     "durationMs": 150
   },
   "deactivate": {
+    "action": "note_off",
     "channel": 1,
     "velocity": 68,
     "durationMs": 90
   },
   "stable": {
+    "action": "none",
     "channel": 0,
     "velocity": 88,
     "durationMs": 130
   },
   "scanned": {
+    "action": "note_on",
+    "channel": 0,
+    "velocity": 88,
+    "durationMs": 130
+  },
+  "scanned_empty": {
+    "action": "note_off",
     "channel": 0,
     "velocity": 88,
     "durationMs": 130

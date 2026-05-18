@@ -91,6 +91,14 @@ export function writeValue<TConfig extends object>(cfg: TConfig, key: string, va
 }
 
 export function formatDisplayValue(key: string, value: unknown): string {
+  if (key === "mapping.activate.channel" || key === "mapping.stable.channel" || key === "mapping.deactivate.channel" || key === "mapping.scanned.channel" || key === "mapping.scanned_empty.channel") {
+    const n = clamp(Math.floor(Number(value)), 0, 15);
+    return String(n + 1);
+  }
+  if (/^instruments\.\d+\.midi\.channel$/.test(key)) {
+    const n = clamp(Math.floor(Number(value)), 0, 15);
+    return String(n + 1);
+  }
   if (key === "masterVolume") return `Vol: ${value}%`;
   if (key === "displayBrightness") return `OLED ${value}%`;
   if (key === "gridBrightness") return `Grid ${value}%`;
@@ -107,7 +115,6 @@ export function formatDisplayValue(key: string, value: unknown): string {
   if (key === "pitch.scale") return formatScaleName(String(value));
   if (key === "pitch.root") return String(value);
   if (key === "transport.playing") return value === true || value === "true" ? "Play" : "Stop";
-  if (key === "eventParity") return value === "none" ? "All" : "Odd/Even";
   if (typeof value === "boolean") return value ? "On" : "Off";
   return String(value);
 }

@@ -88,7 +88,6 @@ async function main() {
 
   // Make note generation deterministic/fast.
   state.runtimeConfig.algorithmStepUnit = "1/16";
-  state.runtimeConfig.eventParity = "none";
 
   // Force stopLatched then play so we emit Start.
   state.system.stopLatched = true;

@@ -41,6 +41,37 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
   const factory = deps.factoryPayload(behavior);
   const p: any = payload ?? {};
   const rt: any = p.runtimeConfig ?? {};
+
+  const sanitizeInstruments = (incoming: any): any[] => {
+    const factorySlots: any[] = Array.isArray((factory.runtimeConfig as any).instruments)
+      ? (factory.runtimeConfig as any).instruments
+      : [];
+    const baseSlots = factorySlots.length > 0 ? factorySlots : Array.from({ length: 16 }, () => ({ type: "synth", midi: { enabled: false, channel: 0 }, synth: {} }));
+    const src = Array.isArray(incoming) ? incoming : [];
+    const out: any[] = [];
+    for (let i = 0; i < 16; i += 1) {
+      const f = baseSlots[i] ?? baseSlots[0] ?? { type: "synth", midi: { enabled: false, channel: i }, synth: {} };
+      const s = src[i] ?? {};
+      out.push({
+        ...(f as any),
+        ...(s as any),
+        type: (s as any).type === "synth" ? "synth" : (f as any).type,
+        midi: { ...(f as any).midi, ...((s as any).midi ?? {}) },
+        synth: {
+          ...(f as any).synth,
+          ...((s as any).synth ?? {}),
+          osc1: { ...(f as any).synth?.osc1, ...((s as any).synth?.osc1 ?? {}) },
+          osc2: { ...(f as any).synth?.osc2, ...((s as any).synth?.osc2 ?? {}) },
+          amp: { ...(f as any).synth?.amp, ...((s as any).synth?.amp ?? {}) },
+          ampEnv: { ...(f as any).synth?.ampEnv, ...((s as any).synth?.ampEnv ?? {}) },
+          filter: { ...(f as any).synth?.filter, ...((s as any).synth?.filter ?? {}) },
+          filterEnv: { ...(f as any).synth?.filterEnv, ...((s as any).synth?.filterEnv ?? {}) }
+        }
+      });
+    }
+    return out;
+  };
+
   const mergedRuntime: RuntimeConfig = {
     ...(factory.runtimeConfig as any),
     ...(rt as any),
@@ -62,7 +93,8 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
       velocity: { ...(factory.runtimeConfig.y.velocity as any), ...(rt.y?.velocity ?? {}) },
       filterCutoff: { ...(factory.runtimeConfig.y.filterCutoff as any), ...(rt.y?.filterCutoff ?? {}) },
       filterResonance: { ...(factory.runtimeConfig.y.filterResonance as any), ...(rt.y?.filterResonance ?? {}) }
-    }
+    },
+    instruments: sanitizeInstruments(rt.instruments)
   };
 
   return {

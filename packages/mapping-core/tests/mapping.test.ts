@@ -15,6 +15,15 @@ test("mapIntentsToMusicalEvents maps scanned intents to scanned target", () => {
   }
 });
 
+test("mapIntentsToMusicalEvents supports note_off and none actions", () => {
+  const config = loadDefaultMappingConfig();
+  const offEvents = mapIntentsToMusicalEvents([{ x: 0, y: 0, degree: 0, kind: "deactivate" }], config);
+  assert.equal(offEvents.length, 1);
+  assert.equal(offEvents[0].type, "note_off");
+  const noneEvents = mapIntentsToMusicalEvents([{ x: 0, y: 0, degree: 0, kind: "stable" }], config);
+  assert.equal(noneEvents.length, 0);
+});
+
 test("mapping config sanitizes out-of-range values", () => {
   const unsafe: MappingConfig = {
     baseMidiNote: -5,
@@ -23,10 +32,11 @@ test("mapping config sanitizes out-of-range values", () => {
     scale: [0, 2, 4, 7, 12],
     rowStepDegrees: -2,
     columnStepDegrees: 3.9,
-    activate: { channel: 20, velocity: 200, durationMs: 999999 },
-    deactivate: { channel: -1, velocity: 0, durationMs: 0 },
-    stable: { channel: 2, velocity: 80, durationMs: 120 },
-    scanned: { channel: 3, velocity: 80, durationMs: 120 }
+    activate: { action: "note_on", channel: 20, velocity: 200, durationMs: 999999 },
+    deactivate: { action: "note_off", channel: -1, velocity: 0, durationMs: 0 },
+    stable: { action: "none", channel: 2, velocity: 80, durationMs: 120 },
+    scanned: { action: "note_on", channel: 3, velocity: 80, durationMs: 120 },
+    scanned_empty: { action: "note_off", channel: 99, velocity: 80, durationMs: 120 }
   };
 
   const events = mapIntentsToMusicalEvents([{ x: 0, y: 0, degree: 300, kind: "activate" }], unsafe);
