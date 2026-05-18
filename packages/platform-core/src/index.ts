@@ -458,6 +458,35 @@ export function enumerateMenuHelpTargets<TState>(state: PlatformState<TState>): 
   return out;
 }
 
+export type EnumHelpTarget = {
+  path: string;
+  key: string;
+  kind: "enum";
+  options: string[];
+};
+
+export function enumerateEnumHelpTargets<TState>(state: PlatformState<TState>): EnumHelpTarget[] {
+  const out: EnumHelpTarget[] = [];
+  function walk(node: MenuNode, s: PlatformState<TState>, path: string): void {
+    const kids = visibleChildren(node, s);
+    for (const child of kids) {
+      if (child.kind === "group") {
+        walk(child, s, `${path} > ${child.label ?? "Group"}`);
+        continue;
+      }
+      if (child.kind !== "enum") continue;
+      out.push({
+        path: `${path} > ${child.label ?? "Option"}`,
+        key: `key:${child.key}`,
+        kind: "enum",
+        options: child.options.slice()
+      });
+    }
+  }
+  walk(menuTree(state), state, "Menu");
+  return out;
+}
+
 function isMainEncoderInput(id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined): boolean {
   return id === undefined || id === "main";
 }

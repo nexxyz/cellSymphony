@@ -348,8 +348,8 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "key:activeBehavior",
     "kind": "enum",
     "title": "Behavior",
-    "line1": "Selects which Life behavior engine runs on the grid.",
-    "line2": "Switching behavior reinitializes that behavior's runtime state."
+    "line1": "Options: life, brain, ant, bounce, pulse, raindrops, dla, glider, sequencer, shapes.",
+    "line2": "Each option changes simulation logic and event density; switching reinitializes behavior state."
   },
   {
     "id": "sense_section",
@@ -366,8 +366,8 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "key:scanMode",
     "kind": "enum",
     "title": "Scan Mode",
-    "line1": "Chooses full-grid immediate sensing or cursor-based scanning.",
-    "line2": "Scanning mode advances a cursor and can create directional note flow."
+    "line1": "Options: no scan, scanning. no scan uses whole-grid interpretation without a scan cursor.",
+    "line2": "scanning moves a cursor by scan unit/axis/direction and emits scanned/scanned-empty triggers."
   },
   {
     "id": "scan_axis",
@@ -609,8 +609,8 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "",
     "kind": "enum",
     "title": "Instrument Type",
-    "line1": "Selects the sound engine type for this slot.",
-    "line2": "Currently synth is available; sampler can be added later."
+    "line1": "Options: synth (current), future types may include sampler.",
+    "line2": "synth uses the slot's osc/amp/filter sections; changing type will switch engine parameter set."
   },
   {
     "id": "inst_note_behavior",

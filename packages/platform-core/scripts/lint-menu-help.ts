@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createInitialState, enumerateMenuHelpTargets } from "../src/index";
+import { createInitialState, enumerateEnumHelpTargets, enumerateMenuHelpTargets } from "../src/index";
 import { lifeBehavior } from "@cellsymphony/behaviors-life";
 
 type Entry = { id: string; path: string; key: string; kind: string; title: string; line1: string; line2: string };
@@ -69,6 +69,7 @@ state.system.midiOutputs = [{ id: "out-1", name: "Out Port" }];
 state.system.midiInputs = [{ id: "in-1", name: "In Port" }];
 
 const targets = enumerateMenuHelpTargets(state);
+const enumTargets = enumerateEnumHelpTargets(state);
 const misses: typeof targets = [];
 const ambiguities: Array<{ target: (typeof targets)[number]; ids: string[] }> = [];
 const buckets = { exactKey: 0, wildcardKey: 0, exactPath: 0, wildcardPath: 0, kindFallback: 0 };
@@ -93,6 +94,62 @@ for (const t of targets) {
   else if (bestTier === 2) buckets.exactPath += 1;
   else if (bestTier === 3) buckets.wildcardPath += 1;
   else buckets.kindFallback += 1;
+}
+
+const enumHelpErrors: string[] = [];
+const seenEnumCanonical = new Set<string>();
+
+function enumCanonicalKey(key: string): string {
+  return key.replace(/instruments\.\d+\./g, "instruments.*.");
+}
+
+function shouldEnforceEnumHelp(target: { key: string; options: string[] }): boolean {
+  const key = enumCanonicalKey(target.key);
+  if (key === "key:scanMode") return true;
+  if (key === "key:activeBehavior") return true;
+  if (key === "key:instruments.*.type") return true;
+  return false;
+}
+
+for (const t of enumTargets) {
+  const canonicalKey = enumCanonicalKey(t.key);
+  if (seenEnumCanonical.has(canonicalKey)) continue;
+  seenEnumCanonical.add(canonicalKey);
+  if (!shouldEnforceEnumHelp(t)) continue;
+  const matched = entries.filter((e) => isExplicit(e) && matches(e, t));
+  if (matched.length === 0) continue;
+  let bestTier = 99;
+  for (const m of matched) {
+    const x = tier(m, t);
+    if (x >= 0 && x < bestTier) bestTier = x;
+  }
+  const best = matched.filter((m) => tier(m, t) === bestTier)[0];
+  if (!best) continue;
+  const text = `${best.line1} ${best.line2}`.toLowerCase();
+  const missing: string[] = [];
+  for (const option of t.options) {
+    const token = option.toLowerCase();
+    const normalized = token.replaceAll("_", " ");
+    const aliases = new Set<string>([token, normalized]);
+    if (t.key === "key:scanMode" && token === "immediate") aliases.add("no scan");
+    let found = false;
+    for (const a of aliases) {
+      if (text.includes(a)) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) missing.push(option);
+  }
+  if (missing.length > 0) {
+    enumHelpErrors.push(`- key=${t.key} path=${t.path} missing options=${missing.join(",")}`);
+  }
+}
+
+if (enumHelpErrors.length > 0) {
+  console.error("Enum help entries must describe all current options:");
+  for (const err of enumHelpErrors) console.error(err);
+  process.exit(1);
 }
 
 if (misses.length > 0) {

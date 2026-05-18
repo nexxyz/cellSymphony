@@ -105,13 +105,13 @@ export function formatDisplayValue(key: string, value: unknown): string {
   if (key === "buttonBrightness") return `Btn ${value}%`;
   if (key === "screenSleepSeconds") return Number(value) <= 0 ? "Sleep: Off" : `Sleep: ${value}s`;
   if (key === "activeBehavior") return String(value);
-  if (key === "scanMode") return value === "immediate" ? "Immediate" : "Scanning";
-  if (key === "scanAxis") return value === "columns" ? "Cols" : "Rows";
-  if (key === "scanDirection") return value === "forward" ? "Fwd" : "Rev";
+  if (key === "scanMode") return value === "immediate" ? "no scan" : "scanning";
+  if (key === "scanAxis") return value === "columns" ? "cols" : "rows";
+  if (key === "scanDirection") return value === "forward" ? "fwd" : "rev";
   if (key === "pitch.startingNote" || key === "pitch.lowestNote" || key === "pitch.highestNote") {
     return formatNoteWithMidi(Number(value));
   }
-  if (key === "pitch.outOfRange") return value === "wrap" ? "Wrap" : "Clamp";
+  if (key === "pitch.outOfRange") return value === "wrap" ? "wrap" : "clamp";
   if (key === "pitch.scale") return formatScaleName(String(value));
   if (key === "pitch.root") return String(value);
   if (key === "transport.playing") return value === true || value === "true" ? "Play" : "Stop";

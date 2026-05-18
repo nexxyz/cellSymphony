@@ -80,7 +80,7 @@ Behavior-specific config items (from `configMenu()`):
 
 ```
 L2: Sense
-├── Scan Mode: [immediate | scanning]
+├── Scan Mode: [no scan | scanning]
 ├── Scan Axis: [rows | columns]           ← visible when scanning
 ├── Scan Unit: [1/16, 1/8, 1/4, 1/2, 1/1] ← visible when scanning
 ├── Scan Direction: [forward | reverse]    ← visible when scanning
@@ -333,7 +333,7 @@ All behaviors use `CellTriggerType`: `"activate" | "stable" | "deactivate" | "sc
 | `deactivate` | Algorithm | Cell becomes inactive (death, shape leaves cell, etc.) |
 | `scanned` | Scanning layer | Cell found active during scan (only in "scanning" mode) |
 
-Scan mode "immediate" generates NO `scanned` triggers. Only "scanning" mode (column/row) generates `scanned` triggers.
+Scan mode "no scan" generates NO `scanned` triggers. Only "scanning" mode (column/row) generates `scanned` triggers.
 
 ## Maintenance Rule
 

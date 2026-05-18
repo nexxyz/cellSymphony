@@ -36,9 +36,9 @@ midi_clock_in	System > MIDI > Sync & Clock > Clock In	key:midi.clockInEnabled	bo
 midi_respond_start_stop	System > MIDI > Sync & Clock > Respond Start/Stop	key:midi.respondToStartStop	bool	Respond Start/Stop	When enabled, external MIDI Start/Stop controls transport.	When disabled, transport reacts only to local controls.
 life_section	Menu > L1: Life		group	Life Layer	Configures the active Life behavior and how fast it advances.	Use this area to shape the cellular process before sensing/audio mapping.
 life_step_rate	*	key:algorithmStepUnit	enum	Step Rate	Sets how often the Life algorithm advances per musical time unit.	Faster rates evolve patterns quickly; slower rates make longer-form motion.
-life_behavior	*	key:activeBehavior	enum	Behavior	Selects which Life behavior engine runs on the grid.	Switching behavior reinitializes that behavior's runtime state.
+life_behavior	*	key:activeBehavior	enum	Behavior	Options: life, brain, ant, bounce, pulse, raindrops, dla, glider, sequencer, shapes.	Each option changes simulation logic and event density; switching reinitializes behavior state.
 sense_section	Menu > L2: Sense		group	Sense Layer	Controls how grid activity is interpreted into trigger intents.	This is where scan/event sources get routed toward instruments.
-scan_mode	*	key:scanMode	enum	Scan Mode	Chooses full-grid immediate sensing or cursor-based scanning.	Scanning mode advances a cursor and can create directional note flow.
+scan_mode	*	key:scanMode	enum	Scan Mode	Options: no scan, scanning. no scan uses whole-grid interpretation without a scan cursor.	scanning moves a cursor by scan unit/axis/direction and emits scanned/scanned-empty triggers.
 scan_axis	*	key:scanAxis	enum	Scan Axis	Sets whether scanning traverses rows or columns.	Combine with Scan Direction to define scan movement.
 scan_unit	*	key:scanUnit	enum	Scan Unit	Sets scan cursor advance rate in musical units.	Smaller units move faster; larger units move slower.
 scan_direction	*	key:scanDirection	enum	Scan Direction	Sets scan travel direction along the selected axis.	Use reverse for back-and-forth style phrasing with manual resets.
@@ -65,7 +65,7 @@ pitch_scale	*	key:pitch.scale	enum	Scale	Selects scale intervals used for pitch 
 pitch_root	*	key:pitch.root	enum	Root	Sets the tonic/root for selected scale quantization.	Changing root transposes quantized output harmonically.
 inst_group	Menu > L3: Voice > Instruments		group	Instruments	Contains the 16 instrument slots used by Sense routing.	Each slot has independent MIDI and synth parameters.
 inst_slot	Menu > L3: Voice > Instruments > Instrument *		group	Instrument Slot	Configures one instrument destination slot.	Sense trigger mappings target these slots.
-inst_type	Menu > L3: Voice > Instruments > Instrument * > Type		enum	Instrument Type	Selects the sound engine type for this slot.	Currently synth is available; sampler can be added later.
+inst_type	Menu > L3: Voice > Instruments > Instrument * > Type		enum	Instrument Type	Options: synth (current), future types may include sampler.	synth uses the slot's osc/amp/filter sections; changing type will switch engine parameter set.
 inst_note_behavior	*	key:instruments.*.noteBehavior	enum	Note Behavior	Controls retrigger versus hold behavior for this instrument slot.	Use hold for lifecycle note_off workflows and scanned-empty release.
 inst_midi_enabled	*	key:instruments.*.midi.enabled	bool	MIDI Enabled	Enables external MIDI output for this instrument slot.	Global MIDI must also be enabled in System > MIDI.
 inst_midi_channel	*	key:instruments.*.midi.channel	number	MIDI Channel	Selects outgoing MIDI channel for this instrument slot.	Shown as 1..16 while stored internally as 0..15.
