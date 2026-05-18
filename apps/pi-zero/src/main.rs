@@ -7,7 +7,7 @@ use cellsymphony_hal::{
 };
 use midir::MidiInput;
 use rodio::{OutputStream, Sink};
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc;
 use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -30,19 +30,12 @@ impl AudioManager {
     }
 
     fn play_note(&self, note: u8, velocity: u8, duration_ms: u32) -> Result<(), String> {
-        use realtime_engine::synth::{render_note_preview, NoteTrigger, Waveform};
-
-        let trigger = NoteTrigger {
-            midi_note: note,
-            velocity,
-            duration_ms,
-            waveform: Waveform::Sine,
-            lowpass_cutoff_hz: 8_000.0,
-            lowpass_resonance: 0.2,
-        };
-
-        let samples = render_note_preview(trigger, 48_000);
-        let source = rodio::buffer::SamplesBuffer::new(1, 48_000, samples);
+        use rodio::Source;
+        let freq_hz = 440.0_f32 * 2.0_f32.powf((note as f32 - 69.0) / 12.0);
+        let amp = (velocity as f32 / 127.0).clamp(0.0, 1.0) * 0.3;
+        let source = rodio::source::SineWave::new(freq_hz)
+            .take_duration(Duration::from_millis(u64::from(duration_ms)))
+            .amplify(amp);
 
         let sink = self.sink.lock().unwrap();
         sink.append(source);
