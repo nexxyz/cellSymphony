@@ -348,8 +348,8 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "key:activeBehavior",
     "kind": "enum",
     "title": "Behavior",
-    "line1": "Options: life, brain, ant, bounce, pulse, raindrops, dla, glider, sequencer, shapes.",
-    "line2": "Each option changes simulation logic and event density; switching reinitializes behavior state."
+    "line1": "Options: life, brain, ant, bounce, pulse, raindrops, dla, glider, sequencer, shapes. life is classic birth/survival growth; brain is three-state firing/wave propagation; ant is directional trail-writing motion.",
+    "line2": "bounce is moving particle collisions; pulse emits expanding pulses; raindrops creates drip/ripple impacts; dla builds branching aggregates; glider injects traveling Conway motifs; sequencer is deterministic stepped patterns; shapes focuses geometric transforms. Switching behavior reinitializes behavior state."
   },
   {
     "id": "sense_section",
@@ -609,8 +609,8 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "",
     "kind": "enum",
     "title": "Instrument Type",
-    "line1": "Options: synth (current), future types may include sampler.",
-    "line2": "synth uses the slot's osc/amp/filter sections; changing type will switch engine parameter set."
+    "line1": "Options: synth (current), with future engine types such as sampler. synth is a two-oscillator subtractive voice with amp/filter envelopes and per-slot MIDI routing.",
+    "line2": "Use synth for fully generated tones from trigger events; when new engine types arrive, this selector swaps the editable parameter set for that slot."
   },
   {
     "id": "inst_note_behavior",
