@@ -1,5 +1,5 @@
 import type { BehaviorEngine, CellTriggerType } from "@cellsymphony/behavior-api";
-import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
+import { GRID_DOMAIN, GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 
 export type LifeState = {
   width: typeof GRID_WIDTH;
@@ -42,7 +42,7 @@ export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
       for (let r = 0; r < 5; r++) {
         const rx = Math.floor(Math.random() * GRID_WIDTH);
         const ry = Math.floor(Math.random() * GRID_HEIGHT);
-        const ri = ry * GRID_WIDTH + rx;
+        const ri = GRID_DOMAIN.indexOf({ x: rx, y: ry });
         if (!cells[ri]) {
           cells[ri] = true;
           tt[ri] = "activate";
@@ -56,9 +56,7 @@ export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
     if (input.x < 0 || input.x >= GRID_WIDTH || input.y < 0 || input.y >= GRID_HEIGHT) {
       return state;
     }
-    const i = input.y * GRID_WIDTH + input.x;
-    const nextCells = state.cells.slice();
-    nextCells[i] = !nextCells[i];
+    const nextCells = GRID_DOMAIN.toggle(state.cells, { x: input.x, y: input.y });
     return {
       ...state,
       cells: nextCells
@@ -70,7 +68,7 @@ export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
 
     for (let y = 0; y < GRID_HEIGHT; y += 1) {
       for (let x = 0; x < GRID_WIDTH; x += 1) {
-        const i = y * GRID_WIDTH + x;
+        const i = GRID_DOMAIN.indexOf({ x, y });
         const alive = state.cells[i];
         const neighbors = countNeighbors(state.cells, x, y);
         const nextAlive = alive ? neighbors === 2 || neighbors === 3 : neighbors === 3;
@@ -101,7 +99,7 @@ export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
       for (let r = 0; r < state.randomCellsPerTick; r += 1) {
         const rx = Math.floor(Math.random() * GRID_WIDTH);
         const ry = Math.floor(Math.random() * GRID_HEIGHT);
-        const ri = ry * GRID_WIDTH + rx;
+        const ri = GRID_DOMAIN.indexOf({ x: rx, y: ry });
         if (!nextCells[ri]) {
           nextCells[ri] = true;
           triggerTypes[ri] = "activate";
@@ -153,7 +151,7 @@ function countNeighbors(cells: boolean[], x: number, y: number): number {
       if (nx < 0 || nx >= GRID_WIDTH || ny < 0 || ny >= GRID_HEIGHT) {
         continue;
       }
-      if (cells[ny * GRID_WIDTH + nx]) {
+      if (cells[GRID_DOMAIN.indexOf({ x: nx, y: ny })]) {
         count += 1;
       }
     }

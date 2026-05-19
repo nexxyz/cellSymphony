@@ -41,3 +41,9 @@ Authoritative menu/control behavior spec: `docs/menu-and-controls-spec.md`.
 3. Runtime scheduler triggers tick -> `platform-core` processing
 4. Runtime publishes snapshot -> UI render (OLED + NeoKey LEDs)
 5. Runtime publishes musical events -> output adapters (audio/MIDI)
+
+## Grid Coordinate Contract
+
+- Core logic uses a world-space grid origin at lower-left: `(0,0)` is bottom-left, `y` increases upward.
+- UI/hardware-facing layers may use screen-space coordinates (top-left origin), but conversion is only allowed at boundaries.
+- In code, grid coordinate conversion must go through the centralized grid domain helpers (`gridDomain.ts`) rather than ad-hoc math.

@@ -1,12 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
+import { GRID_DOMAIN, GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 import { gliderBehavior, type GliderState } from "../src/index";
 
 const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
 
 function idx(x: number, y: number): number {
-  return y * GRID_WIDTH + x;
+  return GRID_DOMAIN.indexOf({ x, y });
 }
 
 const GLIDER_CELLS = [idx(1,0), idx(2,1), idx(0,2), idx(1,2), idx(2,2)];

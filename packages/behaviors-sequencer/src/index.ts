@@ -1,5 +1,5 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
-import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
+import { GRID_DOMAIN, GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 
 export type SequencerState = {
   width: typeof GRID_WIDTH;
@@ -18,10 +18,7 @@ export const sequencerBehavior: BehaviorEngine<SequencerState, {}> = {
   },
   onInput(state, input: DeviceInput) {
     if (input.type !== "grid_press") return state;
-    const i = input.y * GRID_WIDTH + input.x;
-    const nextCells = state.cells.slice();
-    nextCells[i] = !nextCells[i];
-    return { ...state, cells: nextCells };
+    return { ...state, cells: GRID_DOMAIN.toggle(state.cells, { x: input.x, y: input.y }) };
   },
   onTick(state) {
     return state;

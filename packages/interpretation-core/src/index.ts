@@ -128,7 +128,7 @@ function selectStateCandidates(
 }
 
 function computeDegree(gridHeight: number, x: number, y: number, profile: InterpretationProfile): number {
-  const rowFromBottom = Math.max(0, gridHeight - 1 - y);
+  const rowFromBottom = Math.max(0, Math.min(gridHeight - 1, y));
   const xPart = axisValue(profile.x, x);
   const yPart = axisValue(profile.y, rowFromBottom);
   return xPart + yPart;

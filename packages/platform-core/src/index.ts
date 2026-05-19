@@ -34,6 +34,7 @@ import { pressMenuInput, turnMenuInput } from "./menuInput";
 import { applyAuxUnbindChoice, assignAuxEncoder, pressAuxEncoder, turnAuxEncoder } from "./auxInput";
 import { handleMenuAction } from "./actions";
 import { getSynthPreset } from "./synthPresets";
+export { GRID_DOMAIN, createGridDomain, type GridCell, type GridDomain } from "./gridDomain";
 import {
   factoryPayload,
   formatTimestamp,

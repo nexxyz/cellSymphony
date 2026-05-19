@@ -1,5 +1,5 @@
 import type { BehaviorEngine, CellTriggerType } from "@cellsymphony/behavior-api";
-import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
+import { GRID_DOMAIN, GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 
 const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
 
@@ -15,7 +15,7 @@ export type GliderState = {
 };
 
 function idx(x: number, y: number): number {
-  return y * GRID_WIDTH + x;
+  return GRID_DOMAIN.indexOf({ x, y });
 }
 
 export type GliderConfig = {

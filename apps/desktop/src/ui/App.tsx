@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
-import { OLED_HEIGHT, OLED_WIDTH } from "@cellsymphony/platform-core";
+import { GRID_DOMAIN, OLED_HEIGHT, OLED_WIDTH } from "@cellsymphony/platform-core";
 import { mapKeyboardEventToInputAction, mapKeyboardKeyupToInputAction, shouldPreventKeyboardDefault } from "../runtime/inputAdapters/keyboardAdapter";
 import { sendEventsToAudio } from "../runtime/outputAdapters/audioSink";
 import { createSimulatorRuntime } from "../runtime/simulatorRuntime";
@@ -62,8 +62,11 @@ export function App() {
   function applyPaint(x: number, y: number, desired: boolean) {
     const key = `${x}-${y}`;
     if (painted.has(key)) return;
-    const index = y * GRID_WIDTH + x;
-    if (cellAlive(index) !== desired) dispatch({ type: "grid_press", x, y });
+    const index = GRID_DOMAIN.toDisplayIndex(GRID_DOMAIN.toLogicalCell({ x, y }));
+    if (cellAlive(index) !== desired) {
+      const world = GRID_DOMAIN.toLogicalCell({ x, y });
+      dispatch({ type: "grid_press", x: world.x, y: world.y });
+    }
     setPainted((prev) => new Set(prev).add(key));
   }
 

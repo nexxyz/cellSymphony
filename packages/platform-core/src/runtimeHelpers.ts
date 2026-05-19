@@ -1,6 +1,7 @@
 import { GRID_HEIGHT, GRID_WIDTH, type LedCell } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import { clamp } from "./coreUtils";
+import { GRID_DOMAIN } from "./gridDomain";
 
 export function dedupeSimultaneousNotes(events: MusicalEvent[]): MusicalEvent[] {
   const out: MusicalEvent[] = [];
@@ -38,23 +39,34 @@ export function cellsToLeds(
   const b = clamp(brightness, 0.1, 1);
   const OFF_BG: LedCell = { r: 15, g: 15, b: 22 };
   const OFF_CURSOR: LedCell = { r: 70, g: 70, b: 76 };
-  return cells.map((alive, i) => {
-    const x = i % GRID_WIDTH;
-    const y = Math.floor(i / GRID_WIDTH);
-    const inCursor = scanCursor !== null && ((scanCursor.axis === "columns" && x === scanCursor.index) || (scanCursor.axis === "rows" && y === scanCursor.index));
-    if (!alive) return scaleLed(inCursor ? OFF_CURSOR : OFF_BG, b);
-    const type = triggerTypes?.[i] ?? "stable";
-    switch (type) {
-      case "activate":
-        return scaleLed({ r: 255, g: 255, b: 255 }, b);
-      case "deactivate":
-        return scaleLed({ r: 128, g: 128, b: 128 }, b);
-      case "scanned":
-        return scaleLed({ r: 255, g: 0, b: 0 }, b);
-      default:
-        return scaleLed({ r: 0, g: 255, b: 120 }, b);
+  const out = Array.from({ length: GRID_WIDTH * GRID_HEIGHT }, () => scaleLed(OFF_BG, b));
+  for (let yWorld = 0; yWorld < GRID_HEIGHT; yWorld += 1) {
+    for (let x = 0; x < GRID_WIDTH; x += 1) {
+      const worldIndex = GRID_DOMAIN.indexOf({ x, y: yWorld });
+      const screenIndex = GRID_DOMAIN.toDisplayIndex({ x, y: yWorld });
+      const alive = !!cells[worldIndex];
+      const inCursor = scanCursor !== null && ((scanCursor.axis === "columns" && x === scanCursor.index) || (scanCursor.axis === "rows" && yWorld === scanCursor.index));
+      if (!alive) {
+        out[screenIndex] = scaleLed(inCursor ? OFF_CURSOR : OFF_BG, b);
+        continue;
+      }
+      const type = triggerTypes?.[worldIndex] ?? "stable";
+      switch (type) {
+        case "activate":
+          out[screenIndex] = scaleLed({ r: 255, g: 255, b: 255 }, b);
+          break;
+        case "deactivate":
+          out[screenIndex] = scaleLed({ r: 128, g: 128, b: 128 }, b);
+          break;
+        case "scanned":
+          out[screenIndex] = scaleLed({ r: 255, g: 0, b: 0 }, b);
+          break;
+        default:
+          out[screenIndex] = scaleLed({ r: 0, g: 255, b: 120 }, b);
+      }
     }
-  });
+  }
+  return out;
 }
 
 function scaleLed(cell: LedCell, brightness: number): LedCell {

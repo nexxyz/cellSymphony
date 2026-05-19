@@ -1,3 +1,6 @@
+import { createGridDomain, type GridCell, type GridDomain } from "./gridDomain";
+export { createGridDomain } from "./gridDomain";
+
 export type DeviceInput =
   | { type: "encoder_turn"; delta: -1 | 1; id?: "main" | "aux1" | "aux2" | "aux3" | "aux4" }
   | { type: "encoder_press"; id?: "main" | "aux1" | "aux2" | "aux3" | "aux4" }
@@ -32,6 +35,8 @@ export type OledFrame = {
 export type LedCell = { r: number; g: number; b: number };
 export const GRID_WIDTH = 8 as const;
 export const GRID_HEIGHT = 8 as const;
+export const GRID_DOMAIN = createGridDomain(GRID_WIDTH, GRID_HEIGHT);
+export type { GridCell, GridDomain };
 export type LedMatrixFrame = {
   width: typeof GRID_WIDTH;
   height: typeof GRID_HEIGHT;
