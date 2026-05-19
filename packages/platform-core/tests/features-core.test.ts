@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import type { BehaviorEngine, CellTriggerType } from "@cellsymphony/behavior-api";
 import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 import { lifeBehavior } from "@cellsymphony/behaviors-life";
+import { sequencerBehavior } from "@cellsymphony/behaviors-sequencer";
 import {
   createInitialState,
   routeInput,
@@ -311,5 +312,23 @@ test("loading preset tracks current preset name", () => {
   const payload = extractConfigPayload(state);
   state = applyStoreResult(state, { type: "load_preset_result", name: "Jam B", payload }, mockBehavior).state;
   assert.equal(state.system.currentPresetName, "Jam B");
+});
+
+test("factory reset restores default behavior to life", () => {
+  let state = createInitialState(sequencerBehavior as any) as any;
+  state.system.oledMode = "normal";
+  state.runtimeConfig.activeBehavior = "sequencer";
+  state.activeBehavior = "sequencer";
+  state.system.confirm = {
+    kind: "load_factory",
+    action: { kind: "factory_load" },
+    cursor: 0,
+    options: ["Yes", "No"],
+    scroll: 0
+  };
+
+  const result = routeInput(state, { type: "encoder_press" } as DeviceInput, sequencerBehavior as any);
+  assert.equal(result.state.runtimeConfig.activeBehavior, "life");
+  assert.equal(result.state.activeBehavior, "life");
 });
 

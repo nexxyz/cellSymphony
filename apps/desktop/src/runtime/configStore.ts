@@ -89,23 +89,6 @@ function readDefault(): DefaultV2 | null {
 }
 
 function migrateDefaultPayload(payload: ConfigPayload): ConfigPayload {
-  const rt: any = payload?.runtimeConfig ?? {};
-  const yPitch: any = rt?.y?.pitch ?? {};
-  if (yPitch.steps === 1) {
-    return {
-      ...payload,
-      runtimeConfig: {
-        ...payload.runtimeConfig,
-        y: {
-          ...(payload.runtimeConfig as any).y,
-          pitch: {
-            ...(payload.runtimeConfig as any).y?.pitch,
-            steps: 2
-          }
-        }
-      }
-    };
-  }
   return payload;
 }
 

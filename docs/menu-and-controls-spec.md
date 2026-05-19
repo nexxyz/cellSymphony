@@ -120,7 +120,7 @@ L2: Sense
 │       ├── Grid Offset: [-7..7] step 1
 │       └── Curve: [linear | curve]
 └── Y Axis (group)
-    └── (same sub-structure as X Axis, keys use y.* prefix, defaults: Pitch Steps steps=2)
+    └── (same sub-structure as X Axis, keys use y.* prefix, defaults: Pitch Steps steps=1)
 ```
 
 ### L3: Voice
@@ -128,7 +128,7 @@ L2: Sense
 ```
 L3: Voice
 ├── Note Mapping (group)
-│   ├── Starting Note: [0..127] step 1   default 36 (C2)
+│   ├── Starting Note: [0..127] step 1   default 60 (C4)
 │   ├── Lowest Note: [0..127] step 1     default 36 (C2)
 │   ├── Highest Note: [0..127] step 1    default 74 (D5)
 │   ├── Out of Range: [clamp | wrap]     default clamp
@@ -150,9 +150,9 @@ L3: Voice
 │   │       ├── Volume (group)           ← includes amp envelope
 │   │       └── Filter (group)           ← includes filter envelope
 ├── X Axis (group)
-│   └── (same sub-structure as L2 X Axis)
+│   └── (same sub-structure as L2 X Axis, defaults: Pitch Steps steps=0)
 └── Y Axis (group)
-    └── (same sub-structure as L2 Y Axis, defaults: Pitch Steps steps=3)
+    └── (same sub-structure as L2 Y Axis, defaults: Pitch Steps steps=1)
 ```
 
 ### Playback

@@ -163,8 +163,9 @@ function executeConfirmed<TState>(
   behavior: BehaviorEngine<TState, unknown>
 ): PlatformState<TState> {
   if (action.kind === "factory_load") {
-    const factory = factoryPayload(behavior, createInitialState, extractConfigPayload);
-    const next = applyConfigPayload(state, factory, behavior);
+    const factoryBehavior = resolveBehavior("life") as BehaviorEngine<TState, unknown>;
+    const factory = factoryPayload(factoryBehavior, createInitialState, extractConfigPayload);
+    const next = applyConfigPayload(state, factory, factoryBehavior);
     return { ...next, system: { ...next.system, currentPresetName: null } };
   }
   if (action.kind === "default_load") {

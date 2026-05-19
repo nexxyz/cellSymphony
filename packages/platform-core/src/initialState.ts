@@ -37,9 +37,9 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
     })),
     eventEnabled: true,
     stateEnabled: true,
-    pitch: { startingNote: 36, lowestNote: 36, highestNote: 74, outOfRange: "clamp", scale: "major_pentatonic", root: "D" },
+    pitch: { startingNote: 60, lowestNote: 36, highestNote: 74, outOfRange: "clamp", scale: "major_pentatonic", root: "D" },
     x: {
-      pitch: { enabled: true, steps: 2 },
+      pitch: { enabled: true, steps: 0 },
       velocity: { enabled: false, from: 20, to: 100, gridOffset: 0, curve: "linear" },
       filterCutoff: { enabled: false, from: 20, to: 127, gridOffset: 0, curve: "linear" },
       filterResonance: { enabled: false, from: 10, to: 90, gridOffset: 0, curve: "linear" }
