@@ -158,7 +158,7 @@ L3: Voice
     │   │   └── Filter (group)
     │   ├── Sample (group, visible when type=sample)
     │   │   ├── Sample Slot: [1..8]
-    │   │   ├── Choose Sample (group)      ← browses `samples/` tree (wav only, sourced from https://github.com/stargatedaw/stargate-sample-pack)
+    │   │   ├── Choose Sample (group)      ← browses `samples/` tree (wav only)
     │   │   ├── !Assign (action)           ← enters grid assignment mode for selected sample slot
     │   │   ├── Velocity Levels: [on | off]
     │   │   ├── Level High / Medium / Low: [1..127] (visible when Velocity Levels=on)
