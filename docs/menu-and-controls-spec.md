@@ -4,6 +4,18 @@ This is the single source of truth for menu structure, control mappings, and par
 
 Context-help copy source: `docs/menu-help-texts.tsv` (required header row).
 
+## Cheat Sheet
+
+| Combo | Function | Notes |
+|---|---|---|
+| Shift + Space | Emergency Stop | Internal sync: panic + stop/reset.
+| Shift + Space (external sync) | Resync arm | External sync: does not emergency-stop transport.
+| Shift + Back | Clear active layer | Re-initializes current active layer behavior state.
+| Shift + Fn + Main press | Context help | Opens help for highlighted menu entry.
+| Fn + leftmost grid column | Select active part (1..8) | Mirrors `L1: Life > Part`.
+| Fn held + leftmost column LEDs | Layer indicators | Gray = available layers, green = current active layer.
+| Shift + Aux press | Bind/unbind aux mapping | Opens bind/unbind flow for focused item.
+
 ## Control Mapping
 
 | Control | Simulator Key | Function |
