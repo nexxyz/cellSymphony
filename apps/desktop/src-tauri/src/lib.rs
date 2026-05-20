@@ -643,7 +643,9 @@ fn audio_set_instruments(
     Ok(())
 }
 
-fn build_audio_slot_configs(instruments: &[AudioInstrumentSlotConfig]) -> ([bool; 16], [SampleSlotConfig; 16]) {
+fn build_audio_slot_configs(
+    instruments: &[AudioInstrumentSlotConfig],
+) -> ([bool; 16], [SampleSlotConfig; 16]) {
     let mut synth_slots = [false; 16];
     let mut sample_cfgs = std::array::from_fn(|_| SampleSlotConfig::default());
     for (idx, slot) in instruments.iter().enumerate() {
@@ -755,8 +757,12 @@ mod tests {
             synth: None,
             sample: Some(AudioSampleConfig {
                 slots: vec![
-                    AudioSampleSlotEntry { path: Some("a.wav".to_string()) },
-                    AudioSampleSlotEntry { path: Some("b.wav".to_string()) },
+                    AudioSampleSlotEntry {
+                        path: Some("a.wav".to_string()),
+                    },
+                    AudioSampleSlotEntry {
+                        path: Some("b.wav".to_string()),
+                    },
                 ],
                 tune_semis: Some(7.0),
                 amp: Some(AudioAmpConfig {
