@@ -28,7 +28,7 @@ import {
   spawnActionTypeForBehavior
 } from "./menuPresentation";
 import { applyGlobalSound, pitchFromIntent } from "./musicTransforms";
-import { axisGroup, midiInputNodes, midiOutputNodes, presetListNodes, presetRenameNodes } from "./menuNodes";
+import { axisGroup, midiInputNodes, midiOutputNodes, presetListNodes, presetRenameNodes, sampleBrowserNodes } from "./menuNodes";
 import { currentMenuView as renderCurrentMenuView, locate, visibleChildren } from "./menuView";
 import { pressMenuInput, turnMenuInput } from "./menuInput";
 import { applyAuxUnbindChoice, assignAuxEncoder, pressAuxEncoder, turnAuxEncoder } from "./auxInput";
@@ -43,7 +43,7 @@ import {
   textEditTurn,
   writeAnyValue
 } from "./stateHelpers";
-import { cellsToLeds } from "./runtimeHelpers";
+import { cellsToLeds, sampleAssignmentToLeds } from "./runtimeHelpers";
 import { applyExternalClockPulses, tickTransport } from "./transportRuntime";
 import { buildMenuTree } from "./menuTree";
 import { routeInputWithDeps } from "./inputRouter";
@@ -362,20 +362,23 @@ export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior:
     toast,
     lineColors: oledLines.colors
   });
+  const sampleAssign = state.system.sampleAssign;
+  const assignLeds = (() => {
+    if (!sampleAssign) return null;
+    const inst = (state.runtimeConfig as any).instruments?.[sampleAssign.instrumentSlot];
+    if (!inst || inst.type !== "sample") return null;
+    const assignments = Array.isArray(inst.sample?.assignments) ? inst.sample.assignments : [];
+    const levels = inst.sample?.velocityLevelsEnabled === true;
+    return sampleAssignmentToLeds(assignments, sampleAssign.sampleSlot, levels, state.runtimeConfig.gridBrightness / 100);
+  })();
+
   return {
     display: baseDisplay,
     oled,
     leds: {
       width: GRID_WIDTH,
       height: GRID_HEIGHT,
-      cells: cellsToLeds(
-        model.cells,
-        model.triggerTypes,
-        scanCursor,
-        state.runtimeConfig.gridBrightness / 100,
-        state.system.fnHeld,
-        activePart
-      )
+      cells: assignLeds ?? cellsToLeds(model.cells, model.triggerTypes, scanCursor, state.runtimeConfig.gridBrightness / 100, state.system.fnHeld, activePart)
     },
     transport: state.transport,
     activeBehavior: model.name
@@ -389,7 +392,8 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
     presetListNodes,
     presetRenameNodes,
     midiOutputNodes,
-    midiInputNodes
+    midiInputNodes,
+    sampleBrowserNodes
   });
 }
 
@@ -547,8 +551,12 @@ function fitOledText(text: string, columns = OLED_TEXT_COLUMNS): string {
 
 
 export function emergencyBrake<TState>(state: PlatformState<TState>): { state: PlatformState<TState>; events: MusicalEvent[] } {
-  const size = state.runtimeConfig.scanAxis === "columns" ? GRID_WIDTH : GRID_HEIGHT;
-  const origin = state.runtimeConfig.scanDirection === "forward" ? 0 : size - 1;
+  const activePart = Math.max(0, Math.min(7, Number((state.runtimeConfig as any).activePartIndex ?? 0)));
+  const activePartCfg = (state.runtimeConfig as any).parts?.[activePart]?.l2;
+  const axis = activePartCfg?.scanAxis ?? state.runtimeConfig.scanAxis;
+  const direction = activePartCfg?.scanDirection ?? state.runtimeConfig.scanDirection;
+  const size = axis === "columns" ? GRID_WIDTH : GRID_HEIGHT;
+  const origin = direction === "forward" ? 0 : size - 1;
   const events: MusicalEvent[] = [];
   for (let channel = 0; channel < 16; channel += 1) {
     events.push({ type: "cc", channel, controller: 120, value: 0 });
@@ -562,7 +570,10 @@ export function emergencyBrake<TState>(state: PlatformState<TState>): { state: P
       scanIndex: origin,
       scanPulseAccumulator: 0,
       algorithmPulseAccumulator: 0,
-      ppqnPulseRemainder: 0
+      ppqnPulseRemainder: 0,
+      partScanIndex: Array.from({ length: 8 }, () => 0),
+      partScanPulseAccumulator: Array.from({ length: 8 }, () => 0),
+      partAlgorithmPulseAccumulator: Array.from({ length: 8 }, () => 0)
     },
     events
   };

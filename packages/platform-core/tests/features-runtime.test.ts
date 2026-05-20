@@ -6,6 +6,7 @@ import { lifeBehavior } from "@cellsymphony/behaviors-life";
 import {
   applyConfigPayload,
   createInitialState,
+  emergencyBrake,
   extractConfigPayload,
   routeInput,
   tick,
@@ -96,6 +97,7 @@ test("applyConfigPayload reinitializes behavior state when behavior changes", ()
 
 test("applyConfigPayload reinitializes behavior state for same behavior id using saved behaviorConfig", () => {
   let state = createInitialState(lifeBehavior);
+  (state.runtimeConfig as any).parts[0].l1.saveGridState = false;
   const payload = extractConfigPayload(state);
   payload.activeBehavior = "life";
   (payload.runtimeConfig.behaviorConfig as any).life = { randomCellsPerTick: 11, randomTickInterval: 2 };
@@ -125,6 +127,18 @@ test("applyConfigPayload clears transient runtime state on load", () => {
   assert.deepEqual(restored.system.heldNotes, []);
   assert.equal(restored.system.pendingResync, false);
   assert.equal(restored.system.externalPpqnPulse, 0);
+});
+
+test("applyConfigPayload keeps active behavior state aligned to restored active part state", () => {
+  let state = createInitialState(lifeBehavior) as any;
+  state.runtimeConfig.activePartIndex = 2;
+  state.runtimeConfig.parts[2].l1.saveGridState = true;
+  state.partStates[2] = { ...state.partStates[2], tick: 17 };
+
+  const restored = applyConfigPayload(state, extractConfigPayload(state), lifeBehavior) as any;
+  assert.equal(restored.runtimeConfig.activePartIndex, 2);
+  assert.equal(restored.partStates[2].tick, 17);
+  assert.equal(restored.behaviorState.tick, 17);
 });
 
 test("algorithmStepUnit is included in config payload", () => {
@@ -268,3 +282,99 @@ test("menu navigation skips spacers when turning", () => {
 });
 
 // ─── Shift+Back in text editing (backspace) ───────────────────────
+
+test("switching parts restores stored part state immediately", () => {
+  let state = makeState() as any;
+  state.runtimeConfig.parts[1].l1.behaviorId = "mock";
+  state.runtimeConfig.parts[1].l1.behaviorConfig = {};
+  state.partStates[0] = { cells: Array.from({ length: CELL_COUNT }, (_, i) => i === 0), tickCount: 11 };
+  state.partStates[1] = { cells: Array.from({ length: CELL_COUNT }, (_, i) => i === 1), tickCount: 22 };
+  state.behaviorState = state.partStates[0];
+
+  state = routeInput(state, { type: "button_fn", pressed: true } as DeviceInput, mockBehavior).state;
+  state = routeInput(state, { type: "grid_press", x: 0, y: 1 } as DeviceInput, mockBehavior).state;
+
+  assert.equal(state.runtimeConfig.activePartIndex, 1);
+  assert.equal(state.behaviorState.tickCount, 22);
+});
+
+test("L2 Sense includes Part selector", () => {
+  let state = makeState();
+  state = selectLabel(state, "L2: Sense");
+  state = press(state).state;
+  const frame = toSimulatorFrame(state, mockBehavior);
+  assert.ok(frame.display.lines.some((line) => line.includes("Part")));
+});
+
+test("extract/apply payload preserves part state when save grid state is on", () => {
+  let state = createInitialState(lifeBehavior) as any;
+  state.runtimeConfig.parts[0].l1.saveGridState = true;
+  state.partStates[0] = { ...state.partStates[0], tick: 33 };
+  state.behaviorState = state.partStates[0];
+
+  const payload = extractConfigPayload(state);
+  const restored = applyConfigPayload(state, payload, lifeBehavior) as any;
+  assert.equal(restored.partStates[0].tick, 33);
+});
+
+test("extract/apply payload does not preserve part state when save grid state is off", () => {
+  let state = createInitialState(lifeBehavior) as any;
+  state.runtimeConfig.parts[0].l1.saveGridState = false;
+  state.partStates[0] = { ...state.partStates[0], tick: 44 };
+  state.behaviorState = state.partStates[0];
+
+  const payload = extractConfigPayload(state);
+  assert.equal(payload.runtimeConfig.parts[0]?.l1?.savedState, undefined);
+  const restored = applyConfigPayload(state, payload, lifeBehavior) as any;
+  assert.ok(restored.partStates[0] != null);
+  assert.notEqual(restored.partStates[0].tick, 44);
+});
+
+test("stop toggle does not clear active part grid state", () => {
+  let state = makeState() as any;
+  state.transport.playing = true;
+  state.behaviorState = { ...state.behaviorState, tickCount: 12 };
+  state.partStates[0] = state.behaviorState;
+  state = routeInput(state, { type: "button_s", pressed: true } as DeviceInput, mockBehavior).state;
+  assert.equal(state.transport.playing, false);
+  assert.equal(state.partStates[0].tickCount, 12);
+});
+
+test("midi_stop does not clear active part grid state", () => {
+  let state = makeState() as any;
+  state.runtimeConfig.midi.syncMode = "external";
+  state.runtimeConfig.midi.clockInEnabled = true;
+  state.runtimeConfig.midi.respondToStartStop = true;
+  state.transport.playing = true;
+  state.behaviorState = { ...state.behaviorState, tickCount: 21 };
+  state.partStates[0] = state.behaviorState;
+  state = routeInput(state, { type: "midi_stop" } as DeviceInput, mockBehavior).state;
+  assert.equal(state.transport.playing, false);
+  assert.equal(state.partStates[0].tickCount, 21);
+});
+
+test("emergency brake preserves grids and resets timing accumulators", () => {
+  let state = makeState() as any;
+  state.transport.playing = true;
+  state.transport.ppqnPulse = 65;
+  state.scanIndex = 4;
+  state.scanPulseAccumulator = 2.5;
+  state.algorithmPulseAccumulator = 3.5;
+  state.ppqnPulseRemainder = 0.7;
+  state.partScanIndex = [1, 2, 3, 4, 5, 6, 7, 0];
+  state.partScanPulseAccumulator = [1, 1, 1, 1, 1, 1, 1, 1];
+  state.partAlgorithmPulseAccumulator = [2, 2, 2, 2, 2, 2, 2, 2];
+  state.partStates[0] = { ...state.partStates[0], tickCount: 99 };
+
+  const result = emergencyBrake(state as any);
+  const next = result.state as any;
+  assert.equal(next.transport.playing, false);
+  assert.equal(next.transport.ppqnPulse, 0);
+  assert.equal(next.scanPulseAccumulator, 0);
+  assert.equal(next.algorithmPulseAccumulator, 0);
+  assert.equal(next.ppqnPulseRemainder, 0);
+  assert.deepEqual(next.partScanIndex, [0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(next.partScanPulseAccumulator, [0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(next.partAlgorithmPulseAccumulator, [0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.equal(next.partStates[0].tickCount, 99);
+});

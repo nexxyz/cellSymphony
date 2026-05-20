@@ -1,4 +1,5 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
+import { getBehavior } from "@cellsymphony/behavior-api";
 import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { ConfigPayload, PlatformEffect, PlatformState, RuntimeConfig, StoreResult } from "./index";
 
@@ -11,6 +12,25 @@ export function extractConfigPayload<TState>(state: PlatformState<TState>): Conf
   const runtimeAny: any = state.runtimeConfig;
   const active = Math.max(0, Math.min(7, Number(runtimeAny.activePartIndex ?? 0)));
   const parts = Array.isArray(runtimeAny.parts) ? [...runtimeAny.parts] : [];
+  const partStates: unknown[] = Array.isArray((state as any).partStates) ? ([...((state as any).partStates as unknown[])] as unknown[]) : [];
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i];
+    const behaviorId = String(part?.l1?.behaviorId ?? runtimeAny.activeBehavior ?? state.activeBehavior);
+    const engine = getBehavior(behaviorId);
+    const saveGridState = part?.l1?.saveGridState !== false;
+    const savedState = saveGridState && engine && partStates[i] !== undefined ? engine.serialize(partStates[i] as any) : undefined;
+    parts[i] = {
+      ...part,
+      l1: {
+        ...part.l1,
+        saveGridState,
+        ...(savedState === undefined ? {} : { savedState })
+      }
+    };
+    if (!saveGridState && parts[i]?.l1 && "savedState" in parts[i].l1) {
+      delete parts[i].l1.savedState;
+    }
+  }
   if (parts[active]) {
     const behaviorId = String(runtimeAny.activeBehavior ?? parts[active].l1?.behaviorId ?? "life");
     parts[active] = {
@@ -58,9 +78,12 @@ export function applyConfigPayload<TState>(
 ): PlatformState<TState> {
   const safe = sanitizePayload(payload, behavior, deps);
   const next = { ...state } as any;
-  next.activeBehavior = safe.activeBehavior;
   next.runtimeConfig = safe.runtimeConfig;
   next.mappingConfig = safe.mappingConfig;
+  const activePartIndex = Math.max(0, Math.min(7, Number((safe.runtimeConfig as any).activePartIndex ?? 0)));
+  const activePart = (safe.runtimeConfig as any).parts?.[activePartIndex];
+  const activePartBehaviorId = String(activePart?.l1?.behaviorId ?? safe.activeBehavior);
+  next.activeBehavior = safe.activeBehavior;
   const resolved = deps.resolveBehavior(safe.activeBehavior);
   const behaviorCfgSource = ((safe.runtimeConfig as any).behaviorConfig?.[resolved.id] ?? {}) as Record<string, unknown>;
   const behaviorCfg: Record<string, unknown> = {};
@@ -74,9 +97,18 @@ export function applyConfigPayload<TState>(
   const parts: any[] = Array.isArray((safe.runtimeConfig as any).parts) ? (safe.runtimeConfig as any).parts : [];
   next.partStates = parts.map((part) => {
     const engine = deps.resolveBehavior(String(part?.l1?.behaviorId ?? safe.activeBehavior));
+    const saveGridState = part?.l1?.saveGridState !== false;
+    const savedState = part?.l1?.savedState;
+    if (saveGridState && savedState !== undefined) {
+      return engine.deserialize(savedState);
+    }
     return engine.init({ ...(part?.l1?.behaviorConfig ?? {}) });
   });
   while (next.partStates.length < 8) next.partStates.push(resolved.init({}));
+  const shouldUseRestoredActiveState = activePartBehaviorId === safe.activeBehavior && activePart?.l1?.saveGridState !== false && activePart?.l1?.savedState !== undefined;
+  if (shouldUseRestoredActiveState) {
+    next.behaviorState = (next.partStates[activePartIndex] ?? next.behaviorState) as TState;
+  }
   next.partScanIndex = Array.from({ length: 8 }, () => 0);
   next.partScanPulseAccumulator = Array.from({ length: 8 }, () => 0);
   next.partAlgorithmPulseAccumulator = Array.from({ length: 8 }, () => 0);
@@ -88,7 +120,10 @@ export function applyConfigPayload<TState>(
     ...next.system,
     heldNotes: [],
     pendingResync: false,
-    externalPpqnPulse: 0
+    externalPpqnPulse: 0,
+    sampleAssign: null,
+    sampleAssignLastPress: null,
+    sampleBrowser: null
   };
   return next as PlatformState<TState>;
 }
@@ -102,11 +137,11 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     const factorySlots: any[] = Array.isArray((factory.runtimeConfig as any).instruments)
       ? (factory.runtimeConfig as any).instruments
       : [];
-    const baseSlots = factorySlots.length > 0 ? factorySlots : Array.from({ length: 16 }, () => ({ type: "synth", midi: { enabled: false, channel: 0 }, synth: {}, sample: { baseVelocity: 100, tuneSemis: 0, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } }));
+    const baseSlots = factorySlots.length > 0 ? factorySlots : Array.from({ length: 16 }, () => ({ type: "synth", midi: { enabled: false, channel: 0 }, synth: {}, sample: { baseVelocity: 100, velocityLevelsEnabled: false, velocityLevels: { high: 120, medium: 85, low: 45 }, selectedSlot: 0, slots: Array.from({ length: 8 }, () => ({ path: null })), tuneSemis: 0, amp: {}, ampEnv: {}, filter: {}, filterEnv: {}, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } }));
     const src = Array.isArray(incoming) ? incoming : [];
     const out: any[] = [];
     for (let i = 0; i < 16; i += 1) {
-      const f = baseSlots[i] ?? baseSlots[0] ?? { type: "synth", midi: { enabled: false, channel: i }, synth: {}, sample: { baseVelocity: 100, tuneSemis: 0, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } };
+      const f = baseSlots[i] ?? baseSlots[0] ?? { type: "synth", midi: { enabled: false, channel: i }, synth: {}, sample: { baseVelocity: 100, velocityLevelsEnabled: false, velocityLevels: { high: 120, medium: 85, low: 45 }, selectedSlot: 0, slots: Array.from({ length: 8 }, () => ({ path: null })), tuneSemis: 0, amp: {}, ampEnv: {}, filter: {}, filterEnv: {}, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } };
       const s = src[i] ?? {};
       out.push({
         ...(f as any),
@@ -126,7 +161,19 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
         sample: {
           ...(f as any).sample,
           ...((s as any).sample ?? {}),
-          assignments: Array.isArray((s as any).sample?.assignments) ? (s as any).sample.assignments : (Array.isArray((f as any).sample?.assignments) ? (f as any).sample.assignments : [])
+          velocityLevels: { ...(f as any).sample?.velocityLevels, ...((s as any).sample?.velocityLevels ?? {}) },
+          slots: (() => {
+            const incomingSlots = Array.isArray((s as any).sample?.slots)
+              ? (s as any).sample.slots.slice(0, 8).map((entry: any) => ({ path: typeof entry?.path === "string" ? entry.path : null }))
+              : (Array.isArray((f as any).sample?.slots) ? (f as any).sample.slots.slice(0, 8).map((entry: any) => ({ path: typeof entry?.path === "string" ? entry.path : null })) : []);
+            while (incomingSlots.length < 8) incomingSlots.push({ path: null });
+            return incomingSlots;
+          })(),
+          assignments: Array.isArray((s as any).sample?.assignments) ? (s as any).sample.assignments : (Array.isArray((f as any).sample?.assignments) ? (f as any).sample.assignments : []),
+          amp: { ...(f as any).sample?.amp, ...((s as any).sample?.amp ?? {}) },
+          ampEnv: { ...(f as any).sample?.ampEnv, ...((s as any).sample?.ampEnv ?? {}) },
+          filter: { ...(f as any).sample?.filter, ...((s as any).sample?.filter ?? {}) },
+          filterEnv: { ...(f as any).sample?.filterEnv, ...((s as any).sample?.filterEnv ?? {}) }
         },
         midiEngine: {
           ...(f as any).midiEngine,
@@ -203,6 +250,17 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
       };
     }
   }
+  for (let i = 0; i < parts.length; i += 1) {
+    const part = parts[i];
+    if (!part?.l1) continue;
+    parts[i] = {
+      ...part,
+      l1: {
+        ...part.l1,
+        saveGridState: part.l1.saveGridState !== false
+      }
+    };
+  }
   (mergedRuntime as any).parts = parts;
 
   const mappingConfig = p.mappingConfig ? (p.mappingConfig as MappingConfig) : factory.mappingConfig;
@@ -239,6 +297,66 @@ export function applyStoreResult<TState>(
 
   if (result.type === "midi_list_outputs_result") return { state: { ...state, system: { ...state.system, midiOutputs: result.outputs } }, effects };
   if (result.type === "midi_list_inputs_result") return { state: { ...state, system: { ...state.system, midiInputs: result.inputs } }, effects };
+  if (result.type === "sample_list_result") {
+    const browser = state.system.sampleBrowser;
+    if (!browser) {
+      return {
+        state: {
+          ...state,
+          system: {
+            ...state.system,
+            sampleBrowser: {
+              instrumentSlot: result.instrumentSlot,
+              sampleSlot: result.sampleSlot,
+              dir: result.dir,
+              entries: result.entries
+            }
+          }
+        },
+        effects
+      };
+    }
+    return {
+      state: {
+        ...state,
+        system: {
+          ...state.system,
+          sampleBrowser: {
+            ...browser,
+            instrumentSlot: result.instrumentSlot,
+            sampleSlot: result.sampleSlot,
+            dir: result.dir,
+            entries: result.entries
+          }
+        }
+      },
+      effects
+    };
+  }
+  if (result.type === "sample_list_error") {
+    const reason = (result.message ?? "error").slice(0, 48);
+    return {
+      state: setToast(
+        {
+          ...state,
+          system: {
+            ...state.system,
+            sampleBrowser: {
+              instrumentSlot: result.instrumentSlot,
+              sampleSlot: result.sampleSlot,
+              dir: result.dir,
+              entries: []
+            }
+          }
+        },
+        `Sample list error: ${reason}`
+      ),
+      effects
+    };
+  }
+  if (result.type === "sample_preview_error") {
+    return { state: setToast(state, `Sample preview error: ${(result.message ?? "error").slice(0, 40)}`), effects };
+  }
   if (result.type === "midi_status") {
     const msg = result.ok ? "MIDI ok" : result.message ?? "MIDI error";
     return { state: { ...state, system: { ...state.system, midiStatus: msg } }, effects };
