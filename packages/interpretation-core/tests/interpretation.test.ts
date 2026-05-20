@@ -53,3 +53,30 @@ test("scan-row emits scanned_empty for dead cells", () => {
   assert.equal(intents.filter((i) => i.kind === "scanned").length, 2);
   assert.equal(intents.filter((i) => i.kind === "scanned_empty").length, 1);
 });
+
+test("scan-column emits scanned and scanned_empty for all rows", () => {
+  const grid: GridSnapshot = { width: 3, height: 3, cells: [false, true, false, false, false, false, false, true, false] };
+  const intents = interpretGrid(grid, grid, 1, {
+    id: "scan-col",
+    event: { enabled: false },
+    state: { enabled: true, tick: { mode: "scan_column_active" } },
+    x: { mode: "ignore" },
+    y: { mode: "ignore" }
+  });
+  assert.equal(intents.length, 3);
+  assert.equal(intents.filter((i) => i.kind === "scanned").length, 2);
+  assert.equal(intents.filter((i) => i.kind === "scanned_empty").length, 1);
+});
+
+test("whole-grid-active emits only active scanned cells", () => {
+  const grid: GridSnapshot = { width: 2, height: 2, cells: [true, false, true, false] };
+  const intents = interpretGrid(grid, grid, 0, {
+    id: "all-active",
+    event: { enabled: false },
+    state: { enabled: true, tick: { mode: "whole_grid_active" } },
+    x: { mode: "ignore" },
+    y: { mode: "ignore" }
+  });
+  assert.equal(intents.length, 2);
+  assert.equal(intents.every((i) => i.kind === "scanned"), true);
+});

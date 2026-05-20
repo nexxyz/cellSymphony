@@ -332,3 +332,50 @@ test("factory reset restores default behavior to life", () => {
   assert.equal(result.state.activeBehavior, "life");
 });
 
+test("sample list result creates/updates sample browser state", () => {
+  let state = makeState();
+  const resultA = applyStoreResult(
+    state,
+    { type: "sample_list_result", instrumentSlot: 2, sampleSlot: 3, dir: "drums", entries: [{ name: "a.wav", path: "drums/a.wav", isDir: false }] } as any,
+    mockBehavior
+  );
+  state = resultA.state;
+  assert.equal(state.system.sampleBrowser?.instrumentSlot, 2);
+  assert.equal(state.system.sampleBrowser?.sampleSlot, 3);
+  assert.equal(state.system.sampleBrowser?.entries.length, 1);
+
+  const resultB = applyStoreResult(
+    state,
+    { type: "sample_list_result", instrumentSlot: 2, sampleSlot: 3, dir: "drums/kits", entries: [{ name: "k.wav", path: "drums/kits/k.wav", isDir: false }] } as any,
+    mockBehavior
+  );
+  assert.equal(resultB.state.system.sampleBrowser?.dir, "drums/kits");
+  assert.equal(resultB.state.system.sampleBrowser?.entries[0]?.name, "k.wav");
+});
+
+test("sample list/preview errors set user toast", () => {
+  let state = makeState();
+  const listErr = applyStoreResult(
+    state,
+    { type: "sample_list_error", instrumentSlot: 0, sampleSlot: 0, dir: "", message: "permission denied" } as any,
+    mockBehavior
+  );
+  state = listErr.state;
+  assert.ok(state.system.toast?.message.includes("Sample list error"));
+
+  const previewErr = applyStoreResult(
+    state,
+    { type: "sample_preview_error", message: "decode failed" } as any,
+    mockBehavior
+  );
+  assert.ok(previewErr.state.system.toast?.message.includes("Sample preview error"));
+});
+
+test("midi_status updates system midi status", () => {
+  const state = makeState();
+  const ok = applyStoreResult(state, { type: "midi_status", ok: true, message: "ok" } as any, mockBehavior);
+  assert.equal(ok.state.system.midiStatus, "MIDI ok");
+  const bad = applyStoreResult(state, { type: "midi_status", ok: false, message: "failed" } as any, mockBehavior);
+  assert.equal(bad.state.system.midiStatus, "failed");
+});
+

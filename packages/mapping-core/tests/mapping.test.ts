@@ -48,3 +48,23 @@ test("mapping config sanitizes out-of-range values", () => {
     assert.equal(events[0].durationMs, 8000);
   }
 });
+
+test("range mode clamp and wrap behave differently for high degree", () => {
+  const base = loadDefaultMappingConfig();
+  const clampCfg: MappingConfig = { ...base, rangeMode: "clamp", maxMidiNote: base.baseMidiNote + 12 };
+  const wrapCfg: MappingConfig = { ...base, rangeMode: "wrap", maxMidiNote: base.baseMidiNote + 12 };
+  const degree = 400;
+  const clampEvents = mapIntentsToMusicalEvents([{ x: 0, y: 0, degree, kind: "activate" }], clampCfg);
+  const wrapEvents = mapIntentsToMusicalEvents([{ x: 0, y: 0, degree, kind: "activate" }], wrapCfg);
+  assert.equal(clampEvents.length, 1);
+  assert.equal(wrapEvents.length, 1);
+  if (clampEvents[0].type === "note_on" && wrapEvents[0].type === "note_on") {
+    assert.notEqual(clampEvents[0].note, wrapEvents[0].note);
+    assert.equal(clampEvents[0].note, clampCfg.maxMidiNote);
+  }
+});
+
+test("empty scale throws validation error", () => {
+  const bad = { ...loadDefaultMappingConfig(), scale: [] } as MappingConfig;
+  assert.throws(() => mapIntentsToMusicalEvents([{ x: 0, y: 0, degree: 0, kind: "activate" }], bad));
+});

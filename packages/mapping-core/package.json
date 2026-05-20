@@ -11,7 +11,7 @@
     "format:check": "node -e \"process.exit(0)\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "tsx --test tests/*.test.ts",
-    "test:coverage": "c8 --reporter=text --reporter=lcov tsx --test tests/*.test.ts"
+    "test:coverage": "c8 --check-coverage --lines 75 --functions 75 --branches 65 --reporter=text --reporter=lcov tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "@cellsymphony/interpretation-core": "workspace:*",

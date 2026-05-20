@@ -18,6 +18,8 @@ import { createIntervalRuntimeScheduler, type RuntimeScheduler } from "./runtime
 import type { EventsListener, InputAction, RuntimeListener, SimulatorSnapshot } from "./types";
 import { createLocalStorageConfigStore } from "./configStore";
 import { TauriMidiService } from "./midi/tauriMidi";
+import { invoke } from "@tauri-apps/api/core";
+import type { ConfigPayload } from "@cellsymphony/platform-core";
 
 type SimulatorRuntime = {
   dispatch(input: DeviceInput): void;
@@ -27,6 +29,30 @@ type SimulatorRuntime = {
   subscribe(listener: RuntimeListener): () => void;
   subscribeEvents(listener: EventsListener): () => void;
   getSnapshot(): SimulatorSnapshot;
+};
+
+type RuntimeStore = {
+  listPresets(): string[];
+  loadPreset(name: string): ConfigPayload | null;
+  savePreset(name: string, payload: ConfigPayload): "created" | "overwritten";
+  deletePreset(name: string): boolean;
+  loadDefault(): ConfigPayload | null;
+  saveDefault(payload: ConfigPayload): void;
+};
+
+type RuntimeMidiService = {
+  listOutputs(): Promise<{ id: string; name: string }[]>;
+  listInputs(): Promise<{ id: string; name: string }[]>;
+  selectOutput(id: string | null): Promise<{ ok: boolean; message?: string }>;
+  selectInput(id: string | null): Promise<{ ok: boolean; message?: string }>;
+  send(bytes: Uint8Array): Promise<void>;
+  listenMidiIn(handler: (bytes: Uint8Array) => void): Promise<() => void>;
+};
+
+type RuntimeDeps = {
+  store?: RuntimeStore;
+  midiService?: RuntimeMidiService;
+  invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 };
 
 const LOOKAHEAD_MS = 20;
@@ -42,7 +68,7 @@ type ScheduledMidi = {
   bytes: Uint8Array;
 };
 
-export function createSimulatorRuntime(scheduler: RuntimeScheduler = createIntervalRuntimeScheduler(8)): SimulatorRuntime {
+export function createSimulatorRuntime(scheduler: RuntimeScheduler = createIntervalRuntimeScheduler(8), deps: RuntimeDeps = {}): SimulatorRuntime {
   function activeBehavior(): BehaviorEngine<any, any> {
     return getBehavior((state.runtimeConfig as any).activeBehavior) ?? getBehavior("sequencer")!;
   }
@@ -223,7 +249,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
     publishSnapshot();
   }
 
-  const store = createLocalStorageConfigStore();
+  const store = deps.store ?? createLocalStorageConfigStore();
   {
     const payload = store.loadDefault();
     if (payload) {
@@ -231,7 +257,8 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       state = { ...loaded, system: { ...loaded.system, currentPresetName: null } };
     }
   }
-  const tauriMidi = new TauriMidiService();
+  const tauriMidi: RuntimeMidiService = deps.midiService ?? new TauriMidiService();
+  const invokeBridge = deps.invoke ?? invoke;
 
   let selectedOutId: string | null = null;
   let selectedInId: string | null = null;
@@ -357,6 +384,69 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
         }
         midiQueue.length = 0;
         return { type: "midi_status", ok: true, message: "Panic sent" };
+      }
+      if (effect.type === "sample_list_request") {
+        void invokeBridge("sample_list", { dir: effect.dir }).then((entries) => {
+          const safe = Array.isArray(entries)
+            ? entries
+              .map((e: any) => ({
+                name: String(e?.name ?? ""),
+                path: String(e?.path ?? ""),
+                isDir: Boolean(e?.isDir ?? e?.is_dir ?? false)
+              }))
+              .filter((e: any) => e.name.length > 0)
+            : [];
+          const applied = applyStoreResult(
+            state,
+            {
+              type: "sample_list_result",
+              instrumentSlot: effect.instrumentSlot,
+              sampleSlot: effect.sampleSlot,
+              dir: effect.dir,
+              entries: safe
+            } as any,
+            activeBehavior()
+          );
+          state = applied.state;
+          publishSnapshot();
+        }).catch((err) => {
+          const message = err instanceof Error ? err.message : String(err);
+          const applied = applyStoreResult(
+            state,
+            {
+              type: "sample_list_error",
+              instrumentSlot: effect.instrumentSlot,
+              sampleSlot: effect.sampleSlot,
+              dir: effect.dir,
+              message
+            } as any,
+            activeBehavior()
+          );
+          state = applied.state;
+          publishSnapshot();
+        });
+        return {
+          type: "sample_list_result",
+          instrumentSlot: effect.instrumentSlot,
+          sampleSlot: effect.sampleSlot,
+          dir: effect.dir,
+          entries: []
+        } as any;
+      }
+      if (effect.type === "sample_preview_request") {
+        void invokeBridge("sample_preview", { path: effect.path }).catch((err) => {
+          const applied = applyStoreResult(
+            state,
+            {
+              type: "sample_preview_error",
+              message: err instanceof Error ? err.message : String(err)
+            } as any,
+            activeBehavior()
+          );
+          state = applied.state;
+          publishSnapshot();
+        });
+        return { type: "save_default_result", ok: true } as any;
       }
       return { type: "store_error", message: "Unknown effect" };
     } catch (err) {
