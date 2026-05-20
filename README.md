@@ -97,6 +97,11 @@ Navigate with the encoder, press to enter/edit, Back to exit.
 
 See `docs/menu-and-controls-spec.md` for the full authoritative spec.
 
+## Sample Library Attribution
+
+- The repository `samples/` content is sourced from the Stargate sample pack:
+  `https://github.com/stargatedaw/stargate-sample-pack`
+
 ---
 
 ## Installation (Developer Preview)
