@@ -108,15 +108,15 @@ L2: Sense
 ├── State Notes: [on | off]                    default on (all parts)
 ├── Instrument Targets (group)
 │   ├── Activate Action: [none | note_on | note_off]
-│   ├── Activate Instrument: [1..16]
+│   ├── Activate Instrument: [1..8]
 │   ├── Stable Action: [none | note_on | note_off]
-│   ├── Stable Instrument: [1..16]
+│   ├── Stable Instrument: [1..8]
 │   ├── Deactivate Action: [none | note_on | note_off]
-│   ├── Deactivate Instrument: [1..16]
+│   ├── Deactivate Instrument: [1..8]
 │   ├── Scanned Action: [none | note_on | note_off]
-│   ├── Scanned Instrument: [1..16]
+│   ├── Scanned Instrument: [1..8]
 │   ├── Scanned Empty Action: [none | note_on | note_off]
-│   └── Scanned Empty Instrument: [1..16]
+│   └── Scanned Empty Instrument: [1..8]
 ├── X Axis (group)
 │   ├── Pitch Steps (group)
 │   │   ├── Enabled: [on | off]
@@ -148,7 +148,7 @@ L2: Sense
 ```
 L3: Voice
 └── Instruments (group)
-    ├── Instrument 1..16 (group)
+    ├── Instrument 1..8 (group)
     │   ├── Type: [synth | sample | MIDI only]
     │   ├── Note Behavior: [oneshot | hold] default oneshot
     │   ├── Synth (group, visible when type=synth)

@@ -448,7 +448,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "kind": "enum",
     "title": "Activate Instrument",
     "line1": "Selects which instrument slot receives activate events.",
-    "line2": "Displayed as 1..16 in UI and stored as slots 0..15."
+    "line2": "Displayed as 1..N in UI and stored as slots 0..N-1 (N from platform capabilities)."
   },
   {
     "id": "map_stable_action",
@@ -600,7 +600,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "",
     "kind": "group",
     "title": "Instruments",
-    "line1": "Contains the 16 instrument slots used by Sense routing.",
+    "line1": "Contains the platform-defined instrument slots used by Sense routing.",
     "line2": "Each slot has independent MIDI and synth parameters."
   },
   {

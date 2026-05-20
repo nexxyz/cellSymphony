@@ -3,7 +3,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use midir::{Ignore, MidiInput, MidiInputConnection, MidiOutput};
-use realtime_engine::synth::{InstrumentSlotConfig, InstrumentsConfig, SynthConfig, SynthEngine};
+use realtime_engine::synth::{
+    InstrumentSlotConfig, InstrumentsConfig, SynthConfig, SynthEngine, INSTRUMENT_SLOT_COUNT,
+};
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use serde::Deserialize;
 use serde::Serialize;
@@ -153,8 +155,8 @@ impl rodio::Source for EngineSource {
 struct AppState {
     trigger_tx: Sender<QueuedAudioEvent>,
     engine: Arc<Mutex<SynthEngine>>,
-    synth_slots: Mutex<[bool; 16]>,
-    sample_cfgs: Mutex<[SampleSlotConfig; 16]>,
+    synth_slots: Mutex<[bool; INSTRUMENT_SLOT_COUNT]>,
+    sample_cfgs: Mutex<[SampleSlotConfig; INSTRUMENT_SLOT_COUNT]>,
     midi_out: Mutex<Option<midir::MidiOutputConnection>>,
     midi_in: Mutex<Option<MidiInputConnection<()>>>,
 }
@@ -529,7 +531,7 @@ fn trigger_musical_event(
 ) -> Result<(), String> {
     let is_synth_slot = |slot: u8| -> bool {
         if let Ok(guard) = state.synth_slots.lock() {
-            return guard[(slot as usize).min(15)];
+            return guard[(slot as usize).min(INSTRUMENT_SLOT_COUNT - 1)];
         }
         true
     };
@@ -543,7 +545,7 @@ fn trigger_musical_event(
             let slot = channel.clamp(0, 15);
             if !is_synth_slot(slot) {
                 if let Ok(cfgs) = state.sample_cfgs.lock() {
-                    let cfg = &cfgs[(slot as usize).min(15)];
+                    let cfg = &cfgs[(slot as usize).min(INSTRUMENT_SLOT_COUNT - 1)];
                     let sample_slot = (note.saturating_sub(36)).min(7) as usize;
                     if let Some(path) = &cfg.slots[sample_slot] {
                         let Some(sample_path) = resolve_sample_file(path) else {
@@ -645,11 +647,14 @@ fn audio_set_instruments(
 
 fn build_audio_slot_configs(
     instruments: &[AudioInstrumentSlotConfig],
-) -> ([bool; 16], [SampleSlotConfig; 16]) {
-    let mut synth_slots = [false; 16];
+) -> (
+    [bool; INSTRUMENT_SLOT_COUNT],
+    [SampleSlotConfig; INSTRUMENT_SLOT_COUNT],
+) {
+    let mut synth_slots = [false; INSTRUMENT_SLOT_COUNT];
     let mut sample_cfgs = std::array::from_fn(|_| SampleSlotConfig::default());
     for (idx, slot) in instruments.iter().enumerate() {
-        if idx >= 16 {
+        if idx >= INSTRUMENT_SLOT_COUNT {
             break;
         }
         synth_slots[idx] = slot.kind == "synth";
@@ -792,7 +797,7 @@ mod tests {
         assert_eq!(cfgs[0].vel_sens_pct, 50.0);
         assert_eq!(cfgs[0].slots[0], Some("a.wav".to_string()));
         assert_eq!(cfgs[0].slots[1], Some("b.wav".to_string()));
-        assert_eq!(slots.len(), 16);
+        assert_eq!(slots.len(), INSTRUMENT_SLOT_COUNT);
     }
 }
 
@@ -869,7 +874,7 @@ pub fn run() {
         .manage(AppState {
             trigger_tx,
             engine,
-            synth_slots: Mutex::new([true; 16]),
+            synth_slots: Mutex::new([true; INSTRUMENT_SLOT_COUNT]),
             sample_cfgs: Mutex::new(std::array::from_fn(|_| SampleSlotConfig::default())),
             midi_out: Mutex::new(None),
             midi_in: Mutex::new(None),

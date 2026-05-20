@@ -49,7 +49,7 @@ event_enabled	*	key:eventEnabled	bool	Event Triggers	Enables transition triggers
 state_enabled	*	key:stateEnabled	bool	State Notes	Enables state-based scan triggers from current cell occupancy.	Default is On for all parts; disable to use only transition events from cell changes.
 targets_group	Menu > L2: Sense > Instrument Targets		group	Instrument Targets	Maps each trigger kind to an action and destination instrument slot.	Use note_off actions for release-style lifecycle behavior.
 map_activate_action	*	key:mapping.activate.action	enum	Activate Action	Defines what happens when a cell becomes active.	Default note_on starts notes on birth/spawn transitions.
-map_activate_channel	*	key:mapping.activate.channel	enum	Activate Instrument	Selects which instrument slot receives activate events.	Displayed as 1..16 in UI and stored as slots 0..15.
+map_activate_channel	*	key:mapping.activate.channel	enum	Activate Instrument	Selects which instrument slot receives activate events.	Displayed as 1..N in UI and stored as slots 0..N-1 (N from platform capabilities).
 map_stable_action	*	key:mapping.stable.action	enum	Stable Action	Defines behavior for cells that stay active across updates.	Default none avoids constant retriggering from unchanged active cells.
 map_stable_channel	*	key:mapping.stable.channel	enum	Stable Instrument	Selects destination instrument slot for stable triggers.	Use with stable action when you want sustained-state gestures.
 map_deactivate_action	*	key:mapping.deactivate.action	enum	Deactivate Action	Defines what happens when a cell turns inactive.	Default note_off releases matching notes in lifecycle workflows.
@@ -66,7 +66,7 @@ pitch_high	*	key:pitch.highestNote	number	Highest Note	Sets the upper bound for 
 pitch_oor	*	key:pitch.outOfRange	enum	Out of Range	Chooses how pitch indices beyond bounds are handled.	Clamp pins to edges; wrap folds back through the range.
 pitch_scale	*	key:pitch.scale	enum	Scale	Selects scale intervals used for pitch quantization.	Use this to set harmonic language globally.
 pitch_root	*	key:pitch.root	enum	Root	Sets the tonic/root for selected scale quantization.	Changing root transposes quantized output harmonically.
-inst_group	Menu > L3: Voice > Instruments		group	Instruments	Contains the 16 instrument slots used by Sense routing.	Each slot has independent MIDI and synth parameters.
+inst_group	Menu > L3: Voice > Instruments		group	Instruments	Contains the platform-defined instrument slots used by Sense routing.	Each slot has independent MIDI and synth parameters.
 inst_midi_group	Menu > L3: Voice > Instruments > Instrument * > MIDI		group	Instrument MIDI	Per-slot external MIDI routing controls.	Enable and select channel when this slot should transmit MIDI out.
 inst_slot_1	Menu > L3: Voice > Instruments > Instrument 1		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.
 inst_slot_2	Menu > L3: Voice > Instruments > Instrument 2		group	Instrument Slot	Configures one destination instrument slot.	Sense mappings route trigger actions into these slots.

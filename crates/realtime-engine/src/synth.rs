@@ -20,6 +20,9 @@ pub enum FilterType {
     Notch,
 }
 
+pub const INSTRUMENT_SLOT_COUNT: usize = 8;
+pub const VOICES_PER_SLOT: usize = 8;
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct EnvConfig {
     #[serde(rename = "attackMs")]
@@ -335,9 +338,9 @@ impl InstrumentMod {
 pub struct SynthEngine {
     sample_rate: u32,
     sample_clock: u64,
-    instruments: [SynthConfig; 16],
-    mods: [InstrumentMod; 16],
-    voices: [[Voice; 8]; 16],
+    instruments: [SynthConfig; INSTRUMENT_SLOT_COUNT],
+    mods: [InstrumentMod; INSTRUMENT_SLOT_COUNT],
+    voices: [[Voice; VOICES_PER_SLOT]; INSTRUMENT_SLOT_COUNT],
 }
 
 impl SynthEngine {
@@ -346,15 +349,15 @@ impl SynthEngine {
         Self {
             sample_rate,
             sample_clock: 0,
-            instruments: [default; 16],
-            mods: [InstrumentMod::new(); 16],
-            voices: [[Voice::off(); 8]; 16],
+            instruments: [default; INSTRUMENT_SLOT_COUNT],
+            mods: [InstrumentMod::new(); INSTRUMENT_SLOT_COUNT],
+            voices: [[Voice::off(); VOICES_PER_SLOT]; INSTRUMENT_SLOT_COUNT],
         }
     }
 
     pub fn set_instruments(&mut self, cfg: InstrumentsConfig) {
         for (idx, slot) in cfg.instruments.into_iter().enumerate() {
-            if idx >= 16 {
+            if idx >= INSTRUMENT_SLOT_COUNT {
                 break;
             }
             if slot.kind != "synth" {
@@ -365,7 +368,7 @@ impl SynthEngine {
     }
 
     pub fn note_on(&mut self, instrument_slot: u8, midi_note: u8, velocity: u8, duration_ms: u32) {
-        let slot = (instrument_slot as usize).min(15);
+        let slot = (instrument_slot as usize).min(INSTRUMENT_SLOT_COUNT - 1);
         let v = velocity.max(1);
         let duration_samples = ms_to_samples(duration_ms as f32, self.sample_rate).max(1) as u64;
         let note_off_sample = self.sample_clock.saturating_add(duration_samples);
@@ -400,7 +403,7 @@ impl SynthEngine {
     }
 
     pub fn cc(&mut self, instrument_slot: u8, controller: u8, value: u8) {
-        let slot = (instrument_slot as usize).min(15);
+        let slot = (instrument_slot as usize).min(INSTRUMENT_SLOT_COUNT - 1);
         if controller == 74 {
             self.mods[slot].cutoff_cc = (value as f32 / 127.0).clamp(0.0, 1.0);
         } else if controller == 71 {
@@ -411,7 +414,7 @@ impl SynthEngine {
     }
 
     pub fn note_off(&mut self, instrument_slot: u8, midi_note: u8) {
-        let slot = (instrument_slot as usize).min(15);
+        let slot = (instrument_slot as usize).min(INSTRUMENT_SLOT_COUNT - 1);
         let cfg = self.instruments[slot];
         for voice in self.voices[slot].iter_mut() {
             if !voice.active {
@@ -429,7 +432,7 @@ impl SynthEngine {
     }
 
     pub fn all_notes_off(&mut self) {
-        for slot in 0..16 {
+        for slot in 0..INSTRUMENT_SLOT_COUNT {
             let cfg = self.instruments[slot];
             for voice in self.voices[slot].iter_mut() {
                 if !voice.active {
@@ -451,7 +454,7 @@ impl SynthEngine {
                 if !v.active {
                     continue;
                 }
-                let slot = (v.instrument_slot as usize).min(15);
+                let slot = (v.instrument_slot as usize).min(INSTRUMENT_SLOT_COUNT - 1);
                 let cfg = self.instruments[slot];
 
                 if self.sample_clock >= v.note_off_sample {
@@ -504,7 +507,7 @@ impl SynthEngine {
         out.clamp(-1.0, 1.0)
     }
 
-    fn steal_voice_index(pool: &[Voice; 8]) -> usize {
+    fn steal_voice_index(pool: &[Voice; VOICES_PER_SLOT]) -> usize {
         let mut best_i = 0;
         let mut best_score = f32::MAX;
         for (i, v) in pool.iter().enumerate() {
@@ -527,7 +530,7 @@ impl SynthEngine {
 
     #[cfg(test)]
     fn mod_values_for_slot(&self, slot: usize) -> (f32, f32) {
-        let s = slot.min(15);
+        let s = slot.min(INSTRUMENT_SLOT_COUNT - 1);
         (self.mods[s].cutoff_cc, self.mods[s].resonance_cc)
     }
 }
@@ -621,6 +624,7 @@ pub fn default_synth_config() -> SynthConfig {
 mod tests {
     use super::{
         default_synth_config, FilterType, InstrumentSlotConfig, InstrumentsConfig, SynthEngine,
+        INSTRUMENT_SLOT_COUNT,
     };
 
     #[test]
@@ -766,7 +770,10 @@ mod tests {
     fn note_on_clamps_slot_and_velocity() {
         let mut engine = SynthEngine::new(48_000);
         engine.note_on(200, 60, 0, 1_000);
-        assert_eq!(engine.active_voice_count_for_slot(15), 1);
+        assert_eq!(
+            engine.active_voice_count_for_slot(INSTRUMENT_SLOT_COUNT - 1),
+            1
+        );
         for _ in 0..100 {
             let s = engine.next_sample();
             assert!(s.is_finite());
@@ -787,7 +794,7 @@ mod tests {
     fn long_running_event_stream_stays_finite() {
         let mut engine = SynthEngine::new(48_000);
         for i in 0..200 {
-            let slot = (i % 16) as u8;
+            let slot = (i % INSTRUMENT_SLOT_COUNT) as u8;
             let note = 36 + (i % 48) as u8;
             let vel = 1 + (i % 127) as u8;
             engine.note_on(slot, note, vel, 50 + (i % 200) as u32);
