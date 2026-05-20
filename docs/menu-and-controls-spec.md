@@ -18,6 +18,7 @@ Context-help copy source: `docs/menu-help-texts.tsv` (required header row).
 | Aux encoder 1-4 press | (simulated) | Trigger bound press mapping |
 | Shift + Aux encoder press | Shift + (simulated) | Bind current item / open unbind confirm |
 | Shift + Fn + Main press | Shift+Ctrl+Enter | Context help for highlighted entry |
+| Fn + leftmost grid column | Ctrl + leftmost grid column | Select active part (1..8); indicators show only while Fn is held (gray=available, green=active) |
 
 Help popup behavior:
 
@@ -48,6 +49,7 @@ Root (group)
 
 ```
 L1: Life
+├── Part: [1..8]                                 ← selects active part for L1/L2 editing (mirrors Fn+left-column select)
 ├── Step Rate: [1/16, 1/8, 1/4, 1/2, 1/1]    ← controls how often onTick() is called
 ├── Behavior: [sequencer | life | brain | ant | bounce | shapes | raindrops | dla | glider]
 └── ... per-behavior dynamic config from active engine's configMenu()
@@ -59,7 +61,7 @@ Behavior-specific config items (from `configMenu()`):
 |---|---|---|
 | sequencer | *(none)* | — |
 | life | Spawn Count: [0..20] | number, step 1 (default 12) |
-| life | Spawn Interval: [1..20] | number, step 1 (default 4) |
+| life | Spawn Interval: [1..20] | number, step 1 (default 1) |
 | life | !Spawn Random [S] | action, shared route `trigger.life.spawn_now` |
 | brain | Fire Threshold: [1..6] | number, step 1 |
 | brain | !Seed Random [S] | action, shared route `trigger.life.spawn_now` |

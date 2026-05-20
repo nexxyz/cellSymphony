@@ -131,7 +131,7 @@ export function routeInput<TState>(
   input: DeviceInput,
   behavior: BehaviorEngine<TState, unknown>
 ): { state: PlatformState<TState>; events: MusicalEvent[]; effects: PlatformEffect[] } {
-  return routeInputWithDeps(state, input, behavior, {
+  const routed = routeInputWithDeps(state, input, behavior, {
     isMainEncoderInput,
     applyAuxUnbindChoice,
     writeAnyValue,
@@ -154,6 +154,11 @@ export function routeInput<TState>(
     spawnActionTypeForBehavior,
     executeConfirmed
   });
+  const active = Math.max(0, Math.min(7, Number((routed.state.runtimeConfig as any).activePartIndex ?? 0)));
+  const partStates = Array.isArray((routed.state as any).partStates) ? ([...((routed.state as any).partStates as any[])] as any[]) : [];
+  while (partStates.length < 8) partStates.push(routed.state.behaviorState);
+  partStates[active] = routed.state.behaviorState;
+  return { ...routed, state: { ...routed.state, partStates } };
 }
 
 function executeConfirmed<TState>(
@@ -320,9 +325,17 @@ export function applyStoreResult<TState>(
 }
 
 export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>): SimulatorFrame {
-  const model = behavior.renderModel(state.behaviorState);
+  const activePart = Math.max(0, Math.min(7, Number((state.runtimeConfig as any).activePartIndex ?? 0)));
+  const part = (state.runtimeConfig as any).parts?.[activePart];
+  const activeBehaviorId = String(part?.l1?.behaviorId ?? state.runtimeConfig.activeBehavior);
+  const engine = (resolveBehavior(activeBehaviorId) as BehaviorEngine<any, unknown>) ?? behavior;
+  const partStates = Array.isArray((state as any).partStates) ? ((state as any).partStates as any[]) : [];
+  const model = engine.renderModel((partStates[activePart] ?? state.behaviorState) as any);
   const menuView = currentMenuView(state);
-  const scanCursor = state.runtimeConfig.scanMode === "scanning" ? { axis: state.runtimeConfig.scanAxis, index: state.scanIndex } : null;
+  const scanMode = part?.l2?.scanMode ?? state.runtimeConfig.scanMode;
+  const scanAxis = part?.l2?.scanAxis ?? state.runtimeConfig.scanAxis;
+  const scanIndex = ((state as any).partScanIndex?.[activePart] ?? state.scanIndex) as number;
+  const scanCursor = scanMode === "scanning" ? { axis: scanAxis, index: scanIndex } : null;
   const baseDisplay: DisplayFrame = {
     page: menuView.path,
     title: menuView.path,
@@ -352,7 +365,18 @@ export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior:
   return {
     display: baseDisplay,
     oled,
-    leds: { width: GRID_WIDTH, height: GRID_HEIGHT, cells: cellsToLeds(model.cells, model.triggerTypes, scanCursor, state.runtimeConfig.gridBrightness / 100) },
+    leds: {
+      width: GRID_WIDTH,
+      height: GRID_HEIGHT,
+      cells: cellsToLeds(
+        model.cells,
+        model.triggerTypes,
+        scanCursor,
+        state.runtimeConfig.gridBrightness / 100,
+        state.system.fnHeld,
+        activePart
+      )
+    },
     transport: state.transport,
     activeBehavior: model.name
   };

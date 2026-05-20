@@ -353,6 +353,15 @@ test("external MIDI clock advances external position even when locally paused", 
   assert.equal(result.state.system.externalPpqnPulse, 24);
 });
 
+test("Fn+left-column grid press selects active part", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state = routeInput(state, { type: "button_fn", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "grid_press", x: 0, y: 3 }, mockBehavior).state;
+  assert.equal((state.runtimeConfig as any).activePartIndex, 3);
+  assert.equal(state.system.toast?.message, "Part 4");
+});
+
 test("Fn+Shift+Enter opens contextual help popup", () => {
   let state = createInitialState(mockBehavior);
   state.system.oledMode = "normal";

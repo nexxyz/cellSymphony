@@ -34,7 +34,9 @@ export function cellsToLeds(
   cells: boolean[],
   triggerTypes: import("@cellsymphony/behavior-api").CellTriggerType[] | undefined,
   scanCursor: { axis: "rows" | "columns"; index: number } | null,
-  brightness: number
+  brightness: number,
+  fnHeld: boolean = false,
+  activePartIndex: number = 0
 ): LedCell[] {
   const b = clamp(brightness, 0.1, 1);
   const OFF_BG: LedCell = { r: 15, g: 15, b: 22 };
@@ -64,6 +66,14 @@ export function cellsToLeds(
         default:
           out[screenIndex] = scaleLed({ r: 0, g: 255, b: 120 }, b);
       }
+    }
+  }
+  if (fnHeld) {
+    const layerCount = Math.min(8, GRID_HEIGHT);
+    for (let layer = 0; layer < layerCount; layer += 1) {
+      const screenIndex = GRID_DOMAIN.toDisplayIndex({ x: 0, y: layer });
+      const isActive = layer === activePartIndex;
+      out[screenIndex] = scaleLed(isActive ? { r: 0, g: 210, b: 0 } : { r: 90, g: 90, b: 90 }, b);
     }
   }
   return out;

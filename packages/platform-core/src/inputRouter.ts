@@ -114,6 +114,14 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     return { state: nextState, events, effects };
   }
 
+  if (input.type === "grid_press" && nextState.system.fnHeld && input.x === 0) {
+    const idx = clamp(Math.floor(input.y), 0, 7);
+    nextState = deps.writeAnyValue(nextState, "activePartIndex", idx);
+    nextState = deps.reinitBehaviorState(nextState, "activeBehavior");
+    nextState.system = { ...nextState.system, toast: { message: `Part ${idx + 1}`, untilMs: Date.now() + 1000 } };
+    return { state: nextState, events, effects };
+  }
+
   if (input.type === "button_s" && pressed(input)) {
     if (nextState.runtimeConfig.midi.syncMode === "external" && nextState.system.shiftHeld) {
       nextState.system = { ...nextState.system, pendingResync: true };
@@ -151,11 +159,17 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
         nextState = { ...nextState, system: { ...nextState.system, draftName: next, nameCursor: cursor - 1 } };
       }
     } else if (nextState.system.shiftHeld) {
-      const b = deps.resolveBehavior(nextState.runtimeConfig.activeBehavior);
-      const ns = nextState.runtimeConfig.behaviorConfig?.[nextState.runtimeConfig.activeBehavior] as Record<string, unknown> | undefined;
+      const activePart = Math.max(0, Math.min(7, Number((nextState.runtimeConfig as any).activePartIndex ?? 0)));
+      const part: any = (nextState.runtimeConfig as any).parts?.[activePart];
+      const behaviorId = String(part?.l1?.behaviorId ?? nextState.runtimeConfig.activeBehavior);
+      const b = deps.resolveBehavior(behaviorId);
+      const ns = (part?.l1?.behaviorConfig ?? nextState.runtimeConfig.behaviorConfig?.[behaviorId]) as Record<string, unknown> | undefined;
       const cfg: any = {};
       if (b.configMenu) for (const item of b.configMenu(b.init({}))) { const val = ns?.[item.key]; if (val !== undefined) cfg[item.key] = val; }
       nextState.behaviorState = b.init(cfg);
+      if (Array.isArray((nextState as any).partStates) && (nextState as any).partStates.length > activePart) {
+        (nextState as any).partStates[activePart] = nextState.behaviorState;
+      }
       nextState.system = { ...nextState.system, toast: { message: "Grid cleared", untilMs: Date.now() + 1500 } };
     } else {
       if (nextState.menu.editing && selected && selected.kind === "text") {

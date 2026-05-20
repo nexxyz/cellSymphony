@@ -1,14 +1,17 @@
 import { type BehaviorEngine, getBehavior, listBehaviorIds } from "@cellsymphony/behavior-api";
 import { loadDefaultMappingConfig } from "@cellsymphony/mapping-core";
-import type { PlatformState, RuntimeConfig } from "./platformTypes";
+import type { PartConfig, PlatformState, RuntimeConfig } from "./platformTypes";
 import { SYNTH_PRESETS } from "./synthPresets";
 
 export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
+  const defaultMapping = loadDefaultMappingConfig();
   const instruments = Array.from({ length: 16 }, (_, idx) => ({
     type: "synth" as const,
     noteBehavior: "oneshot" as const,
     midi: { enabled: false, channel: idx },
-    synth: structuredClone(SYNTH_PRESETS[idx % 8]!.synth as RuntimeConfig["instruments"][number]["synth"])
+    synth: structuredClone(SYNTH_PRESETS[idx % 8]!.synth as RuntimeConfig["instruments"][number]["synth"]),
+    sample: { baseVelocity: 100, tuneSemis: 0, assignments: [] },
+    midiEngine: { velocity: 100, durationMs: 120 }
   }));
 
   const runtimeConfig: RuntimeConfig = {
@@ -50,10 +53,48 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       filterCutoff: { enabled: false, from: 20, to: 127, gridOffset: 0, curve: "linear" },
       filterResonance: { enabled: false, from: 10, to: 90, gridOffset: 0, curve: "linear" }
     },
+    activePartIndex: 0,
+    parts: [],
     instruments
   };
+  const makePart = (idx: number): PartConfig => ({
+    l1: {
+      stepRate: idx === 0 ? "1/8" : "1/4",
+      behaviorId: idx === 0 ? behavior.id : "life",
+      behaviorConfig: { ...((runtimeConfig.behaviorConfig as any)[idx === 0 ? behavior.id : "life"] ?? {}) }
+    },
+    l2: {
+      scanMode: "immediate",
+      scanAxis: "columns",
+      scanUnit: "1/8",
+      scanDirection: "forward",
+      eventEnabled: idx === 0,
+      stateEnabled: idx === 0,
+      pitch: structuredClone(runtimeConfig.pitch),
+      x: structuredClone(runtimeConfig.x),
+      y: structuredClone(runtimeConfig.y),
+      mapping: {
+        activate: { action: defaultMapping.activate.action, slot: defaultMapping.activate.channel },
+        stable: { action: defaultMapping.stable.action, slot: defaultMapping.stable.channel },
+        deactivate: { action: defaultMapping.deactivate.action, slot: defaultMapping.deactivate.channel },
+        scanned: { action: defaultMapping.scanned.action, slot: defaultMapping.scanned.channel },
+        scanned_empty: { action: defaultMapping.scanned_empty.action, slot: defaultMapping.scanned_empty.channel }
+      }
+    }
+  });
+  runtimeConfig.parts = Array.from({ length: 8 }, (_, idx) => makePart(idx));
   const behaviorCfg = runtimeConfig.behaviorConfig as Record<string, Record<string, unknown> | undefined>;
-  behaviorCfg.life = { ...(behaviorCfg.life ?? {}), randomCellsPerTick: 12, randomTickInterval: 4 };
+  behaviorCfg.life = { ...(behaviorCfg.life ?? {}), randomCellsPerTick: 12, randomTickInterval: 1 };
+  for (let i = 0; i < runtimeConfig.parts.length; i += 1) {
+    const p = runtimeConfig.parts[i];
+    if (p?.l1?.behaviorId === "life") {
+      p.l1.behaviorConfig = { ...(behaviorCfg.life ?? {}) };
+    }
+  }
+  const partStates = runtimeConfig.parts.map((part) => {
+    const engine = getBehavior(part.l1.behaviorId) ?? behavior;
+    return engine.init({ ...(part.l1.behaviorConfig ?? {}) });
+  });
   return {
     transport: { playing: false, bpm: 120, tick: 0, ppqnPulse: 0 },
     behaviorState: behavior.init({}),
@@ -93,6 +134,10 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
     scanIndex: 0,
     scanPulseAccumulator: 0,
     algorithmPulseAccumulator: 0,
-    ppqnPulseRemainder: 0
+    ppqnPulseRemainder: 0,
+    partStates,
+    partScanIndex: Array.from({ length: 8 }, () => 0),
+    partScanPulseAccumulator: Array.from({ length: 8 }, () => 0),
+    partAlgorithmPulseAccumulator: Array.from({ length: 8 }, () => 0)
   };
 }

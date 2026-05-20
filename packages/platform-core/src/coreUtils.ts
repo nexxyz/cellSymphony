@@ -91,7 +91,7 @@ export function writeValue<TConfig extends object>(cfg: TConfig, key: string, va
 }
 
 export function formatDisplayValue(key: string, value: unknown): string {
-  if (key === "mapping.activate.channel" || key === "mapping.stable.channel" || key === "mapping.deactivate.channel" || key === "mapping.scanned.channel" || key === "mapping.scanned_empty.channel") {
+  if (key === "mapping.activate.channel" || key === "mapping.stable.channel" || key === "mapping.deactivate.channel" || key === "mapping.scanned.channel" || key === "mapping.scanned_empty.channel" || /\.l2\.mapping\.(activate|stable|deactivate|scanned|scanned_empty)\.slot$/.test(key)) {
     const n = clamp(Math.floor(Number(value)), 0, 15);
     return String(n + 1);
   }
@@ -105,15 +105,19 @@ export function formatDisplayValue(key: string, value: unknown): string {
   if (key === "buttonBrightness") return `Btn ${value}%`;
   if (key === "screenSleepSeconds") return Number(value) <= 0 ? "Sleep: Off" : `Sleep: ${value}s`;
   if (key === "activeBehavior") return String(value);
-  if (key === "scanMode") return value === "immediate" ? "no scan" : "scanning";
-  if (key === "scanAxis") return value === "columns" ? "cols" : "rows";
-  if (key === "scanDirection") return value === "forward" ? "fwd" : "rev";
-  if (key === "pitch.startingNote" || key === "pitch.lowestNote" || key === "pitch.highestNote") {
+  if (key === "activePartIndex") {
+    const n = clamp(Math.floor(Number(value)), 0, 7);
+    return `Part ${n + 1}`;
+  }
+  if (key === "scanMode" || key.endsWith(".l2.scanMode")) return value === "immediate" ? "no scan" : "scanning";
+  if (key === "scanAxis" || key.endsWith(".l2.scanAxis")) return value === "columns" ? "cols" : "rows";
+  if (key === "scanDirection" || key.endsWith(".l2.scanDirection")) return value === "forward" ? "fwd" : "rev";
+  if (key === "pitch.startingNote" || key === "pitch.lowestNote" || key === "pitch.highestNote" || key.endsWith(".l2.pitch.startingNote") || key.endsWith(".l2.pitch.lowestNote") || key.endsWith(".l2.pitch.highestNote")) {
     return formatNoteWithMidi(Number(value));
   }
-  if (key === "pitch.outOfRange") return value === "wrap" ? "wrap" : "clamp";
-  if (key === "pitch.scale") return formatScaleName(String(value));
-  if (key === "pitch.root") return String(value);
+  if (key === "pitch.outOfRange" || key.endsWith(".l2.pitch.outOfRange")) return value === "wrap" ? "wrap" : "clamp";
+  if (key === "pitch.scale" || key.endsWith(".l2.pitch.scale")) return formatScaleName(String(value));
+  if (key === "pitch.root" || key.endsWith(".l2.pitch.root")) return String(value);
   if (key === "transport.playing") return value === true || value === "true" ? "Play" : "Stop";
   if (typeof value === "boolean") return value ? "On" : "Off";
   return String(value);

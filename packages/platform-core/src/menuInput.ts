@@ -87,7 +87,7 @@ export function turnMenuInput<TState>(state: PlatformState<TState>, delta: -1 | 
     const current = deps.readAnyValue(state, selected.key);
     const nextValue = clamp(Number(current) + delta * selected.step, selected.min, selected.max);
     const nextState = deps.writeAnyValue(state, selected.key, nextValue);
-    if (selected.key.startsWith("behaviorConfig.")) {
+    if (selected.key.startsWith("behaviorConfig.") || selected.key.includes(".l1.behaviorConfig.")) {
       const finalState = deps.reinitBehaviorState(nextState, selected.key);
       deps.autoSaveEffect(finalState, effects);
       return finalState;
@@ -107,7 +107,7 @@ export function turnMenuInput<TState>(state: PlatformState<TState>, delta: -1 | 
   const nextIdx = clamp(idx + delta, 0, selected.options.length - 1);
   const raw = selected.options[nextIdx];
   if (selected.key === "transport.playing") return { ...state, transport: { ...state.transport, playing: raw === "true" } };
-  if (selected.key === "activeBehavior" || selected.key.startsWith("behaviorConfig.")) {
+  if (selected.key === "activeBehavior" || selected.key === "activePartIndex" || selected.key.endsWith(".l1.behaviorId") || selected.key.includes(".l1.behaviorConfig.") || selected.key.startsWith("behaviorConfig.")) {
     const nextState = deps.writeAnyValue(state, selected.key, raw);
     const finalState = deps.reinitBehaviorState(nextState, selected.key);
     deps.autoSaveEffect(finalState, effects);

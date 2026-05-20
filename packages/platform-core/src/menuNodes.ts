@@ -48,8 +48,8 @@ export function midiInputNodes<TState>(state: PlatformState<TState>): MenuNode[]
   return out;
 }
 
-export function axisGroup(label: string, prefix: "x" | "y", _defaultStep: number): MenuNode {
-  const offsetLimit = prefix === "x" ? GRID_WIDTH - 1 : GRID_HEIGHT - 1;
+export function axisGroup(label: string, prefix: string, _defaultStep: number): MenuNode {
+  const offsetLimit = prefix.endsWith(".x") || prefix === "x" ? GRID_WIDTH - 1 : GRID_HEIGHT - 1;
   return {
     kind: "group",
     label,

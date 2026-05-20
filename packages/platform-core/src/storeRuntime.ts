@@ -8,9 +8,44 @@ type StoreDeps<TState> = {
 };
 
 export function extractConfigPayload<TState>(state: PlatformState<TState>): ConfigPayload {
+  const runtimeAny: any = state.runtimeConfig;
+  const active = Math.max(0, Math.min(7, Number(runtimeAny.activePartIndex ?? 0)));
+  const parts = Array.isArray(runtimeAny.parts) ? [...runtimeAny.parts] : [];
+  if (parts[active]) {
+    const behaviorId = String(runtimeAny.activeBehavior ?? parts[active].l1?.behaviorId ?? "life");
+    parts[active] = {
+      ...parts[active],
+      l1: {
+        ...parts[active].l1,
+        stepRate: runtimeAny.algorithmStepUnit,
+        behaviorId,
+        behaviorConfig: { ...((runtimeAny.behaviorConfig ?? {})[behaviorId] ?? {}) }
+      },
+      l2: {
+        ...parts[active].l2,
+        scanMode: runtimeAny.scanMode,
+        scanAxis: runtimeAny.scanAxis,
+        scanUnit: runtimeAny.scanUnit,
+        scanDirection: runtimeAny.scanDirection,
+        eventEnabled: runtimeAny.eventEnabled,
+        stateEnabled: runtimeAny.stateEnabled,
+        pitch: structuredClone(runtimeAny.pitch),
+        x: structuredClone(runtimeAny.x),
+        y: structuredClone(runtimeAny.y),
+        mapping: {
+          activate: { action: (state.mappingConfig as any).activate?.action ?? parts[active].l2.mapping.activate.action, slot: Number((state.mappingConfig as any).activate?.channel ?? parts[active].l2.mapping.activate.slot) },
+          stable: { action: (state.mappingConfig as any).stable?.action ?? parts[active].l2.mapping.stable.action, slot: Number((state.mappingConfig as any).stable?.channel ?? parts[active].l2.mapping.stable.slot) },
+          deactivate: { action: (state.mappingConfig as any).deactivate?.action ?? parts[active].l2.mapping.deactivate.action, slot: Number((state.mappingConfig as any).deactivate?.channel ?? parts[active].l2.mapping.deactivate.slot) },
+          scanned: { action: (state.mappingConfig as any).scanned?.action ?? parts[active].l2.mapping.scanned.action, slot: Number((state.mappingConfig as any).scanned?.channel ?? parts[active].l2.mapping.scanned.slot) },
+          scanned_empty: { action: (state.mappingConfig as any).scanned_empty?.action ?? parts[active].l2.mapping.scanned_empty.action, slot: Number((state.mappingConfig as any).scanned_empty?.channel ?? parts[active].l2.mapping.scanned_empty.slot) }
+        }
+      }
+    };
+  }
+  const runtimeConfig = { ...(state.runtimeConfig as any), parts } as RuntimeConfig;
   return {
-    activeBehavior: (state.runtimeConfig as any).activeBehavior ?? state.activeBehavior,
-    runtimeConfig: state.runtimeConfig,
+    activeBehavior: runtimeAny.activeBehavior ?? state.activeBehavior,
+    runtimeConfig,
     mappingConfig: state.mappingConfig
   };
 }
@@ -36,6 +71,15 @@ export function applyConfigPayload<TState>(
     }
   }
   next.behaviorState = resolved.init(behaviorCfg);
+  const parts: any[] = Array.isArray((safe.runtimeConfig as any).parts) ? (safe.runtimeConfig as any).parts : [];
+  next.partStates = parts.map((part) => {
+    const engine = deps.resolveBehavior(String(part?.l1?.behaviorId ?? safe.activeBehavior));
+    return engine.init({ ...(part?.l1?.behaviorConfig ?? {}) });
+  });
+  while (next.partStates.length < 8) next.partStates.push(resolved.init({}));
+  next.partScanIndex = Array.from({ length: 8 }, () => 0);
+  next.partScanPulseAccumulator = Array.from({ length: 8 }, () => 0);
+  next.partAlgorithmPulseAccumulator = Array.from({ length: 8 }, () => 0);
   next.scanPulseAccumulator = 0;
   next.algorithmPulseAccumulator = 0;
   next.ppqnPulseRemainder = 0;
@@ -58,16 +102,16 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     const factorySlots: any[] = Array.isArray((factory.runtimeConfig as any).instruments)
       ? (factory.runtimeConfig as any).instruments
       : [];
-    const baseSlots = factorySlots.length > 0 ? factorySlots : Array.from({ length: 16 }, () => ({ type: "synth", midi: { enabled: false, channel: 0 }, synth: {} }));
+    const baseSlots = factorySlots.length > 0 ? factorySlots : Array.from({ length: 16 }, () => ({ type: "synth", midi: { enabled: false, channel: 0 }, synth: {}, sample: { baseVelocity: 100, tuneSemis: 0, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } }));
     const src = Array.isArray(incoming) ? incoming : [];
     const out: any[] = [];
     for (let i = 0; i < 16; i += 1) {
-      const f = baseSlots[i] ?? baseSlots[0] ?? { type: "synth", midi: { enabled: false, channel: i }, synth: {} };
+      const f = baseSlots[i] ?? baseSlots[0] ?? { type: "synth", midi: { enabled: false, channel: i }, synth: {}, sample: { baseVelocity: 100, tuneSemis: 0, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } };
       const s = src[i] ?? {};
       out.push({
         ...(f as any),
         ...(s as any),
-        type: (s as any).type === "synth" ? "synth" : (f as any).type,
+        type: (s as any).type === "sample" || (s as any).type === "midi" || (s as any).type === "synth" ? (s as any).type : (f as any).type,
         midi: { ...(f as any).midi, ...((s as any).midi ?? {}) },
         synth: {
           ...(f as any).synth,
@@ -78,6 +122,15 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
           ampEnv: { ...(f as any).synth?.ampEnv, ...((s as any).synth?.ampEnv ?? {}) },
           filter: { ...(f as any).synth?.filter, ...((s as any).synth?.filter ?? {}) },
           filterEnv: { ...(f as any).synth?.filterEnv, ...((s as any).synth?.filterEnv ?? {}) }
+        },
+        sample: {
+          ...(f as any).sample,
+          ...((s as any).sample ?? {}),
+          assignments: Array.isArray((s as any).sample?.assignments) ? (s as any).sample.assignments : (Array.isArray((f as any).sample?.assignments) ? (f as any).sample.assignments : [])
+        },
+        midiEngine: {
+          ...(f as any).midiEngine,
+          ...((s as any).midiEngine ?? {})
         }
       });
     }
@@ -106,13 +159,69 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
       filterCutoff: { ...(factory.runtimeConfig.y.filterCutoff as any), ...(rt.y?.filterCutoff ?? {}) },
       filterResonance: { ...(factory.runtimeConfig.y.filterResonance as any), ...(rt.y?.filterResonance ?? {}) }
     },
+    activePartIndex: Math.max(0, Math.min(7, Number(rt.activePartIndex ?? (factory.runtimeConfig as any).activePartIndex ?? 0))),
+    parts: Array.isArray(rt.parts) ? rt.parts : Array.isArray((factory.runtimeConfig as any).parts) ? (factory.runtimeConfig as any).parts : [],
     instruments: sanitizeInstruments(rt.instruments)
   };
+
+  if (!Array.isArray((mergedRuntime as any).parts) || (mergedRuntime as any).parts.length === 0) {
+    (mergedRuntime as any).parts = Array.isArray((factory.runtimeConfig as any).parts) ? structuredClone((factory.runtimeConfig as any).parts) : [];
+  }
+  const active = Math.max(0, Math.min(7, Number((mergedRuntime as any).activePartIndex ?? 0)));
+  const parts = [...((mergedRuntime as any).parts as any[])];
+  while (parts.length < 8) {
+    const base = (factory.runtimeConfig as any).parts?.[parts.length] ?? (factory.runtimeConfig as any).parts?.[0];
+    if (base) parts.push(structuredClone(base));
+    else break;
+  }
+  if (parts[active]) {
+    const p = parts[active];
+    mergedRuntime.algorithmStepUnit = p.l1?.stepRate ?? mergedRuntime.algorithmStepUnit;
+    mergedRuntime.activeBehavior = p.l1?.behaviorId ?? mergedRuntime.activeBehavior;
+    mergedRuntime.scanMode = p.l2?.scanMode ?? mergedRuntime.scanMode;
+    mergedRuntime.scanAxis = p.l2?.scanAxis ?? mergedRuntime.scanAxis;
+    mergedRuntime.scanUnit = p.l2?.scanUnit ?? mergedRuntime.scanUnit;
+    mergedRuntime.scanDirection = p.l2?.scanDirection ?? mergedRuntime.scanDirection;
+    mergedRuntime.eventEnabled = p.l2?.eventEnabled ?? mergedRuntime.eventEnabled;
+    mergedRuntime.stateEnabled = p.l2?.stateEnabled ?? mergedRuntime.stateEnabled;
+    mergedRuntime.pitch = p.l2?.pitch ? structuredClone(p.l2.pitch) : mergedRuntime.pitch;
+    mergedRuntime.x = p.l2?.x ? structuredClone(p.l2.x) : mergedRuntime.x;
+    mergedRuntime.y = p.l2?.y ? structuredClone(p.l2.y) : mergedRuntime.y;
+    const behaviorFromPayload = ((rt.behaviorConfig ?? {}) as any)[mergedRuntime.activeBehavior];
+    mergedRuntime.behaviorConfig = {
+      ...(mergedRuntime.behaviorConfig as any),
+      [mergedRuntime.activeBehavior]: { ...(behaviorFromPayload ?? p.l1?.behaviorConfig ?? {}) }
+    };
+    if (behaviorFromPayload) {
+      parts[active] = {
+        ...p,
+        l1: {
+          ...p.l1,
+          behaviorId: mergedRuntime.activeBehavior,
+          behaviorConfig: { ...behaviorFromPayload }
+        }
+      };
+    }
+  }
+  (mergedRuntime as any).parts = parts;
+
+  const mappingConfig = p.mappingConfig ? (p.mappingConfig as MappingConfig) : factory.mappingConfig;
+  const activePart = (mergedRuntime as any).parts?.[active];
+  const mergedMapping: MappingConfig = activePart?.l2?.mapping
+    ? {
+      ...mappingConfig,
+      activate: { ...mappingConfig.activate, action: activePart.l2.mapping.activate.action, channel: activePart.l2.mapping.activate.slot },
+      stable: { ...mappingConfig.stable, action: activePart.l2.mapping.stable.action, channel: activePart.l2.mapping.stable.slot },
+      deactivate: { ...mappingConfig.deactivate, action: activePart.l2.mapping.deactivate.action, channel: activePart.l2.mapping.deactivate.slot },
+      scanned: { ...mappingConfig.scanned, action: activePart.l2.mapping.scanned.action, channel: activePart.l2.mapping.scanned.slot },
+      scanned_empty: { ...mappingConfig.scanned_empty, action: activePart.l2.mapping.scanned_empty.action, channel: activePart.l2.mapping.scanned_empty.slot }
+    }
+    : mappingConfig;
 
   return {
     activeBehavior: typeof p.activeBehavior === "string" ? p.activeBehavior : factory.activeBehavior,
     runtimeConfig: mergedRuntime,
-    mappingConfig: p.mappingConfig ? (p.mappingConfig as MappingConfig) : factory.mappingConfig
+    mappingConfig: mergedMapping
   };
 }
 

@@ -13,6 +13,7 @@ type PitchSettings = { startingNote: number; lowestNote: number; highestNote: nu
 type PitchLaneConfig = { enabled: boolean; steps: number };
 export type ValueLaneConfig = { enabled: boolean; from: number; to: number; gridOffset: number; curve: Curve };
 type AxisModConfig = { pitch: PitchLaneConfig; velocity: ValueLaneConfig; filterCutoff: ValueLaneConfig; filterResonance: ValueLaneConfig };
+type TriggerAction = "none" | "note_on" | "note_off";
 
 export type EnvConfig = { attackMs: number; decayMs: number; sustainPct: number; releaseMs: number };
 
@@ -42,10 +43,47 @@ export type SynthConfig = {
 };
 
 export type InstrumentSlotConfig = {
-  type: "synth";
+  type: "synth" | "sample" | "midi";
   noteBehavior: "oneshot" | "hold";
   midi: { enabled: boolean; channel: number };
   synth: SynthConfig;
+  sample: {
+    baseVelocity: number;
+    tuneSemis: number;
+    assignments: Array<{ x: number; y: number; sampleId: string; velocity?: number }>;
+  };
+  midiEngine: {
+    velocity: number;
+    durationMs: number;
+  };
+};
+
+export type PartSenseConfig = {
+  scanMode: ScanMode;
+  scanAxis: ScanAxis;
+  scanUnit: NoteUnit;
+  scanDirection: Direction;
+  eventEnabled: boolean;
+  stateEnabled: boolean;
+  pitch: PitchSettings;
+  x: AxisModConfig;
+  y: AxisModConfig;
+  mapping: {
+    activate: { action: TriggerAction; slot: number };
+    stable: { action: TriggerAction; slot: number };
+    deactivate: { action: TriggerAction; slot: number };
+    scanned: { action: TriggerAction; slot: number };
+    scanned_empty: { action: TriggerAction; slot: number };
+  };
+};
+
+export type PartConfig = {
+  l1: {
+    stepRate: NoteUnit;
+    behaviorId: string;
+    behaviorConfig: Record<string, unknown>;
+  };
+  l2: PartSenseConfig;
 };
 
 export type RuntimeConfig = {
@@ -55,6 +93,7 @@ export type RuntimeConfig = {
   scanMode: ScanMode; scanAxis: ScanAxis; scanUnit: NoteUnit; scanDirection: Direction; algorithmStepUnit: NoteUnit;
   activeBehavior: string; autoSaveDefault: boolean; behaviorConfig: Record<string, unknown>; eventEnabled: boolean; stateEnabled: boolean;
   pitch: PitchSettings; x: AxisModConfig; y: AxisModConfig;
+  activePartIndex: number; parts: PartConfig[];
   instruments: InstrumentSlotConfig[];
 };
 
@@ -113,6 +152,7 @@ export type StoreResult = StoreResultBase | MidiResult;
 export type PlatformState<TState> = {
   transport: TransportFrame; behaviorState: TState; activeBehavior: string; mappingConfig: MappingConfig; runtimeConfig: RuntimeConfig; menu: MenuState; system: SystemState;
   scanIndex: number; scanPulseAccumulator: number; algorithmPulseAccumulator: number; ppqnPulseRemainder: number;
+  partStates: unknown[]; partScanIndex: number[]; partScanPulseAccumulator: number[]; partAlgorithmPulseAccumulator: number[];
 };
 
 export type MenuNode =
