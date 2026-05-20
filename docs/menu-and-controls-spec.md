@@ -2,7 +2,7 @@
 
 This is the single source of truth for menu structure, control mappings, and parameter behavior.
 
-Context-help copy source: `docs/menu-help-texts.tsv` (required header row).
+Context-help copy source: `packages/platform-core/resources/menu-help-texts.tsv` (required header row).
 
 ## Cheat Sheet
 
@@ -14,6 +14,8 @@ Context-help copy source: `docs/menu-help-texts.tsv` (required header row).
 | Shift + Fn + Main press | Context help | Opens help for highlighted menu entry.
 | Fn + leftmost grid column | Select active part (1..8) | Mirrors `L1: Life > Part`.
 | Fn held + leftmost column LEDs | Layer indicators | Gray = available layers, green = current active layer.
+| Sample assign + Shift + cell | Row assign step | Applies current selected-cell assign step to the whole row.
+| Sample assign + Shift + double cell | Column assign step | Applies current selected-cell assign step to the whole column.
 | Shift + Aux press | Bind/unbind aux mapping | Opens bind/unbind flow for focused item.
 
 ## Control Mapping
@@ -31,6 +33,8 @@ Context-help copy source: `docs/menu-help-texts.tsv` (required header row).
 | Shift + Aux encoder press | Shift + (simulated) | Bind current item / open unbind confirm |
 | Shift + Fn + Main press | Shift+Ctrl+Enter | Context help for highlighted entry |
 | Fn + leftmost grid column | Ctrl + leftmost grid column | Select active part (1..8); indicators show only while Fn is held (gray=available, green=active) |
+| Sample assign mode + Shift + cell press | Shift + cell | Apply current assign toggle/level step to entire row |
+| Sample assign mode + Shift + double cell press | Shift + double cell | Apply current assign toggle/level step to entire column |
 
 Help popup behavior:
 
@@ -62,6 +66,7 @@ Root (group)
 ```
 L1: Life
 ├── Part: [1..8]                                 ← selects active part for L1/L2 editing (mirrors Fn+left-column select)
+├── Save Grid State: [on | off]                  ← controls whether this part's current grid/runtime state is stored in preset/default saves
 ├── Step Rate: [1/16, 1/8, 1/4, 1/2, 1/1]    ← controls how often onTick() is called
 ├── Behavior: [sequencer | life | brain | ant | bounce | shapes | raindrops | dla | glider]
 └── ... per-behavior dynamic config from active engine's configMenu()
@@ -94,12 +99,13 @@ Behavior-specific config items (from `configMenu()`):
 
 ```
 L2: Sense
+├── Part: [1..8]                                 ← same selector as L1 Part
 ├── Scan Mode: [no scan | scanning]
 ├── Scan Axis: [rows | columns]           ← visible when scanning
 ├── Scan Unit: [1/16, 1/8, 1/4, 1/2, 1/1] ← visible when scanning
 ├── Scan Direction: [forward | reverse]    ← visible when scanning
 ├── Event Triggers: [on | off]
-├── State Notes: [on | off]
+├── State Notes: [on | off]                    default on (all parts)
 ├── Instrument Targets (group)
 │   ├── Activate Action: [none | note_on | note_off]
 │   ├── Activate Instrument: [1..16]
@@ -141,33 +147,51 @@ L2: Sense
 
 ```
 L3: Voice
-├── Note Mapping (group)
-│   ├── Starting Note: [0..127] step 1   default 60 (C4)
-│   ├── Lowest Note: [0..127] step 1     default 36 (C2)
-│   ├── Highest Note: [0..127] step 1    default 74 (D5)
-│   ├── Out of Range: [clamp | wrap]     default clamp
-│   ├── Scale: [chromatic | major | natural_minor | dorian | mixolydian | major_pentatonic | minor_pentatonic | harmonic_minor]  default major_pentatonic
-│   └── Root: [C | C# | D | D# | E | F | F# | G | G# | A | A# | B]  default D
-├── Instruments (group)
-│   ├── Instrument 1..16 (group)
-│   │   ├── Type: [synth]
-│   │   ├── Note Behavior: [oneshot | hold] default oneshot
-│   │   ├── MIDI (group)
-│   │   │   ├── Enabled: [on | off]       default off
-│   │   │   └── Channel: [1..16]
-│   │   └── Synth (group)
-│   │       ├── Preset (group)
-│   │       │   └── Load (group)          ← per-slot synth preset load with confirm
-│   │       ├── Oscillator (group)
-│   │       │   ├── Osc 1 (group)
-│   │       │   └── Osc 2 (group)
-│   │       ├── Volume (group)           ← includes amp envelope
-│   │       └── Filter (group)           ← includes filter envelope
-├── X Axis (group)
-│   └── (same sub-structure as L2 X Axis, defaults: Pitch Steps steps=0)
-└── Y Axis (group)
-    └── (same sub-structure as L2 Y Axis, defaults: Pitch Steps steps=1)
+└── Instruments (group)
+    ├── Instrument 1..16 (group)
+    │   ├── Type: [synth | sample | MIDI only]
+    │   ├── Note Behavior: [oneshot | hold] default oneshot
+    │   ├── Synth (group, visible when type=synth)
+    │   │   ├── Preset > Load (group)      ← per-slot synth preset load with confirm
+    │   │   ├── Oscillator (group)
+    │   │   ├── Volume (group)
+    │   │   └── Filter (group)
+    │   ├── Sample (group, visible when type=sample)
+    │   │   ├── Sample Slot: [1..8]
+    │   │   ├── Choose Sample (group)      ← browses `samples/` tree (wav only)
+    │   │   ├── !Assign (action)           ← enters grid assignment mode for selected sample slot
+    │   │   ├── Velocity Levels: [on | off]
+    │   │   ├── Level High / Medium / Low: [1..127] (visible when Velocity Levels=on)
+    │   │   ├── Base Velocity: [1..127]    ← used when Velocity Levels=off
+    │   │   ├── Tune Semis: [-24..24]
+    │   │   ├── Volume (group)             ← sample amp + amp envelope
+    │   │   └── Filter (group)             ← sample filter + filter envelope
+    │   ├── Note Settings (group, visible when type=midi)
+    │       ├── Velocity: [1..127]
+    │       └── Duration: [10..2000] ms
+    │   └── MIDI (group)
+    │       ├── Enabled: [on | off]       default off
+    │       └── Channel: [1..16]
 ```
+
+Sample assignment mode semantics:
+
+- Enter via `L3: Voice > Instruments > Instrument N > Sample > Assign`
+- Back exits assignment mode
+- One sample assignment per cell (new assignment replaces old cell assignment)
+- With Velocity Levels ON, selected-slot cell presses cycle: `Off -> High(red) -> Medium(yellow) -> Low(green) -> Off`
+- With Velocity Levels OFF, selected-slot cell presses toggle: `Off <-> Assigned(white)`
+- Cells assigned to other sample slots are shown as dim white during assignment editing
+- Shift + cell applies the same toggle/step to the whole row
+- Shift + double cell applies the same toggle/step to the whole column
+- In `Choose Sample`, Space previews the highlighted wav file (folders and `..` are no-op)
+
+Part runtime behavior:
+
+- All 8 parts run in parallel while transport is running.
+- Switching active part never clears/reset any part state automatically.
+- Switching part shows the selected part's current state immediately.
+- `Save Grid State` affects preset/default save payload persistence only.
 
 ### Playback
 
@@ -253,6 +277,11 @@ Each cell in the 8×8 grid is mapped to an LED with color based on its `CellTrig
 | `scanned` | Red (only if scan mode is "scanning") |
 
 Brightness is scaled by the Grid Brightness setting.
+
+Overrides:
+
+- While Fn is held: leftmost column shows part selectors (gray) and active part (green).
+- While sample assignment mode is active: grid shows assignment overlay (selected-slot colors, other-slot dim white, unassigned dark).
 
 ## Auto-Save
 

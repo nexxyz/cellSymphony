@@ -5,7 +5,7 @@ import { lifeBehavior } from "@cellsymphony/behaviors-life";
 
 type Entry = { id: string; path: string; key: string; kind: string; title: string; line1: string; line2: string };
 
-const tsvPath = resolve(process.cwd(), "..", "..", "docs", "menu-help-texts.tsv");
+const tsvPath = resolve(process.cwd(), "resources", "menu-help-texts.tsv");
 const raw = readFileSync(tsvPath, "utf8");
 const lines = raw.split(/\r?\n/).filter((l) => l.trim().length > 0 && !l.trim().startsWith("#"));
 

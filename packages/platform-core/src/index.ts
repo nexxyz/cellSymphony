@@ -13,7 +13,6 @@ import {
   GRID_WIDTH,
   type DeviceInput,
   type DisplayFrame,
-  type LedCell,
   type PageId,
   type SimulatorFrame,
   type TransportFrame
@@ -43,7 +42,6 @@ import {
   textEditTurn,
   writeAnyValue
 } from "./stateHelpers";
-import { cellsToLeds, sampleAssignmentToLeds } from "./runtimeHelpers";
 import { applyExternalClockPulses, tickTransport } from "./transportRuntime";
 import { buildMenuTree } from "./menuTree";
 import { routeInputWithDeps } from "./inputRouter";
@@ -80,9 +78,8 @@ function resolveBehavior(activeId: string): BehaviorEngine<any, any> {
   return getBehavior(activeId) ?? sequencerBehavior;
 }
 
-import { renderOledFrame } from "./oledRender";
-import { logoSepia128Rgb565be } from "./oledAssets/logoSepia128_rgb565be";
-import { logo128Rgb565be } from "./oledAssets/logo128_rgb565be";
+import { buildSimulatorFrame } from "./simulatorFrameBuilder";
+import { emergencyBrakeState } from "./transportSafety";
 
 import {
   OLED_HEIGHT,
@@ -337,53 +334,7 @@ export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior:
   const scanAxis = part?.l2?.scanAxis ?? state.runtimeConfig.scanAxis;
   const scanIndex = ((state as any).partScanIndex?.[activePart] ?? state.scanIndex) as number;
   const scanCursor = scanMode === "scanning" ? { axis: scanAxis, index: scanIndex } : null;
-  const baseDisplay: DisplayFrame = {
-    page: menuView.path,
-    title: menuView.path,
-    editing: state.menu.editing,
-    lines: menuView.lines,
-    colors: menuView.colors
-  };
-  const oledLines = toOledLines(baseDisplay);
-  const now = Date.now();
-  const toast = state.system.toast && state.system.toast.untilMs > now ? state.system.toast.message : null;
-  const transportIcon: "play" | "pause" | "stop" = state.transport.playing ? "play" : state.system.stopLatched ? "stop" : "pause";
-  const oled = renderOledFrame({
-    lines: oledLines.lines,
-    off: state.system.oledMode === "off",
-    splash:
-      state.system.oledMode === "splash"
-        ? state.system.oledSplashText === "Starting up"
-          ? { pixelsRgb565be: logo128Rgb565be, topText: "", bottomText: "Starting up" }
-          : { pixelsRgb565be: logoSepia128Rgb565be, topText: state.system.oledSplashText, bottomText: null }
-        : undefined,
-    transportIcon,
-    transportFlash: state.system.transportFlash,
-    eventDotOn: state.system.eventBlipUntilMs > now,
-    toast,
-    lineColors: oledLines.colors
-  });
-  const sampleAssign = state.system.sampleAssign;
-  const assignLeds = (() => {
-    if (!sampleAssign) return null;
-    const inst = (state.runtimeConfig as any).instruments?.[sampleAssign.instrumentSlot];
-    if (!inst || inst.type !== "sample") return null;
-    const assignments = Array.isArray(inst.sample?.assignments) ? inst.sample.assignments : [];
-    const levels = inst.sample?.velocityLevelsEnabled === true;
-    return sampleAssignmentToLeds(assignments, sampleAssign.sampleSlot, levels, state.runtimeConfig.gridBrightness / 100);
-  })();
-
-  return {
-    display: baseDisplay,
-    oled,
-    leds: {
-      width: GRID_WIDTH,
-      height: GRID_HEIGHT,
-      cells: assignLeds ?? cellsToLeds(model.cells, model.triggerTypes, scanCursor, state.runtimeConfig.gridBrightness / 100, state.system.fnHeld, activePart)
-    },
-    transport: state.transport,
-    activeBehavior: model.name
-  };
+  return buildSimulatorFrame({ state, activePart, engine, model, menuView, scanCursor, toOledLines });
 }
 
 function menuTree<TState>(state: PlatformState<TState>): MenuNode {
@@ -402,7 +353,7 @@ function currentMenuView<TState>(state: PlatformState<TState>): { path: string; 
   return renderCurrentMenuView({
     state,
     menuTree,
-    fitOledText,
+    fitOledText: (text: string) => fitOledTextToColumns(text, OLED_TEXT_COLUMNS),
     readAnyValue,
     formatDisplayValue,
     oledTextLines: OLED_TEXT_LINES
@@ -477,12 +428,12 @@ function autoSaveEffect<TState>(state: PlatformState<TState>, effects: PlatformE
 const FRAME_SECONDS = 0.15;
 
 export function toOledLines(display: DisplayFrame): { lines: string[]; colors: number[] } {
-  const title = fitOledText(display.title, OLED_TEXT_COLUMNS);
+  const title = fitOledTextToColumns(display.title, OLED_TEXT_COLUMNS);
   const titleColor = getSectionColorFromPath(display.title);
   const body = display.lines
     .slice(0, OLED_TEXT_LINES - 1)
     .map((line, idx) => ({
-      line: line.trim().length === 0 ? "" : fitOledMenuLine(line, OLED_TEXT_COLUMNS),
+      line: line.trim().length === 0 ? "" : fitOledMenuLineToColumns(line, OLED_TEXT_COLUMNS),
       color: display.colors?.[idx] ?? 0xffff
     }));
   // Keep empty lines - they render as blank spacer lines
@@ -542,40 +493,6 @@ function isMainEncoderInput(id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | und
   return id === undefined || id === "main";
 }
 
-function fitOledMenuLine(line: string, columns: number): string {
-  return fitOledMenuLineToColumns(line, columns);
-}
-
-function fitOledText(text: string, columns = OLED_TEXT_COLUMNS): string {
-  return fitOledTextToColumns(text, columns);
-}
-
-
 export function emergencyBrake<TState>(state: PlatformState<TState>): { state: PlatformState<TState>; events: MusicalEvent[] } {
-  const activePart = clampPartIndex((state.runtimeConfig as any).activePartIndex ?? 0);
-  const activePartCfg = (state.runtimeConfig as any).parts?.[activePart]?.l2;
-  const axis = activePartCfg?.scanAxis ?? state.runtimeConfig.scanAxis;
-  const direction = activePartCfg?.scanDirection ?? state.runtimeConfig.scanDirection;
-  const size = axis === "columns" ? GRID_WIDTH : GRID_HEIGHT;
-  const origin = direction === "forward" ? 0 : size - 1;
-  const events: MusicalEvent[] = [];
-  for (let channel = 0; channel < 16; channel += 1) {
-    events.push({ type: "cc", channel, controller: 120, value: 0 });
-    events.push({ type: "cc", channel, controller: 123, value: 0 });
-  }
-  return {
-    state: {
-      ...state,
-      transport: { ...state.transport, playing: false, ppqnPulse: 0 },
-      system: { ...state.system, stopLatched: true, transportFlash: "none", transportFlashUntilMs: 0, heldNotes: [] },
-      scanIndex: origin,
-      scanPulseAccumulator: 0,
-      algorithmPulseAccumulator: 0,
-      ppqnPulseRemainder: 0,
-      partScanIndex: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0),
-      partScanPulseAccumulator: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0),
-      partAlgorithmPulseAccumulator: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0)
-    },
-    events
-  };
+  return emergencyBrakeState(state);
 }

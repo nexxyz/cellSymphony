@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 
 const SRC = resolve(process.cwd(), "src");
 const thresholds = {
-  fileLocWarn: 500,
+  fileLocMax: 500,
   fnLocWarn: 60,
   complexityWarn: 10,
   paramsWarn: 4
@@ -58,13 +58,15 @@ function scanFunctions(text: string): Array<{ name: string; loc: number; complex
 
 const files = listTsFiles(SRC);
 let warnings = 0;
+let errors = 0;
 
 for (const file of files) {
   const text = readFileSync(file, "utf8");
   const lines = text.split(/\r?\n/).length;
-  if (lines > thresholds.fileLocWarn) {
-    warnings += 1;
-    console.warn(`[quality] file-loc ${file} ${lines} > ${thresholds.fileLocWarn}`);
+  const isGenerated = /\.generated\.(ts|tsx)$/.test(file);
+  if (!isGenerated && lines > thresholds.fileLocMax) {
+    errors += 1;
+    console.error(`[quality] file-loc ${file} ${lines} > ${thresholds.fileLocMax}`);
   }
   for (const fn of scanFunctions(text)) {
     if (fn.loc > thresholds.fnLocWarn) {
@@ -80,6 +82,11 @@ for (const file of files) {
       console.warn(`[quality] fn-params ${file}:${fn.line} ${fn.name} ${fn.params} > ${thresholds.paramsWarn}`);
     }
   }
+}
+
+if (errors > 0) {
+  console.error(`[quality] staged checks failed with ${errors} error(s)`);
+  process.exit(1);
 }
 
 if (warnings === 0) {
