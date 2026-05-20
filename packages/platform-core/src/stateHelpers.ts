@@ -144,7 +144,9 @@ export function writeAnyValue<TState>(state: PlatformState<TState>, key: string,
     }
     return nextState;
   }
-  const normalized = key === "activePartIndex" || key.endsWith(".sample.selectedSlot") ? Number(value) : value;
+  const normalized = key.endsWith(".customName")
+    ? (String(value ?? "").trim().length === 0 ? null : String(value))
+    : (key === "activePartIndex" || key.endsWith(".sample.selectedSlot") ? Number(value) : value);
   const nextState = { ...state, runtimeConfig: writeValue(state.runtimeConfig, key, normalized) };
   if (key === "activePartIndex") {
     return syncLegacyFromActivePart(nextState);

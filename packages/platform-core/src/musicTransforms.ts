@@ -15,6 +15,14 @@ export function applyModulation(intents: { x: number; y: number; degree: number;
     const ccs = ccFromIntent(intent, cfg, targetChannel);
     out.push(...ccs);
     if (event.type === "note_on") {
+      const sampleResolved = resolveSampleAssignedNote(intent, cfg, event.channel, event.velocity, velocityFromIntent(intent, cfg));
+      if (sampleResolved) {
+        out.push({ ...event, note: sampleResolved.note, velocity: sampleResolved.velocity });
+        continue;
+      }
+      if (isSampleInstrument(cfg, event.channel)) {
+        continue;
+      }
       const note = pitchFromIntent(intent, cfg, event.note);
       const vel = velocityFromIntent(intent, cfg);
       if (vel !== null) {
@@ -24,9 +32,50 @@ export function applyModulation(intents: { x: number; y: number; degree: number;
       out.push({ ...event, note });
       continue;
     }
+    if (event.type === "note_off" && isSampleInstrument(cfg, event.channel)) {
+      const assigned = resolveSampleAssignedNote(intent, cfg, event.channel, 100, null);
+      if (!assigned) continue;
+      out.push({ ...event, note: assigned.note });
+      continue;
+    }
     out.push(event);
   }
   return applyGlobalSound(out, cfg);
+}
+
+function resolveSampleAssignedNote(
+  intent: { x: number; y: number },
+  cfg: RuntimeConfig,
+  channel: number,
+  sourceVelocity: number,
+  senseVelocity: number | null
+): { note: number; velocity: number } | null {
+  const instruments: any[] = Array.isArray((cfg as any).instruments) ? ((cfg as any).instruments as any[]) : [];
+  const inst = instruments[channel];
+  if (!inst || inst.type !== "sample") return null;
+  const assignments: any[] = Array.isArray(inst.sample?.assignments) ? inst.sample.assignments : [];
+  const a = assignments.find((x) => x.x === intent.x && x.y === intent.y);
+  if (!a) return null;
+  const base = sampleBaseVelocity(inst, a.level as any);
+  const sense = clamp(Math.round(senseVelocity ?? sourceVelocity), 1, 127);
+  const vel = clamp(Math.round((base * sense) / 127), 1, 127);
+  const sampleSlot = clamp(Math.floor(Number(a.sampleSlot ?? 0)), 0, 7);
+  return { note: 36 + sampleSlot, velocity: vel };
+}
+
+function sampleBaseVelocity(inst: any, level: "high" | "medium" | "low" | undefined): number {
+  const sample = inst.sample ?? {};
+  if (sample.velocityLevelsEnabled === true) {
+    if (level === "high") return clamp(Math.round(Number(sample.velocityLevels?.high ?? 120)), 1, 127);
+    if (level === "medium") return clamp(Math.round(Number(sample.velocityLevels?.medium ?? 85)), 1, 127);
+    return clamp(Math.round(Number(sample.velocityLevels?.low ?? 45)), 1, 127);
+  }
+  return clamp(Math.round(Number(sample.baseVelocity ?? 100)), 1, 127);
+}
+
+function isSampleInstrument(cfg: RuntimeConfig, channel: number): boolean {
+  const instruments: any[] = Array.isArray((cfg as any).instruments) ? ((cfg as any).instruments as any[]) : [];
+  return instruments[channel]?.type === "sample";
 }
 
 export function applyGlobalSound(events: MusicalEvent[], cfg: RuntimeConfig): MusicalEvent[] {

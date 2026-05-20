@@ -17,10 +17,7 @@ class TauriNativeAudioBridge implements NativeAudioBridge {
     const isTauri = "__TAURI_INTERNALS__" in window;
     if (!isTauri) return;
     const payload = {
-      instruments: (Array.isArray(instruments) ? instruments : []).map((i: any) => ({
-        type: "synth",
-        synth: i?.synth ?? i
-      }))
+      instruments: Array.isArray(instruments) ? instruments : []
     };
     await invoke("audio_set_instruments", { config: payload });
   }

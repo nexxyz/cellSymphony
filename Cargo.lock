@@ -340,6 +340,7 @@ dependencies = [
  "realtime-engine",
  "rodio",
  "serde",
+ "serde_json",
  "tauri",
  "tauri-build",
 ]
