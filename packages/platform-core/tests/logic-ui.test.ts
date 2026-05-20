@@ -148,6 +148,15 @@ test("default axis pitch steps are x=0 and y=1", () => {
   assert.equal(state.runtimeConfig.y.pitch.steps, 1);
 });
 
+test("default State Notes is on for all parts", () => {
+  const state = createInitialState(mockBehavior) as any;
+  const parts = Array.isArray(state.runtimeConfig.parts) ? state.runtimeConfig.parts : [];
+  assert.equal(parts.length, 8);
+  for (const part of parts) {
+    assert.equal(part?.l2?.stateEnabled, true);
+  }
+});
+
 test("config save default requires confirmation before emitting effect", () => {
   let state = createInitialState(mockBehavior);
   state.system.oledMode = "normal";
@@ -444,4 +453,46 @@ test("startup splash close shows help hint toast", () => {
 
   assert.equal(state.system.oledMode, "normal");
   assert.equal(state.system.toast?.message, "Help=Sh+Fn+Enter");
+});
+
+test("sample assign mode cycles high-medium-low-off when velocity levels are on", () => {
+  let state = createInitialState(mockBehavior) as any;
+  state.system.oledMode = "normal";
+  state.runtimeConfig.instruments[0].type = "sample";
+  state.runtimeConfig.instruments[0].sample.selectedSlot = 2;
+  state.runtimeConfig.instruments[0].sample.velocityLevelsEnabled = true;
+  state.system.sampleAssign = { instrumentSlot: 0, sampleSlot: 2 };
+
+  const press = () => {
+    state = routeInput(state, { type: "grid_press", x: 1, y: 1 } as DeviceInput, mockBehavior).state;
+    return state.runtimeConfig.instruments[0].sample.assignments.find((a: any) => a.x === 1 && a.y === 1);
+  };
+
+  const a1 = press();
+  assert.equal(a1.level, "high");
+  const a2 = press();
+  assert.equal(a2.level, "medium");
+  const a3 = press();
+  assert.equal(a3.level, "low");
+  press();
+  const a4 = state.runtimeConfig.instruments[0].sample.assignments.find((a: any) => a.x === 1 && a.y === 1);
+  assert.equal(a4, undefined);
+});
+
+test("sample assign mode supports shift row and shift double-press column", () => {
+  let state = createInitialState(mockBehavior) as any;
+  state.system.oledMode = "normal";
+  state.runtimeConfig.instruments[0].type = "sample";
+  state.runtimeConfig.instruments[0].sample.selectedSlot = 1;
+  state.runtimeConfig.instruments[0].sample.velocityLevelsEnabled = false;
+  state.system.sampleAssign = { instrumentSlot: 0, sampleSlot: 1 };
+
+  state = routeInput(state, { type: "button_shift", pressed: true } as DeviceInput, mockBehavior).state;
+  state = routeInput(state, { type: "grid_press", x: 2, y: 3 } as DeviceInput, mockBehavior).state;
+  const rowAssigned = state.runtimeConfig.instruments[0].sample.assignments.filter((a: any) => a.y === 3 && a.sampleSlot === 1);
+  assert.equal(rowAssigned.length, GRID_WIDTH);
+
+  state = routeInput(state, { type: "grid_press", x: 2, y: 3 } as DeviceInput, mockBehavior).state;
+  const colAssigned = state.runtimeConfig.instruments[0].sample.assignments.filter((a: any) => a.x === 2);
+  assert.equal(colAssigned.length, 0);
 });

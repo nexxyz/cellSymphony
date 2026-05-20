@@ -250,7 +250,7 @@ test("loading synth preset from Voice menu requires confirm and applies to targe
   state = press(state).state;
   state = selectLabel(state, "Instruments");
   state = press(state).state;
-  state = selectLabel(state, "Instrument 1");
+  state = selectLabel(state, "I1: synth");
   state = press(state).state;
   state = selectLabel(state, "Synth");
   state = press(state).state;
@@ -311,6 +311,37 @@ test("L2 Sense includes Part selector", () => {
   state = press(state).state;
   const frame = toSimulatorFrame(state, mockBehavior);
   assert.ok(frame.display.lines.some((line) => line.includes("Part")));
+});
+
+test("instrument list shows compact name labels", () => {
+  let state = makeState();
+  state = selectLabel(state, "L3: Voice");
+  state = press(state).state;
+  state = selectLabel(state, "Instruments");
+  state = press(state).state;
+  const frame = toSimulatorFrame(state, mockBehavior);
+  assert.ok(frame.display.lines.some((line) => line.includes("I1: synth")));
+});
+
+test("instrument auto name follows type and custom/preset modes override", () => {
+  let state = makeState() as any;
+  state.runtimeConfig.instruments[0].type = "sample";
+  state.runtimeConfig.instruments[0].nameMode = "auto";
+  state = selectLabel(state, "L3: Voice");
+  state = press(state).state;
+  state = selectLabel(state, "Instruments");
+  state = press(state).state;
+  let frame = toSimulatorFrame(state, mockBehavior);
+  assert.ok(frame.display.lines.some((line) => line.includes("I1: sample")));
+
+  state.runtimeConfig.instruments[0].nameMode = "drums";
+  frame = toSimulatorFrame(state, mockBehavior);
+  assert.ok(frame.display.lines.some((line) => line.includes("I1: Drums")));
+
+  state.runtimeConfig.instruments[0].nameMode = "custom";
+  state.runtimeConfig.instruments[0].customName = "MyKick";
+  frame = toSimulatorFrame(state, mockBehavior);
+  assert.ok(frame.display.lines.some((line) => line.includes("I1: MyKick")));
 });
 
 test("extract/apply payload preserves part state when save grid state is on", () => {
