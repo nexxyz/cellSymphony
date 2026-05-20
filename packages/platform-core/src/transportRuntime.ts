@@ -8,13 +8,14 @@ import { dedupeSimultaneousNotes, toGridSnapshot } from "./runtimeHelpers";
 import { mod } from "./coreUtils";
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { PlatformState, RuntimeConfig, Direction, NoteUnit } from "./platformTypes";
+import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
 
 const PPQN = 24;
 
 export function tickTransport<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>, elapsedSeconds: number): { state: PlatformState<TState>; events: MusicalEvent[] } {
   const events: MusicalEvent[] = [];
   let next = { ...state };
-  const activePart = Math.max(0, Math.min(7, Number((next.runtimeConfig as any).activePartIndex ?? 0)));
+  const activePart = clampPartIndex((next.runtimeConfig as any).activePartIndex ?? 0);
   if (Array.isArray((next as any).partScanIndex) && (next as any).partScanIndex.length > activePart) {
     (next as any).partScanIndex[activePart] = next.scanIndex;
   }
@@ -31,8 +32,8 @@ export function tickTransport<TState>(state: PlatformState<TState>, behavior: Be
   const elapsedPulses = pulsesPerSecond(next.transport.bpm) * elapsedSeconds;
   next.partScanPulseAccumulator = next.partScanPulseAccumulator.map((v) => v + elapsedPulses);
   next.partAlgorithmPulseAccumulator = next.partAlgorithmPulseAccumulator.map((v) => v + elapsedPulses);
-  next.scanPulseAccumulator = next.partScanPulseAccumulator[Math.max(0, Math.min(7, Number((next.runtimeConfig as any).activePartIndex ?? 0)))] ?? next.scanPulseAccumulator;
-  next.algorithmPulseAccumulator = next.partAlgorithmPulseAccumulator[Math.max(0, Math.min(7, Number((next.runtimeConfig as any).activePartIndex ?? 0)))] ?? next.algorithmPulseAccumulator;
+  next.scanPulseAccumulator = next.partScanPulseAccumulator[clampPartIndex((next.runtimeConfig as any).activePartIndex ?? 0)] ?? next.scanPulseAccumulator;
+  next.algorithmPulseAccumulator = next.partAlgorithmPulseAccumulator[clampPartIndex((next.runtimeConfig as any).activePartIndex ?? 0)] ?? next.algorithmPulseAccumulator;
   next.ppqnPulseRemainder += elapsedPulses;
   const wholePulses = Math.floor(next.ppqnPulseRemainder);
   if (wholePulses > 0) {
@@ -77,13 +78,13 @@ export function applyExternalClockPulses<TState>(state: PlatformState<TState>, b
 function advanceEngineByPulses<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>, pulses: number): { state: PlatformState<TState>; events: MusicalEvent[] } {
   const events: MusicalEvent[] = [];
   let next = { ...state };
-  const activePart = Math.max(0, Math.min(7, Number((next.runtimeConfig as any).activePartIndex ?? 0)));
+  const activePart = clampPartIndex((next.runtimeConfig as any).activePartIndex ?? 0);
   const parts: any[] = Array.isArray((next.runtimeConfig as any).parts) ? (next.runtimeConfig as any).parts : [];
   let partStates: any[] = Array.isArray((next as any).partStates) ? ([...(next as any).partStates] as any[]) : [];
-  while (partStates.length < 8) partStates.push(next.behaviorState);
-  let partScanIndex = Array.isArray((next as any).partScanIndex) ? ([...(next as any).partScanIndex] as number[]) : Array.from({ length: 8 }, () => 0);
-  let partScanPulseAccumulator = Array.isArray((next as any).partScanPulseAccumulator) ? ([...(next as any).partScanPulseAccumulator] as number[]) : Array.from({ length: 8 }, () => 0);
-  let partAlgorithmPulseAccumulator = Array.isArray((next as any).partAlgorithmPulseAccumulator) ? ([...(next as any).partAlgorithmPulseAccumulator] as number[]) : Array.from({ length: 8 }, () => 0);
+  while (partStates.length < PLATFORM_CAPS.partCount) partStates.push(next.behaviorState);
+  let partScanIndex = Array.isArray((next as any).partScanIndex) ? ([...(next as any).partScanIndex] as number[]) : Array.from({ length: PLATFORM_CAPS.partCount }, () => 0);
+  let partScanPulseAccumulator = Array.isArray((next as any).partScanPulseAccumulator) ? ([...(next as any).partScanPulseAccumulator] as number[]) : Array.from({ length: PLATFORM_CAPS.partCount }, () => 0);
+  let partAlgorithmPulseAccumulator = Array.isArray((next as any).partAlgorithmPulseAccumulator) ? ([...(next as any).partAlgorithmPulseAccumulator] as number[]) : Array.from({ length: PLATFORM_CAPS.partCount }, () => 0);
   partScanIndex[activePart] = next.scanIndex;
   partScanPulseAccumulator[activePart] = next.scanPulseAccumulator;
   partAlgorithmPulseAccumulator[activePart] = next.algorithmPulseAccumulator;
@@ -94,7 +95,7 @@ function advanceEngineByPulses<TState>(state: PlatformState<TState>, behavior: B
   }
 
   let heldNotes = next.system.heldNotes;
-  for (let partIdx = 0; partIdx < 8; partIdx += 1) {
+  for (let partIdx = 0; partIdx < PLATFORM_CAPS.partCount; partIdx += 1) {
     const part = parts[partIdx];
     if (!part) continue;
     const partCfg = toRuntimeConfigForPart(next.runtimeConfig, next.mappingConfig as any, part, behavior.id, partIdx === activePart);
@@ -260,11 +261,11 @@ function toRuntimeConfigForPart(base: RuntimeConfig, mapping: any, part: any, fa
   } as RuntimeConfig;
   const mappingConfig = {
     ...mapping,
-    activate: { ...mapping.activate, action: mapping.activate?.action ?? part?.l2?.mapping?.activate?.action, channel: Number(mapping.activate?.channel ?? part?.l2?.mapping?.activate?.slot ?? 0) },
-    stable: { ...mapping.stable, action: mapping.stable?.action ?? part?.l2?.mapping?.stable?.action, channel: Number(mapping.stable?.channel ?? part?.l2?.mapping?.stable?.slot ?? 0) },
-    deactivate: { ...mapping.deactivate, action: mapping.deactivate?.action ?? part?.l2?.mapping?.deactivate?.action, channel: Number(mapping.deactivate?.channel ?? part?.l2?.mapping?.deactivate?.slot ?? 0) },
-    scanned: { ...mapping.scanned, action: mapping.scanned?.action ?? part?.l2?.mapping?.scanned?.action, channel: Number(mapping.scanned?.channel ?? part?.l2?.mapping?.scanned?.slot ?? 0) },
-    scanned_empty: { ...mapping.scanned_empty, action: mapping.scanned_empty?.action ?? part?.l2?.mapping?.scanned_empty?.action, channel: Number(mapping.scanned_empty?.channel ?? part?.l2?.mapping?.scanned_empty?.slot ?? 0) }
+    activate: { ...mapping.activate, action: preferBase ? (mapping.activate?.action ?? part?.l2?.mapping?.activate?.action) : (part?.l2?.mapping?.activate?.action ?? mapping.activate?.action), channel: Number(preferBase ? (mapping.activate?.channel ?? part?.l2?.mapping?.activate?.slot ?? 0) : (part?.l2?.mapping?.activate?.slot ?? mapping.activate?.channel ?? 0)) },
+    stable: { ...mapping.stable, action: preferBase ? (mapping.stable?.action ?? part?.l2?.mapping?.stable?.action) : (part?.l2?.mapping?.stable?.action ?? mapping.stable?.action), channel: Number(preferBase ? (mapping.stable?.channel ?? part?.l2?.mapping?.stable?.slot ?? 0) : (part?.l2?.mapping?.stable?.slot ?? mapping.stable?.channel ?? 0)) },
+    deactivate: { ...mapping.deactivate, action: preferBase ? (mapping.deactivate?.action ?? part?.l2?.mapping?.deactivate?.action) : (part?.l2?.mapping?.deactivate?.action ?? mapping.deactivate?.action), channel: Number(preferBase ? (mapping.deactivate?.channel ?? part?.l2?.mapping?.deactivate?.slot ?? 0) : (part?.l2?.mapping?.deactivate?.slot ?? mapping.deactivate?.channel ?? 0)) },
+    scanned: { ...mapping.scanned, action: preferBase ? (mapping.scanned?.action ?? part?.l2?.mapping?.scanned?.action) : (part?.l2?.mapping?.scanned?.action ?? mapping.scanned?.action), channel: Number(preferBase ? (mapping.scanned?.channel ?? part?.l2?.mapping?.scanned?.slot ?? 0) : (part?.l2?.mapping?.scanned?.slot ?? mapping.scanned?.channel ?? 0)) },
+    scanned_empty: { ...mapping.scanned_empty, action: preferBase ? (mapping.scanned_empty?.action ?? part?.l2?.mapping?.scanned_empty?.action) : (part?.l2?.mapping?.scanned_empty?.action ?? mapping.scanned_empty?.action), channel: Number(preferBase ? (mapping.scanned_empty?.channel ?? part?.l2?.mapping?.scanned_empty?.slot ?? 0) : (part?.l2?.mapping?.scanned_empty?.slot ?? mapping.scanned_empty?.channel ?? 0)) }
   };
   return { ...partCfg, mappingConfig };
 }

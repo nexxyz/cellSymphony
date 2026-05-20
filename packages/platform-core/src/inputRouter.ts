@@ -1,7 +1,8 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
-import type { DeviceInput } from "@cellsymphony/device-contracts";
+import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import { clamp } from "./coreUtils";
+import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
 import type { PlatformEffect, PlatformState } from "./index";
 
 type Deps<TState> = {
@@ -81,6 +82,26 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
   if (input.type === "button_shift") nextState.system = { ...nextState.system, shiftHeld: pressed(input) };
   if (input.type === "button_fn") nextState.system = { ...nextState.system, fnHeld: pressed(input) };
 
+  if (nextState.system.sampleAssign) {
+    if (input.type === "button_a" && pressed(input)) {
+      nextState.system = { ...nextState.system, sampleAssign: null, sampleAssignLastPress: null, toast: { message: "Assign mode off", untilMs: Date.now() + 1200 } };
+      return { state: nextState, events, effects };
+    }
+    if (input.type === "grid_press") {
+      const now = Date.now();
+      const mode = nextState.system.shiftHeld
+        ? (nextState.system.sampleAssignLastPress && nextState.system.sampleAssignLastPress.x === input.x && nextState.system.sampleAssignLastPress.y === input.y && now - nextState.system.sampleAssignLastPress.atMs <= 350 ? "column" : "row")
+        : "single";
+      nextState = applySampleAssignment(nextState, nextState.system.sampleAssign.instrumentSlot, nextState.system.sampleAssign.sampleSlot, input.x, input.y, mode as "single" | "row" | "column");
+      nextState.system = {
+        ...nextState.system,
+        sampleAssignLastPress: nextState.system.shiftHeld ? { x: input.x, y: input.y, atMs: now } : null
+      };
+      deps.autoSaveEffect(nextState, effects);
+      return { state: nextState, events, effects };
+    }
+  }
+
   if (input.type === "midi_clock") {
     if (nextState.runtimeConfig.midi.syncMode === "external" && nextState.runtimeConfig.midi.clockInEnabled) {
       const pulses = Math.max(0, Math.floor((input as any).pulses ?? 0));
@@ -100,6 +121,9 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       } else if (!nextState.system.pausedByUser) {
         if (input.type === "midi_start") {
           nextState.transport = { ...nextState.transport, playing: true, ppqnPulse: 0, tick: 0 };
+          nextState.partScanIndex = nextState.partScanIndex.map(() => 0);
+          nextState.partScanPulseAccumulator = nextState.partScanPulseAccumulator.map(() => 0);
+          nextState.partAlgorithmPulseAccumulator = nextState.partAlgorithmPulseAccumulator.map(() => 0);
           nextState.scanIndex = 0;
           nextState.scanPulseAccumulator = 0;
           nextState.algorithmPulseAccumulator = 0;
@@ -115,11 +139,22 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
   }
 
   if (input.type === "grid_press" && nextState.system.fnHeld && input.x === 0) {
-    const idx = clamp(Math.floor(input.y), 0, 7);
+    const idx = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.partCount, GRID_HEIGHT) - 1);
     nextState = deps.writeAnyValue(nextState, "activePartIndex", idx);
-    nextState = deps.reinitBehaviorState(nextState, "activeBehavior");
+    nextState = deps.reinitBehaviorState(nextState, "activePartIndex");
     nextState.system = { ...nextState.system, toast: { message: `Part ${idx + 1}`, untilMs: Date.now() + 1000 } };
     return { state: nextState, events, effects };
+  }
+
+  if (input.type === "button_s" && pressed(input)) {
+    const view = deps.locate(deps.menuTree(nextState), nextState, nextState.menu);
+    if (view.path.endsWith("/Choose Sample")) {
+      const selected = view.siblings[nextState.menu.cursor] as any;
+      if (selected?.kind === "action" && selected.action?.type === "sample_pick" && typeof selected.action.path === "string") {
+        effects.push({ type: "sample_preview_request", path: selected.action.path } as any);
+      }
+      return { state: nextState, events, effects };
+    }
   }
 
   if (input.type === "button_s" && pressed(input)) {
@@ -139,6 +174,9 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       const isStopToPlay = nextState.system.stopLatched || (nextState.transport.ppqnPulse === 0 && nextState.transport.tick === 0);
       if (isStopToPlay) {
         nextState.transport = { ...nextState.transport, ppqnPulse: 0, tick: 0 };
+        nextState.partScanIndex = nextState.partScanIndex.map(() => 0);
+        nextState.partScanPulseAccumulator = nextState.partScanPulseAccumulator.map(() => 0);
+        nextState.partAlgorithmPulseAccumulator = nextState.partAlgorithmPulseAccumulator.map(() => 0);
         nextState.scanPulseAccumulator = 0;
         nextState.algorithmPulseAccumulator = 0;
         nextState.ppqnPulseRemainder = 0;
@@ -159,7 +197,7 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
         nextState = { ...nextState, system: { ...nextState.system, draftName: next, nameCursor: cursor - 1 } };
       }
     } else if (nextState.system.shiftHeld) {
-      const activePart = Math.max(0, Math.min(7, Number((nextState.runtimeConfig as any).activePartIndex ?? 0)));
+      const activePart = clampPartIndex((nextState.runtimeConfig as any).activePartIndex ?? 0);
       const part: any = (nextState.runtimeConfig as any).parts?.[activePart];
       const behaviorId = String(part?.l1?.behaviorId ?? nextState.runtimeConfig.activeBehavior);
       const b = deps.resolveBehavior(behaviorId);
@@ -224,4 +262,58 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
   nextState.behaviorState = behavior.onInput(nextState.behaviorState, input, { bpm: nextState.transport.bpm, emit: (event) => events.push(event) });
   if (events.some((e) => e.type === "note_on")) nextState.system = { ...nextState.system, eventBlipUntilMs: Date.now() + 100 };
   return { state: nextState, events, effects };
+}
+
+function applySampleAssignment<TState>(
+  state: PlatformState<TState>,
+  instrumentSlot: number,
+  sampleSlot: number,
+  x: number,
+  y: number,
+  mode: "single" | "row" | "column"
+): PlatformState<TState> {
+  const slot = clamp(Math.floor(instrumentSlot), 0, 15);
+  const sslot = clamp(Math.floor(sampleSlot), 0, 7);
+  const gx = clamp(Math.floor(x), 0, GRID_WIDTH - 1);
+  const gy = clamp(Math.floor(y), 0, GRID_HEIGHT - 1);
+  const instruments = Array.isArray((state.runtimeConfig as any).instruments) ? ([...((state.runtimeConfig as any).instruments as any[])] as any[]) : [];
+  const inst = instruments[slot];
+  if (!inst || inst.type !== "sample") return state;
+  const sample = { ...(inst.sample ?? {}) };
+  const levelsEnabled = sample.velocityLevelsEnabled === true;
+  const assignments = Array.isArray(sample.assignments) ? ([...sample.assignments] as any[]) : [];
+  const resolved = resolveNextAssignment(assignments, gx, gy, sslot, levelsEnabled);
+  const points: Array<{ x: number; y: number }> = [];
+  if (mode === "single") points.push({ x: gx, y: gy });
+  else if (mode === "row") {
+    for (let cx = 0; cx < GRID_WIDTH; cx += 1) points.push({ x: cx, y: gy });
+  } else {
+    for (let cy = 0; cy < GRID_HEIGHT; cy += 1) points.push({ x: gx, y: cy });
+  }
+  for (const pt of points) {
+    const idx = assignments.findIndex((a) => a.x === pt.x && a.y === pt.y);
+    if (!resolved) {
+      if (idx >= 0) assignments.splice(idx, 1);
+      continue;
+    }
+    const next = { x: pt.x, y: pt.y, sampleSlot: sslot, ...(resolved.level ? { level: resolved.level } : {}) };
+    if (idx >= 0) assignments[idx] = next;
+    else assignments.push(next);
+  }
+  instruments[slot] = { ...inst, sample: { ...sample, assignments } };
+  return { ...state, runtimeConfig: { ...(state.runtimeConfig as any), instruments } as any };
+}
+
+function resolveNextAssignment(assignments: any[], x: number, y: number, sampleSlot: number, levelsEnabled: boolean): { level?: "high" | "medium" | "low" } | null {
+  const current = assignments.find((a) => a.x === x && a.y === y);
+  const selectedCurrent = current && Number(current.sampleSlot) === sampleSlot ? current : null;
+  if (!levelsEnabled) {
+    if (selectedCurrent) return null;
+    return {};
+  }
+  const level = selectedCurrent?.level as "high" | "medium" | "low" | undefined;
+  if (!selectedCurrent) return { level: "high" };
+  if (level === "high") return { level: "medium" };
+  if (level === "medium") return { level: "low" };
+  return null;
 }

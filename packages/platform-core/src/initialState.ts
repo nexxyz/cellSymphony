@@ -2,15 +2,28 @@ import { type BehaviorEngine, getBehavior, listBehaviorIds } from "@cellsymphony
 import { loadDefaultMappingConfig } from "@cellsymphony/mapping-core";
 import type { PartConfig, PlatformState, RuntimeConfig } from "./platformTypes";
 import { SYNTH_PRESETS } from "./synthPresets";
+import { PLATFORM_CAPS } from "./platformCaps";
 
 export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
   const defaultMapping = loadDefaultMappingConfig();
-  const instruments = Array.from({ length: 16 }, (_, idx) => ({
+  const instruments = Array.from({ length: PLATFORM_CAPS.instrumentCount }, (_, idx) => ({
     type: "synth" as const,
     noteBehavior: "oneshot" as const,
     midi: { enabled: false, channel: idx },
     synth: structuredClone(SYNTH_PRESETS[idx % 8]!.synth as RuntimeConfig["instruments"][number]["synth"]),
-    sample: { baseVelocity: 100, tuneSemis: 0, assignments: [] },
+    sample: {
+      baseVelocity: 100,
+      velocityLevelsEnabled: false,
+      velocityLevels: { high: 120, medium: 85, low: 45 },
+      selectedSlot: 0,
+      slots: Array.from({ length: PLATFORM_CAPS.sampleSlotCount }, () => ({ path: null })),
+      tuneSemis: 0,
+      amp: structuredClone((SYNTH_PRESETS[idx % 8]!.synth as any).amp),
+      ampEnv: structuredClone((SYNTH_PRESETS[idx % 8]!.synth as any).ampEnv),
+      filter: structuredClone((SYNTH_PRESETS[idx % 8]!.synth as any).filter),
+      filterEnv: structuredClone((SYNTH_PRESETS[idx % 8]!.synth as any).filterEnv),
+      assignments: []
+    },
     midiEngine: { velocity: 100, durationMs: 120 }
   }));
 
@@ -61,7 +74,8 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
     l1: {
       stepRate: idx === 0 ? "1/8" : "1/4",
       behaviorId: idx === 0 ? behavior.id : "life",
-      behaviorConfig: { ...((runtimeConfig.behaviorConfig as any)[idx === 0 ? behavior.id : "life"] ?? {}) }
+      behaviorConfig: { ...((runtimeConfig.behaviorConfig as any)[idx === 0 ? behavior.id : "life"] ?? {}) },
+      saveGridState: true
     },
     l2: {
       scanMode: "immediate",
@@ -69,7 +83,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       scanUnit: "1/8",
       scanDirection: "forward",
       eventEnabled: idx === 0,
-      stateEnabled: idx === 0,
+      stateEnabled: true,
       pitch: structuredClone(runtimeConfig.pitch),
       x: structuredClone(runtimeConfig.x),
       y: structuredClone(runtimeConfig.y),
@@ -82,7 +96,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       }
     }
   });
-  runtimeConfig.parts = Array.from({ length: 8 }, (_, idx) => makePart(idx));
+  runtimeConfig.parts = Array.from({ length: PLATFORM_CAPS.partCount }, (_, idx) => makePart(idx));
   const behaviorCfg = runtimeConfig.behaviorConfig as Record<string, Record<string, unknown> | undefined>;
   behaviorCfg.life = { ...(behaviorCfg.life ?? {}), randomCellsPerTick: 12, randomTickInterval: 1 };
   for (let i = 0; i < runtimeConfig.parts.length; i += 1) {
@@ -129,15 +143,18 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       oledSplashUntilMs: Date.now() + 1000,
       lastInteractionMs: Date.now(),
       auxBindings: {},
-      heldNotes: []
+      heldNotes: [],
+      sampleAssign: null,
+      sampleAssignLastPress: null,
+      sampleBrowser: null
     },
     scanIndex: 0,
     scanPulseAccumulator: 0,
     algorithmPulseAccumulator: 0,
     ppqnPulseRemainder: 0,
     partStates,
-    partScanIndex: Array.from({ length: 8 }, () => 0),
-    partScanPulseAccumulator: Array.from({ length: 8 }, () => 0),
-    partAlgorithmPulseAccumulator: Array.from({ length: 8 }, () => 0)
+    partScanIndex: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0),
+    partScanPulseAccumulator: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0),
+    partAlgorithmPulseAccumulator: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0)
   };
 }

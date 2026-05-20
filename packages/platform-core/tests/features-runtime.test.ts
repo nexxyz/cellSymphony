@@ -14,6 +14,7 @@ import {
   type PlatformEffect,
   type PlatformState
 } from "../src/index";
+import { validatePlatformCapabilities } from "../src/platformCaps";
 
 const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
 
@@ -93,6 +94,12 @@ test("applyConfigPayload reinitializes behavior state when behavior changes", ()
 
   const restored = applyConfigPayload(state, payload, lifeBehavior);
   assert.equal(restored.activeBehavior, "sequencer");
+});
+
+test("platform capabilities validator rejects invalid values", () => {
+  assert.throws(() => validatePlatformCapabilities({ gridWidth: 0, gridHeight: 8, partCount: 8, instrumentCount: 16, sampleSlotCount: 8 }));
+  assert.throws(() => validatePlatformCapabilities({ gridWidth: 8, gridHeight: 8, partCount: -1, instrumentCount: 16, sampleSlotCount: 8 }));
+  assert.throws(() => validatePlatformCapabilities({ gridWidth: 8, gridHeight: 8, partCount: 8, instrumentCount: 16.5, sampleSlotCount: 8 }));
 });
 
 test("applyConfigPayload reinitializes behavior state for same behavior id using saved behaviorConfig", () => {

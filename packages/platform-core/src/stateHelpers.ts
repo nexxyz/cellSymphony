@@ -3,11 +3,12 @@ import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { TransportFrame } from "@cellsymphony/device-contracts";
 import { clamp, mod, readNestedValue, readValue, writeNestedValue, writeValue } from "./coreUtils";
 import type { ConfigPayload, MenuNode, PlatformState, SystemState } from "./platformTypes";
+import { clampPartIndex } from "./platformCaps";
 
 type AnyState = PlatformState<any>;
 
 function syncLegacyFromActivePart<TState>(state: PlatformState<TState>): PlatformState<TState> {
-  const active = Math.max(0, Math.min(7, Number((state.runtimeConfig as any).activePartIndex ?? 0)));
+  const active = clampPartIndex((state.runtimeConfig as any).activePartIndex ?? 0);
   const part = (state.runtimeConfig as any).parts?.[active];
   if (!part) return state;
   const nextRuntime: any = {
@@ -40,7 +41,7 @@ function syncLegacyFromActivePart<TState>(state: PlatformState<TState>): Platfor
 }
 
 function syncActivePartFromLegacy<TState>(state: PlatformState<TState>): PlatformState<TState> {
-  const active = Math.max(0, Math.min(7, Number((state.runtimeConfig as any).activePartIndex ?? 0)));
+  const active = clampPartIndex((state.runtimeConfig as any).activePartIndex ?? 0);
   const parts = Array.isArray((state.runtimeConfig as any).parts) ? [...((state.runtimeConfig as any).parts as any[])] : [];
   const current = parts[active];
   if (!current) return state;
@@ -137,13 +138,13 @@ export function writeAnyValue<TState>(state: PlatformState<TState>, key: string,
     if (key.endsWith(".l1.behaviorId")) {
       return nextState;
     }
-    const active = Math.max(0, Math.min(7, Number((nextState.runtimeConfig as any).activePartIndex ?? 0)));
+    const active = clampPartIndex((nextState.runtimeConfig as any).activePartIndex ?? 0);
     if (key.startsWith(`parts.${active}.`)) {
       return syncLegacyFromActivePart(nextState);
     }
     return nextState;
   }
-  const normalized = key === "activePartIndex" ? Number(value) : value;
+  const normalized = key === "activePartIndex" || key.endsWith(".sample.selectedSlot") ? Number(value) : value;
   const nextState = { ...state, runtimeConfig: writeValue(state.runtimeConfig, key, normalized) };
   if (key === "activePartIndex") {
     return syncLegacyFromActivePart(nextState);
@@ -160,12 +161,23 @@ export function reinitBehaviorState<TState>(
   resolveBehavior: (id: string) => BehaviorEngine<any, any>
 ): PlatformState<TState> {
   const previousBehaviorId = state.activeBehavior;
+  if (key === "activePartIndex") {
+    const targetPartIndex = clampPartIndex((state.runtimeConfig as any).activePartIndex ?? 0);
+    const partBehaviorId = String((state.runtimeConfig as any).parts?.[targetPartIndex]?.l1?.behaviorId ?? state.runtimeConfig.activeBehavior);
+    const partStates = Array.isArray((state as any).partStates) ? ((state as any).partStates as any[]) : [];
+    const partState = partStates[targetPartIndex];
+    return {
+      ...(state as any),
+      activeBehavior: partBehaviorId,
+      behaviorState: (partState ?? state.behaviorState) as TState
+    } as PlatformState<TState>;
+  }
   const parts = key.split(".");
   let behaviorId = parts[1] ?? state.runtimeConfig.activeBehavior;
   let ns = state.runtimeConfig.behaviorConfig?.[behaviorId] as Record<string, unknown> | undefined;
-  let targetPartIndex = Math.max(0, Math.min(7, Number((state.runtimeConfig as any).activePartIndex ?? 0)));
+  let targetPartIndex = clampPartIndex((state.runtimeConfig as any).activePartIndex ?? 0);
   if (key.startsWith("parts.")) {
-    targetPartIndex = Math.max(0, Math.min(7, Number(parts[1] ?? 0)));
+    targetPartIndex = clampPartIndex(parts[1] ?? 0);
     behaviorId = String((state.runtimeConfig as any).parts?.[targetPartIndex]?.l1?.behaviorId ?? state.runtimeConfig.activeBehavior);
     ns = ((state.runtimeConfig as any).parts?.[targetPartIndex]?.l1?.behaviorConfig ?? {}) as Record<string, unknown>;
   }

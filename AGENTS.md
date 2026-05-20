@@ -31,6 +31,8 @@ Cell Symphony is a monorepo (pnpm workspaces) combining a TypeScript core engine
 
 ### Architecture
 
+- Design for Change, not for Future.
+
 - `packages/platform-core/src/index.ts` = single-entry core module (menu, transport, config, behavior orchestration)
 - `packages/behavior-api/` = `BehaviorEngine` interface + registry (`registerBehavior`, `getBehavior`, `listBehaviorIds`)
 - All behaviors are registered at import time via top-level `registerBehavior()` calls

@@ -2,6 +2,7 @@ import { GRID_HEIGHT, GRID_WIDTH, type LedCell } from "@cellsymphony/device-cont
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import { clamp } from "./coreUtils";
 import { GRID_DOMAIN } from "./gridDomain";
+import { PLATFORM_CAPS } from "./platformCaps";
 
 export function dedupeSimultaneousNotes(events: MusicalEvent[]): MusicalEvent[] {
   const out: MusicalEvent[] = [];
@@ -69,12 +70,38 @@ export function cellsToLeds(
     }
   }
   if (fnHeld) {
-    const layerCount = Math.min(8, GRID_HEIGHT);
+    const layerCount = Math.min(PLATFORM_CAPS.partCount, GRID_HEIGHT);
     for (let layer = 0; layer < layerCount; layer += 1) {
       const screenIndex = GRID_DOMAIN.toDisplayIndex({ x: 0, y: layer });
       const isActive = layer === activePartIndex;
       out[screenIndex] = scaleLed(isActive ? { r: 0, g: 210, b: 0 } : { r: 90, g: 90, b: 90 }, b);
     }
+  }
+  return out;
+}
+
+export function sampleAssignmentToLeds(
+  assignments: Array<{ x: number; y: number; sampleSlot: number; level?: "high" | "medium" | "low" }>,
+  selectedSampleSlot: number,
+  velocityLevelsEnabled: boolean,
+  brightness: number
+): LedCell[] {
+  const b = Math.max(0, Math.min(1, brightness));
+  const out: LedCell[] = Array.from({ length: GRID_WIDTH * GRID_HEIGHT }, () => ({ r: 0, g: 0, b: 0 }));
+  for (const a of assignments) {
+    if (a.x < 0 || a.x >= GRID_WIDTH || a.y < 0 || a.y >= GRID_HEIGHT) continue;
+    const screenIndex = GRID_DOMAIN.toDisplayIndex({ x: a.x, y: a.y });
+    if (a.sampleSlot !== selectedSampleSlot) {
+      out[screenIndex] = scaleLed({ r: 70, g: 70, b: 70 }, b);
+      continue;
+    }
+    if (!velocityLevelsEnabled) {
+      out[screenIndex] = scaleLed({ r: 220, g: 220, b: 220 }, b);
+      continue;
+    }
+    if (a.level === "high") out[screenIndex] = scaleLed({ r: 220, g: 0, b: 0 }, b);
+    else if (a.level === "medium") out[screenIndex] = scaleLed({ r: 220, g: 180, b: 0 }, b);
+    else out[screenIndex] = scaleLed({ r: 0, g: 220, b: 0 }, b);
   }
   return out;
 }

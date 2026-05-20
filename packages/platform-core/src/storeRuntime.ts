@@ -2,6 +2,7 @@ import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import { getBehavior } from "@cellsymphony/behavior-api";
 import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { ConfigPayload, PlatformEffect, PlatformState, RuntimeConfig, StoreResult } from "./index";
+import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
 
 type StoreDeps<TState> = {
   resolveBehavior: (id: string) => BehaviorEngine<any, any>;
@@ -10,7 +11,7 @@ type StoreDeps<TState> = {
 
 export function extractConfigPayload<TState>(state: PlatformState<TState>): ConfigPayload {
   const runtimeAny: any = state.runtimeConfig;
-  const active = Math.max(0, Math.min(7, Number(runtimeAny.activePartIndex ?? 0)));
+  const active = clampPartIndex(runtimeAny.activePartIndex ?? 0);
   const parts = Array.isArray(runtimeAny.parts) ? [...runtimeAny.parts] : [];
   const partStates: unknown[] = Array.isArray((state as any).partStates) ? ([...((state as any).partStates as unknown[])] as unknown[]) : [];
   for (let i = 0; i < parts.length; i += 1) {
@@ -80,7 +81,7 @@ export function applyConfigPayload<TState>(
   const next = { ...state } as any;
   next.runtimeConfig = safe.runtimeConfig;
   next.mappingConfig = safe.mappingConfig;
-  const activePartIndex = Math.max(0, Math.min(7, Number((safe.runtimeConfig as any).activePartIndex ?? 0)));
+  const activePartIndex = clampPartIndex((safe.runtimeConfig as any).activePartIndex ?? 0);
   const activePart = (safe.runtimeConfig as any).parts?.[activePartIndex];
   const activePartBehaviorId = String(activePart?.l1?.behaviorId ?? safe.activeBehavior);
   next.activeBehavior = safe.activeBehavior;
@@ -104,14 +105,14 @@ export function applyConfigPayload<TState>(
     }
     return engine.init({ ...(part?.l1?.behaviorConfig ?? {}) });
   });
-  while (next.partStates.length < 8) next.partStates.push(resolved.init({}));
+  while (next.partStates.length < PLATFORM_CAPS.partCount) next.partStates.push(resolved.init({}));
   const shouldUseRestoredActiveState = activePartBehaviorId === safe.activeBehavior && activePart?.l1?.saveGridState !== false && activePart?.l1?.savedState !== undefined;
   if (shouldUseRestoredActiveState) {
     next.behaviorState = (next.partStates[activePartIndex] ?? next.behaviorState) as TState;
   }
-  next.partScanIndex = Array.from({ length: 8 }, () => 0);
-  next.partScanPulseAccumulator = Array.from({ length: 8 }, () => 0);
-  next.partAlgorithmPulseAccumulator = Array.from({ length: 8 }, () => 0);
+  next.partScanIndex = Array.from({ length: PLATFORM_CAPS.partCount }, () => 0);
+  next.partScanPulseAccumulator = Array.from({ length: PLATFORM_CAPS.partCount }, () => 0);
+  next.partAlgorithmPulseAccumulator = Array.from({ length: PLATFORM_CAPS.partCount }, () => 0);
   next.scanPulseAccumulator = 0;
   next.algorithmPulseAccumulator = 0;
   next.ppqnPulseRemainder = 0;
@@ -137,11 +138,11 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     const factorySlots: any[] = Array.isArray((factory.runtimeConfig as any).instruments)
       ? (factory.runtimeConfig as any).instruments
       : [];
-    const baseSlots = factorySlots.length > 0 ? factorySlots : Array.from({ length: 16 }, () => ({ type: "synth", midi: { enabled: false, channel: 0 }, synth: {}, sample: { baseVelocity: 100, velocityLevelsEnabled: false, velocityLevels: { high: 120, medium: 85, low: 45 }, selectedSlot: 0, slots: Array.from({ length: 8 }, () => ({ path: null })), tuneSemis: 0, amp: {}, ampEnv: {}, filter: {}, filterEnv: {}, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } }));
+    const baseSlots = factorySlots.length > 0 ? factorySlots : Array.from({ length: PLATFORM_CAPS.instrumentCount }, () => ({ type: "synth", midi: { enabled: false, channel: 0 }, synth: {}, sample: { baseVelocity: 100, velocityLevelsEnabled: false, velocityLevels: { high: 120, medium: 85, low: 45 }, selectedSlot: 0, slots: Array.from({ length: PLATFORM_CAPS.sampleSlotCount }, () => ({ path: null })), tuneSemis: 0, amp: {}, ampEnv: {}, filter: {}, filterEnv: {}, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } }));
     const src = Array.isArray(incoming) ? incoming : [];
     const out: any[] = [];
-    for (let i = 0; i < 16; i += 1) {
-      const f = baseSlots[i] ?? baseSlots[0] ?? { type: "synth", midi: { enabled: false, channel: i }, synth: {}, sample: { baseVelocity: 100, velocityLevelsEnabled: false, velocityLevels: { high: 120, medium: 85, low: 45 }, selectedSlot: 0, slots: Array.from({ length: 8 }, () => ({ path: null })), tuneSemis: 0, amp: {}, ampEnv: {}, filter: {}, filterEnv: {}, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } };
+    for (let i = 0; i < PLATFORM_CAPS.instrumentCount; i += 1) {
+      const f = baseSlots[i] ?? baseSlots[0] ?? { type: "synth", midi: { enabled: false, channel: i }, synth: {}, sample: { baseVelocity: 100, velocityLevelsEnabled: false, velocityLevels: { high: 120, medium: 85, low: 45 }, selectedSlot: 0, slots: Array.from({ length: PLATFORM_CAPS.sampleSlotCount }, () => ({ path: null })), tuneSemis: 0, amp: {}, ampEnv: {}, filter: {}, filterEnv: {}, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } };
       const s = src[i] ?? {};
       out.push({
         ...(f as any),
@@ -164,9 +165,9 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
           velocityLevels: { ...(f as any).sample?.velocityLevels, ...((s as any).sample?.velocityLevels ?? {}) },
           slots: (() => {
             const incomingSlots = Array.isArray((s as any).sample?.slots)
-              ? (s as any).sample.slots.slice(0, 8).map((entry: any) => ({ path: typeof entry?.path === "string" ? entry.path : null }))
-              : (Array.isArray((f as any).sample?.slots) ? (f as any).sample.slots.slice(0, 8).map((entry: any) => ({ path: typeof entry?.path === "string" ? entry.path : null })) : []);
-            while (incomingSlots.length < 8) incomingSlots.push({ path: null });
+              ? (s as any).sample.slots.slice(0, PLATFORM_CAPS.sampleSlotCount).map((entry: any) => ({ path: typeof entry?.path === "string" ? entry.path : null }))
+              : (Array.isArray((f as any).sample?.slots) ? (f as any).sample.slots.slice(0, PLATFORM_CAPS.sampleSlotCount).map((entry: any) => ({ path: typeof entry?.path === "string" ? entry.path : null })) : []);
+            while (incomingSlots.length < PLATFORM_CAPS.sampleSlotCount) incomingSlots.push({ path: null });
             return incomingSlots;
           })(),
           assignments: Array.isArray((s as any).sample?.assignments) ? (s as any).sample.assignments : (Array.isArray((f as any).sample?.assignments) ? (f as any).sample.assignments : []),
@@ -206,7 +207,7 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
       filterCutoff: { ...(factory.runtimeConfig.y.filterCutoff as any), ...(rt.y?.filterCutoff ?? {}) },
       filterResonance: { ...(factory.runtimeConfig.y.filterResonance as any), ...(rt.y?.filterResonance ?? {}) }
     },
-    activePartIndex: Math.max(0, Math.min(7, Number(rt.activePartIndex ?? (factory.runtimeConfig as any).activePartIndex ?? 0))),
+    activePartIndex: clampPartIndex(rt.activePartIndex ?? (factory.runtimeConfig as any).activePartIndex ?? 0),
     parts: Array.isArray(rt.parts) ? rt.parts : Array.isArray((factory.runtimeConfig as any).parts) ? (factory.runtimeConfig as any).parts : [],
     instruments: sanitizeInstruments(rt.instruments)
   };
@@ -214,9 +215,9 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
   if (!Array.isArray((mergedRuntime as any).parts) || (mergedRuntime as any).parts.length === 0) {
     (mergedRuntime as any).parts = Array.isArray((factory.runtimeConfig as any).parts) ? structuredClone((factory.runtimeConfig as any).parts) : [];
   }
-  const active = Math.max(0, Math.min(7, Number((mergedRuntime as any).activePartIndex ?? 0)));
+  const active = clampPartIndex((mergedRuntime as any).activePartIndex ?? 0);
   const parts = [...((mergedRuntime as any).parts as any[])];
-  while (parts.length < 8) {
+  while (parts.length < PLATFORM_CAPS.partCount) {
     const base = (factory.runtimeConfig as any).parts?.[parts.length] ?? (factory.runtimeConfig as any).parts?.[0];
     if (base) parts.push(structuredClone(base));
     else break;

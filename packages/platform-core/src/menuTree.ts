@@ -1,6 +1,7 @@
 import { listBehaviorIds, type BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { MenuNode, PlatformState } from "./index";
 import { SYNTH_PRESETS } from "./synthPresets";
+import { clampSampleSlotIndex, instrumentIndexOptions, partIndexOptions, sampleSlotOptions } from "./platformCaps";
 
 type MenuTreeDeps<TState> = {
   resolveBehavior: (id: string) => BehaviorEngine<any, any>;
@@ -9,15 +10,18 @@ type MenuTreeDeps<TState> = {
   presetRenameNodes: (state: PlatformState<TState>) => MenuNode[];
   midiOutputNodes: (state: PlatformState<TState>) => MenuNode[];
   midiInputNodes: (state: PlatformState<TState>) => MenuNode[];
+  sampleBrowserNodes: (state: PlatformState<TState>, instrumentSlot: number, sampleSlot: number) => MenuNode[];
 };
 
 export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTreeDeps<TState>): MenuNode {
-  const activePartIndex = Math.max(0, Math.min(7, Number((state.runtimeConfig as any).activePartIndex ?? 0)));
+  const partOptions = partIndexOptions();
+  const activePartIndex = Math.max(0, Math.min(partOptions.length - 1, Number((state.runtimeConfig as any).activePartIndex ?? 0)));
   const partPrefix = `parts.${activePartIndex}`;
   const activePart: any = (state.runtimeConfig as any).parts?.[activePartIndex] ?? null;
   const activeBehaviorId = String(activePart?.l1?.behaviorId ?? state.runtimeConfig.activeBehavior);
   const activeEngine = deps.resolveBehavior(activeBehaviorId);
-  const instrumentSlotOptions = Array.from({ length: 16 }, (_, i) => String(i));
+  const instrumentSlotOptions = instrumentIndexOptions();
+  const sampleSlots = sampleSlotOptions();
   const behaviorConfigNodes: MenuNode[] = [];
   if (activeEngine.configMenu) {
     const items = activeEngine.configMenu(state.behaviorState as any);
@@ -38,11 +42,12 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
     kind: "group",
     label: "Root",
     children: [
-      { kind: "group", label: "L1: Life", children: [{ kind: "enum", label: "Part", key: "activePartIndex", options: ["0", "1", "2", "3", "4", "5", "6", "7"] }, { kind: "enum", label: "Step Rate", key: `${partPrefix}.l1.stepRate`, options: ["1/16", "1/8", "1/4", "1/2", "1/1"] }, { kind: "enum", label: "Behavior", key: `${partPrefix}.l1.behaviorId`, options: listBehaviorIds() }, ...behaviorConfigNodes] },
+      { kind: "group", label: "L1: Life", children: [{ kind: "enum", label: "Part", key: "activePartIndex", options: partOptions }, { kind: "bool", label: "Save Grid State", key: `${partPrefix}.l1.saveGridState` }, { kind: "enum", label: "Step Rate", key: `${partPrefix}.l1.stepRate`, options: ["1/16", "1/8", "1/4", "1/2", "1/1"] }, { kind: "enum", label: "Behavior", key: `${partPrefix}.l1.behaviorId`, options: listBehaviorIds() }, ...behaviorConfigNodes] },
       {
         kind: "group",
         label: "L2: Sense",
         children: [
+          { kind: "enum", label: "Part", key: "activePartIndex", options: partOptions },
           { kind: "enum", label: "Scan Mode", key: `${partPrefix}.l2.scanMode`, options: ["immediate", "scanning"] },
           { kind: "enum", label: "Scan Axis", key: `${partPrefix}.l2.scanAxis`, options: ["rows", "columns"], visible: (c: any) => c.parts?.[activePartIndex]?.l2?.scanMode === "scanning" },
           { kind: "enum", label: "Scan Unit", key: `${partPrefix}.l2.scanUnit`, options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c: any) => c.parts?.[activePartIndex]?.l2?.scanMode === "scanning" },
@@ -88,7 +93,7 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
           {
             kind: "group",
             label: "Instruments",
-            children: Array.from({ length: 16 }, (_, idx) => {
+            children: Array.from({ length: instrumentSlotOptions.length }, (_, idx) => {
               const prefix = `instruments.${idx}`;
               return {
                 kind: "group",
@@ -96,14 +101,6 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
                 children: [
                   { kind: "enum", label: "Type", key: `${prefix}.type`, options: ["synth", "sample", "midi"] },
                   { kind: "enum", label: "Note Behavior", key: `${prefix}.noteBehavior`, options: ["oneshot", "hold"] },
-                  {
-                    kind: "group",
-                    label: "MIDI",
-                    children: [
-                      { kind: "bool", label: "Enabled", key: `${prefix}.midi.enabled` },
-                      { kind: "number", label: "Channel", key: `${prefix}.midi.channel`, min: 0, max: 15, step: 1 }
-                    ]
-                  },
                   {
                     kind: "group",
                     label: "Synth",
@@ -210,17 +207,98 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
                     label: "Sample",
                     visible: (c: any) => c.instruments?.[idx]?.type === "sample",
                     children: [
+                      { kind: "enum", label: "Sample Slot", key: `${prefix}.sample.selectedSlot`, options: sampleSlots },
+                      {
+                        kind: "group",
+                        label: "Choose Sample",
+                        children: (s) => {
+                          const ss = clampSampleSlotIndex((s.runtimeConfig as any).instruments?.[idx]?.sample?.selectedSlot ?? 0);
+                          return deps.sampleBrowserNodes(s, idx, ss);
+                        }
+                      },
+                      {
+                        kind: "action",
+                        label: "Assign",
+                        action: {
+                          type: "sample_assign_enter",
+                          instrumentSlot: idx,
+                          sampleSlot: clampSampleSlotIndex((state.runtimeConfig as any).instruments?.[idx]?.sample?.selectedSlot ?? 0)
+                        }
+                      },
+                      { kind: "bool", label: "Velocity Levels", key: `${prefix}.sample.velocityLevelsEnabled` },
+                      { kind: "number", label: "Level High", key: `${prefix}.sample.velocityLevels.high`, min: 1, max: 127, step: 1, visible: (c: any) => c.instruments?.[idx]?.sample?.velocityLevelsEnabled === true },
+                      { kind: "number", label: "Level Medium", key: `${prefix}.sample.velocityLevels.medium`, min: 1, max: 127, step: 1, visible: (c: any) => c.instruments?.[idx]?.sample?.velocityLevelsEnabled === true },
+                      { kind: "number", label: "Level Low", key: `${prefix}.sample.velocityLevels.low`, min: 1, max: 127, step: 1, visible: (c: any) => c.instruments?.[idx]?.sample?.velocityLevelsEnabled === true },
                       { kind: "number", label: "Base Velocity", key: `${prefix}.sample.baseVelocity`, min: 1, max: 127, step: 1 },
-                      { kind: "number", label: "Tune Semis", key: `${prefix}.sample.tuneSemis`, min: -24, max: 24, step: 1 }
+                      { kind: "number", label: "Tune Semis", key: `${prefix}.sample.tuneSemis`, min: -24, max: 24, step: 1 },
+                      {
+                        kind: "group",
+                        label: "Volume",
+                        children: [
+                          {
+                            kind: "group",
+                            label: "Amp",
+                            children: [
+                              { kind: "number", label: "Gain", key: `${prefix}.sample.amp.gainPct`, min: 0, max: 100, step: 1 },
+                              { kind: "number", label: "Vel Sens", key: `${prefix}.sample.amp.velocitySensitivityPct`, min: 0, max: 100, step: 1 }
+                            ]
+                          },
+                          {
+                            kind: "group",
+                            label: "Envelope",
+                            children: [
+                              { kind: "number", label: "Attack", key: `${prefix}.sample.ampEnv.attackMs`, min: 0, max: 5000, step: 5 },
+                              { kind: "number", label: "Decay", key: `${prefix}.sample.ampEnv.decayMs`, min: 0, max: 5000, step: 5 },
+                              { kind: "number", label: "Sustain", key: `${prefix}.sample.ampEnv.sustainPct`, min: 0, max: 100, step: 1 },
+                              { kind: "number", label: "Release", key: `${prefix}.sample.ampEnv.releaseMs`, min: 0, max: 8000, step: 5 }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        kind: "group",
+                        label: "Filter",
+                        children: [
+                          {
+                            kind: "group",
+                            label: "Filter",
+                            children: [
+                              { kind: "enum", label: "Type", key: `${prefix}.sample.filter.type`, options: ["lowpass", "highpass", "bandpass", "notch"] },
+                              { kind: "number", label: "Cutoff", key: `${prefix}.sample.filter.cutoffHz`, min: 80, max: 16000, step: 20 },
+                              { kind: "number", label: "Res", key: `${prefix}.sample.filter.resonance`, min: 0, max: 100, step: 1 },
+                              { kind: "number", label: "Env Amt", key: `${prefix}.sample.filter.envAmountPct`, min: -100, max: 100, step: 1 },
+                              { kind: "number", label: "Key Track", key: `${prefix}.sample.filter.keyTrackingPct`, min: 0, max: 100, step: 1 }
+                            ]
+                          },
+                          {
+                            kind: "group",
+                            label: "Envelope",
+                            children: [
+                              { kind: "number", label: "Attack", key: `${prefix}.sample.filterEnv.attackMs`, min: 0, max: 5000, step: 5 },
+                              { kind: "number", label: "Decay", key: `${prefix}.sample.filterEnv.decayMs`, min: 0, max: 5000, step: 5 },
+                              { kind: "number", label: "Sustain", key: `${prefix}.sample.filterEnv.sustainPct`, min: 0, max: 100, step: 1 },
+                              { kind: "number", label: "Release", key: `${prefix}.sample.filterEnv.releaseMs`, min: 0, max: 8000, step: 5 }
+                            ]
+                          }
+                        ]
+                      }
                     ]
                   },
                   {
                     kind: "group",
-                    label: "MIDI Engine",
+                    label: "Note Settings",
                     visible: (c: any) => c.instruments?.[idx]?.type === "midi",
                     children: [
                       { kind: "number", label: "Velocity", key: `${prefix}.midiEngine.velocity`, min: 1, max: 127, step: 1 },
                       { kind: "number", label: "Duration", key: `${prefix}.midiEngine.durationMs`, min: 10, max: 2000, step: 10 }
+                    ]
+                  },
+                  {
+                    kind: "group",
+                    label: "MIDI",
+                    children: [
+                      { kind: "bool", label: "Enabled", key: `${prefix}.midi.enabled` },
+                      { kind: "number", label: "Channel", key: `${prefix}.midi.channel`, min: 0, max: 15, step: 1 }
                     ]
                   }
                 ]

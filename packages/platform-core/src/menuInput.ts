@@ -1,6 +1,7 @@
 import { clamp } from "./coreUtils";
 import { locate } from "./menuView";
 import type { MenuNode, PlatformEffect, PlatformState } from "./index";
+import { clampInstrumentIndex } from "./platformCaps";
 
 type PressDeps<TState> = {
   menuTree: (state: PlatformState<TState>) => MenuNode;
@@ -26,6 +27,27 @@ export function pressMenuInput<TState>(state: PlatformState<TState>, effects: Pl
     if (label === "Save As") {
       const suggested = deps.formatTimestamp(Date.now());
       nextState = { ...nextState, system: { ...nextState.system, draftName: suggested, nameCursor: suggested.length } };
+    }
+    if (label === "Choose Sample") {
+      const parts = view.path.split("/");
+      const instrumentLabel = parts.find((p) => p.startsWith("Instrument ")) ?? "";
+      const match = /^Instrument\s+(\d+)$/.exec(instrumentLabel.trim());
+      if (match) {
+        const instrumentSlot = clampInstrumentIndex(Number(match[1]) - 1);
+        const selectedSlot = Number((nextState.runtimeConfig as any).instruments?.[instrumentSlot]?.sample?.selectedSlot ?? 0);
+        const sampleSlot = clamp(Math.floor(selectedSlot), 0, 7);
+        const browser = nextState.system.sampleBrowser;
+        const dir = browser && browser.instrumentSlot === instrumentSlot && browser.sampleSlot === sampleSlot ? browser.dir : "";
+        effects.push({ type: "sample_list_request", instrumentSlot, sampleSlot, dir } as any);
+        nextState = {
+          ...nextState,
+          system: {
+            ...nextState.system,
+            sampleBrowser: { instrumentSlot, sampleSlot, dir, entries: [] },
+            toast: { message: "Loading samples...", untilMs: Date.now() + 1000 }
+          }
+        };
+      }
     }
     return nextState;
   }

@@ -1,3 +1,5 @@
+import { PLATFORM_CAPS } from "./platformCaps";
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
@@ -99,6 +101,11 @@ export function formatDisplayValue(key: string, value: unknown): string {
     const n = clamp(Math.floor(Number(value)), 0, 15);
     return String(n + 1);
   }
+  if (/^instruments\.\d+\.type$/.test(key)) {
+    if (value === "midi") return "MIDI only";
+    if (value === "sample") return "sample";
+    return "synth";
+  }
   if (key === "masterVolume") return `Vol: ${value}%`;
   if (key === "displayBrightness") return `OLED ${value}%`;
   if (key === "gridBrightness") return `Grid ${value}%`;
@@ -106,8 +113,12 @@ export function formatDisplayValue(key: string, value: unknown): string {
   if (key === "screenSleepSeconds") return Number(value) <= 0 ? "Sleep: Off" : `Sleep: ${value}s`;
   if (key === "activeBehavior") return String(value);
   if (key === "activePartIndex") {
-    const n = clamp(Math.floor(Number(value)), 0, 7);
+    const n = clamp(Math.floor(Number(value)), 0, PLATFORM_CAPS.partCount - 1);
     return `Part ${n + 1}`;
+  }
+  if (/^instruments\.\d+\.sample\.selectedSlot$/.test(key)) {
+    const n = clamp(Math.floor(Number(value)), 0, PLATFORM_CAPS.sampleSlotCount - 1);
+    return String(n + 1);
   }
   if (key === "scanMode" || key.endsWith(".l2.scanMode")) return value === "immediate" ? "no scan" : "scanning";
   if (key === "scanAxis" || key.endsWith(".l2.scanAxis")) return value === "columns" ? "cols" : "rows";

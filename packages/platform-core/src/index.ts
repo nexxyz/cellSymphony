@@ -53,6 +53,7 @@ import {
   applyStoreResult as applyStoreResultRuntime,
   extractConfigPayload as extractConfigPayloadRuntime
 } from "./storeRuntime";
+import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
 import {
   clamp,
   fitOledMenuLine as fitOledMenuLineToColumns,
@@ -154,9 +155,9 @@ export function routeInput<TState>(
     spawnActionTypeForBehavior,
     executeConfirmed
   });
-  const active = Math.max(0, Math.min(7, Number((routed.state.runtimeConfig as any).activePartIndex ?? 0)));
+  const active = clampPartIndex((routed.state.runtimeConfig as any).activePartIndex ?? 0);
   const partStates = Array.isArray((routed.state as any).partStates) ? ([...((routed.state as any).partStates as any[])] as any[]) : [];
-  while (partStates.length < 8) partStates.push(routed.state.behaviorState);
+  while (partStates.length < PLATFORM_CAPS.partCount) partStates.push(routed.state.behaviorState);
   partStates[active] = routed.state.behaviorState;
   return { ...routed, state: { ...routed.state, partStates } };
 }
@@ -205,7 +206,7 @@ function executeConfirmed<TState>(
     const preset = getSynthPreset(action.presetId as any);
     if (!preset) return state;
     const instruments = Array.isArray(state.runtimeConfig.instruments) ? state.runtimeConfig.instruments.slice() : [];
-    const slot = Math.max(0, Math.min(15, action.slot | 0));
+    const slot = Math.max(0, Math.min(PLATFORM_CAPS.instrumentCount - 1, action.slot | 0));
     const current = instruments[slot];
     if (!current) return state;
     instruments[slot] = { ...current, synth: structuredClone(preset.synth) };
@@ -325,7 +326,7 @@ export function applyStoreResult<TState>(
 }
 
 export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>): SimulatorFrame {
-  const activePart = Math.max(0, Math.min(7, Number((state.runtimeConfig as any).activePartIndex ?? 0)));
+  const activePart = clampPartIndex((state.runtimeConfig as any).activePartIndex ?? 0);
   const part = (state.runtimeConfig as any).parts?.[activePart];
   const activeBehaviorId = String(part?.l1?.behaviorId ?? state.runtimeConfig.activeBehavior);
   const engine = (resolveBehavior(activeBehaviorId) as BehaviorEngine<any, unknown>) ?? behavior;
@@ -551,7 +552,7 @@ function fitOledText(text: string, columns = OLED_TEXT_COLUMNS): string {
 
 
 export function emergencyBrake<TState>(state: PlatformState<TState>): { state: PlatformState<TState>; events: MusicalEvent[] } {
-  const activePart = Math.max(0, Math.min(7, Number((state.runtimeConfig as any).activePartIndex ?? 0)));
+  const activePart = clampPartIndex((state.runtimeConfig as any).activePartIndex ?? 0);
   const activePartCfg = (state.runtimeConfig as any).parts?.[activePart]?.l2;
   const axis = activePartCfg?.scanAxis ?? state.runtimeConfig.scanAxis;
   const direction = activePartCfg?.scanDirection ?? state.runtimeConfig.scanDirection;
@@ -571,9 +572,9 @@ export function emergencyBrake<TState>(state: PlatformState<TState>): { state: P
       scanPulseAccumulator: 0,
       algorithmPulseAccumulator: 0,
       ppqnPulseRemainder: 0,
-      partScanIndex: Array.from({ length: 8 }, () => 0),
-      partScanPulseAccumulator: Array.from({ length: 8 }, () => 0),
-      partAlgorithmPulseAccumulator: Array.from({ length: 8 }, () => 0)
+      partScanIndex: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0),
+      partScanPulseAccumulator: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0),
+      partAlgorithmPulseAccumulator: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0)
     },
     events
   };
