@@ -3,7 +3,7 @@ import type { MenuNode } from "./index";
 
 export function menuHelpTargetFromNode(path: string, node: MenuNode): HelpTarget {
   const nodeLabel = "label" in node ? node.label : node.kind;
-  const fullPath = `${path} > ${nodeLabel}`;
+  const fullPath = canonicalizeMenuPath(`${path} > ${nodeLabel}`);
   if (node.kind === "group") {
     return { path: fullPath, key: "", kind: "group", label: node.label ?? "Section" };
   }
@@ -22,4 +22,10 @@ export function menuHelpTargetFromNode(path: string, node: MenuNode): HelpTarget
     return { path: fullPath, key: `key:${node.key}`, kind: node.kind, label: node.label ?? "Setting" };
   }
   return { path: fullPath, key: "", kind: node.kind, label: nodeLabel ?? "Menu Entry" };
+}
+
+function canonicalizeMenuPath(path: string): string {
+  return path
+    .replace(/\bI\d+:\s[^>]+$/g, "Instrument 1")
+    .replace(/\bI\d+:\s[^>]+(?=\s>)/g, "Instrument *");
 }
