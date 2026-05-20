@@ -33,10 +33,12 @@ export type FilterConfig = {
   keyTrackingPct: number;
 };
 
+export type AmpConfig = { gainPct: number; velocitySensitivityPct: number };
+
 export type SynthConfig = {
   osc1: OscConfig;
   osc2: OscConfig;
-  amp: { gainPct: number; velocitySensitivityPct: number };
+  amp: AmpConfig;
   ampEnv: EnvConfig;
   filter: FilterConfig;
   filterEnv: EnvConfig;
@@ -44,13 +46,23 @@ export type SynthConfig = {
 
 export type InstrumentSlotConfig = {
   type: "synth" | "sample" | "midi";
+  nameMode: "auto" | "drums" | "pad" | "lead" | "bass" | "fx" | "custom";
+  customName: string | null;
   noteBehavior: "oneshot" | "hold";
   midi: { enabled: boolean; channel: number };
   synth: SynthConfig;
   sample: {
     baseVelocity: number;
+    velocityLevelsEnabled: boolean;
+    velocityLevels: { high: number; medium: number; low: number };
+    selectedSlot: number;
+    slots: Array<{ path: string | null }>;
     tuneSemis: number;
-    assignments: Array<{ x: number; y: number; sampleId: string; velocity?: number }>;
+    amp: AmpConfig;
+    ampEnv: EnvConfig;
+    filter: FilterConfig;
+    filterEnv: EnvConfig;
+    assignments: Array<{ x: number; y: number; sampleSlot: number; level?: "high" | "medium" | "low" }>;
   };
   midiEngine: {
     velocity: number;
@@ -82,6 +94,8 @@ export type PartConfig = {
     stepRate: NoteUnit;
     behaviorId: string;
     behaviorConfig: Record<string, unknown>;
+    saveGridState: boolean;
+    savedState?: unknown;
   };
   l2: PartSenseConfig;
 };
@@ -103,6 +117,12 @@ export type ActionSpec =
   | { type: "preset_rename_pick"; name: string } | { type: "preset_rename_apply" }
   | { type: "default_save" } | { type: "default_load" } | { type: "factory_load" }
   | { type: "synth_preset_load"; slot: number; presetId: string; presetLabel: string }
+  | { type: "sample_browse_open"; instrumentSlot: number; sampleSlot: number; dir?: string }
+  | { type: "sample_browse_up" }
+  | { type: "sample_browse_enter"; path: string }
+  | { type: "sample_pick"; path: string }
+  | { type: "sample_assign_enter"; instrumentSlot: number; sampleSlot: number }
+  | { type: "sample_assign_exit" }
   | { type: "midi_select_output"; id: string | null } | { type: "midi_select_input"; id: string | null }
   | { type: "midi_panic" } | { type: "behavior_action"; behaviorId: string; actionType: string };
 
@@ -130,6 +150,14 @@ export type SystemState = {
   midiOutputs: MidiPortInfo[]; midiInputs: MidiPortInfo[]; midiStatus: string | null; externalPpqnPulse: number; pendingResync: boolean; pausedByUser: boolean;
   oledMode: "normal" | "splash" | "off"; oledSplashText: string; oledSplashUntilMs: number; lastInteractionMs: number; auxBindings: Record<string, AuxBinding | null>;
   heldNotes: string[];
+  sampleAssign: { instrumentSlot: number; sampleSlot: number } | null;
+  sampleAssignLastPress: { x: number; y: number; atMs: number } | null;
+  sampleBrowser: {
+    instrumentSlot: number;
+    sampleSlot: number;
+    dir: string;
+    entries: Array<{ name: string; path: string; isDir: boolean }>;
+  } | null;
 };
 
 export type PlatformEffectBase =
@@ -138,7 +166,10 @@ export type PlatformEffectBase =
 export type MidiEffect =
   | { type: "midi_list_outputs_request" } | { type: "midi_list_inputs_request" }
   | { type: "midi_select_output"; id: string | null } | { type: "midi_select_input"; id: string | null } | { type: "midi_panic" };
-export type PlatformEffect = PlatformEffectBase | MidiEffect;
+export type SampleEffect =
+  | { type: "sample_list_request"; instrumentSlot: number; sampleSlot: number; dir: string }
+  | { type: "sample_preview_request"; path: string };
+export type PlatformEffect = PlatformEffectBase | MidiEffect | SampleEffect;
 export type StoreResultBase =
   | { type: "list_presets_result"; names: string[] } | { type: "load_preset_result"; name: string; payload: ConfigPayload | null }
   | { type: "save_preset_result"; name: string; outcome: "created" | "overwritten" } | { type: "delete_preset_result"; name: string; ok: boolean }
@@ -147,7 +178,11 @@ export type MidiResult =
   | { type: "midi_list_outputs_result"; outputs: MidiPortInfo[] }
   | { type: "midi_list_inputs_result"; inputs: MidiPortInfo[] }
   | { type: "midi_status"; ok: boolean; message?: string; selectedOutId?: string | null; selectedInId?: string | null };
-export type StoreResult = StoreResultBase | MidiResult;
+export type SampleResult =
+  | { type: "sample_list_result"; instrumentSlot: number; sampleSlot: number; dir: string; entries: Array<{ name: string; path: string; isDir: boolean }> }
+  | { type: "sample_list_error"; instrumentSlot: number; sampleSlot: number; dir: string; message: string }
+  | { type: "sample_preview_error"; message: string };
+export type StoreResult = StoreResultBase | MidiResult | SampleResult;
 
 export type PlatformState<TState> = {
   transport: TransportFrame; behaviorState: TState; activeBehavior: string; mappingConfig: MappingConfig; runtimeConfig: RuntimeConfig; menu: MenuState; system: SystemState;

@@ -82,3 +82,22 @@ function laneGroup(label: string, prefix: string, offsetLimit: number): MenuNode
     ]
   };
 }
+
+export function sampleBrowserNodes<TState>(state: PlatformState<TState>, instrumentSlot: number, sampleSlot: number): MenuNode[] {
+  const browser = (state.system as any).sampleBrowser;
+  if (!browser || browser.instrumentSlot !== instrumentSlot || browser.sampleSlot !== sampleSlot) {
+    return [{ kind: "action", label: "(loading...)", action: { type: "sample_browse_open", instrumentSlot, sampleSlot, dir: "" } }];
+  }
+  const nodes: MenuNode[] = [{ kind: "action", label: "..", action: { type: "sample_browse_up" } }];
+  for (const entry of browser.entries as Array<{ name: string; path: string; isDir: boolean }>) {
+    if (entry.isDir) {
+      nodes.push({ kind: "action", label: `[${entry.name}]`, action: { type: "sample_browse_enter", path: entry.path } });
+    } else {
+      nodes.push({ kind: "action", label: entry.name, action: { type: "sample_pick", path: entry.path } });
+    }
+  }
+  if (nodes.length === 1) {
+    nodes.push({ kind: "action", label: "(empty)", action: { type: "sample_browse_open", instrumentSlot, sampleSlot, dir: browser.dir } });
+  }
+  return nodes;
+}

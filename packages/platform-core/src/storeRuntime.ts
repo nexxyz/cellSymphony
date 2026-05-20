@@ -148,6 +148,12 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
         ...(f as any),
         ...(s as any),
         type: (s as any).type === "sample" || (s as any).type === "midi" || (s as any).type === "synth" ? (s as any).type : (f as any).type,
+        nameMode: (s as any).nameMode === "auto" || (s as any).nameMode === "drums" || (s as any).nameMode === "pad" || (s as any).nameMode === "lead" || (s as any).nameMode === "bass" || (s as any).nameMode === "fx" || (s as any).nameMode === "custom"
+          ? (s as any).nameMode
+          : ((f as any).nameMode ?? "auto"),
+        customName: typeof (s as any).customName === "string" && (s as any).customName.trim().length > 0
+          ? (s as any).customName
+          : ((typeof (f as any).customName === "string" && (f as any).customName.trim().length > 0) ? (f as any).customName : null),
         midi: { ...(f as any).midi, ...((s as any).midi ?? {}) },
         synth: {
           ...(f as any).synth,

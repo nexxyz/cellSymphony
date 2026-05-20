@@ -54,6 +54,67 @@ export function handleMenuAction<TState>(state: PlatformState<TState>, action: a
   if (action.type === "synth_preset_load") {
     return openConfirm("load_synth_preset", { kind: "synth_preset_load", slot: action.slot, presetId: action.presetId, presetLabel: action.presetLabel }, ["Cancel", "Confirm"]);
   }
+  if (action.type === "sample_assign_enter") {
+    return {
+      ...state,
+      system: {
+        ...state.system,
+        sampleAssign: { instrumentSlot: action.instrumentSlot, sampleSlot: action.sampleSlot },
+        sampleAssignLastPress: null,
+        toast: { message: `Assign: Inst ${action.instrumentSlot + 1} / Slot ${action.sampleSlot + 1}`, untilMs: Date.now() + 1600 }
+      }
+    };
+  }
+  if (action.type === "sample_assign_exit") {
+    return {
+      ...state,
+      system: { ...state.system, sampleAssign: null, sampleAssignLastPress: null }
+    };
+  }
+  if (action.type === "sample_browse_open") {
+    const dir = action.dir ?? "";
+    effects.push({ type: "sample_list_request", instrumentSlot: action.instrumentSlot, sampleSlot: action.sampleSlot, dir });
+    return {
+      ...state,
+      system: {
+        ...state.system,
+        sampleBrowser: { instrumentSlot: action.instrumentSlot, sampleSlot: action.sampleSlot, dir, entries: [] },
+        toast: { message: "Loading samples...", untilMs: Date.now() + 1000 }
+      }
+    };
+  }
+  if (action.type === "sample_browse_enter") {
+    const browser = state.system.sampleBrowser;
+    if (!browser) return state;
+    effects.push({ type: "sample_list_request", instrumentSlot: browser.instrumentSlot, sampleSlot: browser.sampleSlot, dir: action.path });
+    return { ...state, system: { ...state.system, sampleBrowser: { ...browser, dir: action.path, entries: [] } } };
+  }
+  if (action.type === "sample_browse_up") {
+    const browser = state.system.sampleBrowser;
+    if (!browser) return state;
+    const parts = browser.dir.split("/").filter((p: string) => p.length > 0);
+    const dir = parts.length > 0 ? parts.slice(0, -1).join("/") : "";
+    effects.push({ type: "sample_list_request", instrumentSlot: browser.instrumentSlot, sampleSlot: browser.sampleSlot, dir });
+    return { ...state, system: { ...state.system, sampleBrowser: { ...browser, dir, entries: [] } } };
+  }
+  if (action.type === "sample_pick") {
+    const browser = state.system.sampleBrowser;
+    if (!browser) return state;
+    const key = `instruments.${browser.instrumentSlot}.sample.slots.${browser.sampleSlot}.path`;
+    const nextCfg = deps.writeValue(state.runtimeConfig, key, action.path);
+    const next = {
+      ...state,
+      runtimeConfig: nextCfg,
+      system: {
+        ...state.system,
+        toast: { message: `Sample set: ${action.path.split("/").pop() ?? action.path}`, untilMs: Date.now() + 1800 }
+      }
+    };
+    if (next.runtimeConfig.autoSaveDefault) {
+      effects.push({ type: "store_save_default", payload: deps.extractConfigPayload(next) });
+    }
+    return next;
+  }
   if (action.type === "midi_select_output") {
     const nextCfg = deps.writeValue(state.runtimeConfig, "midi.outId", action.id);
     effects.push({ type: "midi_select_output", id: action.id });

@@ -22,6 +22,20 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
   const activeEngine = deps.resolveBehavior(activeBehaviorId);
   const instrumentSlotOptions = instrumentIndexOptions();
   const sampleSlots = sampleSlotOptions();
+
+  const instrumentLabel = (idx: number): string => {
+    const inst: any = (state.runtimeConfig as any).instruments?.[idx] ?? {};
+    const typeLabel = inst.type === "midi" ? "MIDI" : inst.type === "sample" ? "sample" : "synth";
+    const mode = String(inst.nameMode ?? "auto");
+    const custom = typeof inst.customName === "string" ? inst.customName.trim() : "";
+    if (mode === "drums") return `I${idx + 1}: Drums`;
+    if (mode === "pad") return `I${idx + 1}: Pad`;
+    if (mode === "lead") return `I${idx + 1}: Lead`;
+    if (mode === "bass") return `I${idx + 1}: Bass`;
+    if (mode === "fx") return `I${idx + 1}: FX`;
+    if (mode === "custom" && custom.length > 0) return `I${idx + 1}: ${custom}`;
+    return `I${idx + 1}: ${typeLabel}`;
+  };
   const behaviorConfigNodes: MenuNode[] = [];
   if (activeEngine.configMenu) {
     const items = activeEngine.configMenu(state.behaviorState as any);
@@ -97,9 +111,11 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
               const prefix = `instruments.${idx}`;
               return {
                 kind: "group",
-                label: `Instrument ${idx + 1}`,
+                label: instrumentLabel(idx),
                 children: [
                   { kind: "enum", label: "Type", key: `${prefix}.type`, options: ["synth", "sample", "midi"] },
+                  { kind: "enum", label: "Name", key: `${prefix}.nameMode`, options: ["auto", "drums", "pad", "lead", "bass", "fx", "custom"] },
+                  { kind: "text", label: "Custom Name", key: `${prefix}.customName`, maxLen: 32 },
                   { kind: "enum", label: "Note Behavior", key: `${prefix}.noteBehavior`, options: ["oneshot", "hold"] },
                   {
                     kind: "group",

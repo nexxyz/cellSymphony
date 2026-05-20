@@ -8,6 +8,8 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
   const defaultMapping = loadDefaultMappingConfig();
   const instruments = Array.from({ length: PLATFORM_CAPS.instrumentCount }, (_, idx) => ({
     type: "synth" as const,
+    nameMode: "auto" as const,
+    customName: null as string | null,
     noteBehavior: "oneshot" as const,
     midi: { enabled: false, channel: idx },
     synth: structuredClone(SYNTH_PRESETS[idx % 8]!.synth as RuntimeConfig["instruments"][number]["synth"]),

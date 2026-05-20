@@ -361,6 +361,15 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "This is where scan/event sources get routed toward instruments."
   },
   {
+    "id": "life_part_select",
+    "path": "Menu > L1: Life > Part",
+    "key": "",
+    "kind": "enum",
+    "title": "Active Part",
+    "line1": "Selects which of the 8 parts receives current L1/L2 edits.",
+    "line2": "Mirrors Fn + leftmost-column selection; while Fn is held, layer indicators appear on the left column (gray, active green)."
+  },
+  {
     "id": "scan_mode",
     "path": "*",
     "key": "key:scanMode",
@@ -843,8 +852,134 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "",
     "kind": "enum",
     "title": "Instrument Type",
-    "line1": "Options: synth (current), with future engine types such as sampler. synth is a two-oscillator subtractive voice with amp/filter envelopes and per-slot MIDI routing.",
-    "line2": "Use synth for fully generated tones from trigger events; when new engine types arrive, this selector swaps the editable parameter set for that slot."
+    "line1": "Options: synth, sample, MIDI only. synth is a two-oscillator subtractive engine; sample is assignment-driven playback; MIDI only is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_sample_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample",
+    "key": "",
+    "kind": "group",
+    "title": "Sample",
+    "line1": "Sample playback setup for this instrument slot.",
+    "line2": "Choose slot/path, enter assignment mode, and tune per-slot dynamics/filtering."
+  },
+  {
+    "id": "inst_sample_slot",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample > Sample Slot",
+    "key": "key:instruments.*.sample.selectedSlot",
+    "kind": "enum",
+    "title": "Sample Slot",
+    "line1": "Selects which one of the 8 sample slots is currently focused.",
+    "line2": "Choose Sample and Assign actions apply to the selected slot."
+  },
+  {
+    "id": "inst_sample_choose_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample > Choose Sample",
+    "key": "",
+    "kind": "group",
+    "title": "Choose Sample",
+    "line1": "Browse files inside the `samples/` folder tree (wav only).",
+    "line2": "Press Space to preview highlighted wav; press Enter to pick it."
+  },
+  {
+    "id": "inst_sample_assign",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample > Assign",
+    "key": "action:sample_assign_enter",
+    "kind": "action",
+    "title": "Assign",
+    "line1": "Enters grid assignment mode for the selected sample slot.",
+    "line2": "Back exits; Shift+cell applies to row, Shift+double-cell applies to column."
+  },
+  {
+    "id": "inst_sample_velocity_levels",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample > Velocity Levels",
+    "key": "key:instruments.*.sample.velocityLevelsEnabled",
+    "kind": "bool",
+    "title": "Velocity Levels",
+    "line1": "When on, assigned cells store High/Medium/Low level states.",
+    "line2": "Pressing a selected-slot cell cycles Off -> High -> Medium -> Low -> Off."
+  },
+  {
+    "id": "inst_sample_level_high",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample > Level High",
+    "key": "key:instruments.*.sample.velocityLevels.high",
+    "kind": "number",
+    "title": "Level High",
+    "line1": "Base velocity used for High assignment level.",
+    "line2": "Final playback velocity is this value scaled by Sense/global velocity shaping."
+  },
+  {
+    "id": "inst_sample_level_medium",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample > Level Medium",
+    "key": "key:instruments.*.sample.velocityLevels.medium",
+    "kind": "number",
+    "title": "Level Medium",
+    "line1": "Base velocity used for Medium assignment level.",
+    "line2": "Final playback velocity is this value scaled by Sense/global velocity shaping."
+  },
+  {
+    "id": "inst_sample_level_low",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample > Level Low",
+    "key": "key:instruments.*.sample.velocityLevels.low",
+    "kind": "number",
+    "title": "Level Low",
+    "line1": "Base velocity used for Low assignment level.",
+    "line2": "Final playback velocity is this value scaled by Sense/global velocity shaping."
+  },
+  {
+    "id": "inst_sample_base_velocity",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample > Base Velocity",
+    "key": "key:instruments.*.sample.baseVelocity",
+    "kind": "number",
+    "title": "Base Velocity",
+    "line1": "Used when Velocity Levels are off.",
+    "line2": "Assigned cells then play as binary on/off with this base velocity."
+  },
+  {
+    "id": "inst_sample_browse_open",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample > Choose Sample > (loading...)",
+    "key": "action:sample_browse_open",
+    "kind": "action",
+    "title": "Loading Samples",
+    "line1": "Requests a listing for the current directory under `samples/`.",
+    "line2": "This appears briefly while the browser is loading."
+  },
+  {
+    "id": "inst_sample_browse_up",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample > Choose Sample > ..",
+    "key": "action:sample_browse_up",
+    "kind": "action",
+    "title": "Browse Up",
+    "line1": "Moves to the parent folder within `samples/`.",
+    "line2": "Cannot navigate outside the `samples/` root."
+  },
+  {
+    "id": "inst_sample_browse_enter",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample > Choose Sample > *",
+    "key": "action:sample_browse_enter",
+    "kind": "action",
+    "title": "Enter Folder",
+    "line1": "Opens the selected subfolder in the sample browser.",
+    "line2": "Folder names are shown in brackets."
+  },
+  {
+    "id": "inst_sample_pick",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Sample > Choose Sample > *",
+    "key": "action:sample_pick",
+    "kind": "action",
+    "title": "Pick Sample",
+    "line1": "Assigns the selected wav path to the current sample slot.",
+    "line2": "The slot path updates immediately and can auto-save if enabled."
+  },
+  {
+    "id": "sense_note_mapping_group",
+    "path": "Menu > L2: Sense > Note Mapping",
+    "key": "",
+    "kind": "group",
+    "title": "Sense Note Mapping",
+    "line1": "Per-part pitch mapping used during Sense interpretation and instrument routing.",
+    "line2": "Defines starting note, range, scale, and root before events reach instrument slots."
   },
   {
     "id": "inst_note_behavior",
