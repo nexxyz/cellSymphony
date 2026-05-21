@@ -1,5 +1,5 @@
-use realtime_engine::synth::SynthEngine;
-use std::sync::{Arc, Mutex};
+use realtime_engine::synth::{InstrumentsConfig, SynthEngine, VoiceStealingMode};
+use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
 const DEFAULT_BLOCK_FRAMES: usize = 128;
@@ -7,18 +7,40 @@ const MIN_BLOCK_FRAMES: usize = 32;
 const MAX_BLOCK_FRAMES: usize = 2048;
 
 pub struct EngineSource {
-    engine: Arc<Mutex<SynthEngine>>,
+    engine: SynthEngine,
+    control_rx: Receiver<EngineEvent>,
     sample_rate: u32,
     block_frames: usize,
     buf: Vec<f32>,
     idx: usize,
 }
 
+pub enum EngineEvent {
+    NoteOn {
+        instrument_slot: u8,
+        note: u8,
+        velocity: u8,
+        duration_ms: u32,
+    },
+    NoteOff {
+        instrument_slot: u8,
+        note: u8,
+    },
+    Cc {
+        instrument_slot: u8,
+        controller: u8,
+        value: u8,
+    },
+    SetInstruments(InstrumentsConfig),
+    SetVoiceStealingMode(VoiceStealingMode),
+}
+
 impl EngineSource {
-    pub fn new(engine: Arc<Mutex<SynthEngine>>, sample_rate: u32) -> Self {
+    pub fn new(control_rx: Receiver<EngineEvent>, sample_rate: u32) -> Self {
         let block_frames = audio_block_frames();
         Self {
-            engine,
+            engine: SynthEngine::new(sample_rate),
+            control_rx,
             sample_rate,
             block_frames,
             buf: Vec::with_capacity(block_frames * 2),
@@ -27,16 +49,13 @@ impl EngineSource {
     }
 
     fn refill(&mut self) {
+        self.drain_control_events();
         let t0 = Instant::now();
         self.buf.clear();
-        if let Ok(mut eng) = self.engine.lock() {
-            for _ in 0..self.block_frames {
-                let (l, r) = eng.next_stereo_sample();
-                self.buf.push(l);
-                self.buf.push(r);
-            }
-        } else {
-            self.buf.resize(self.block_frames * 2, 0.0);
+        for _ in 0..self.block_frames {
+            let (l, r) = self.engine.next_stereo_sample();
+            self.buf.push(l);
+            self.buf.push(r);
         }
         self.idx = 0;
         let elapsed = t0.elapsed().as_secs_f32();
@@ -46,8 +65,39 @@ impl EngineSource {
         } else {
             0.0
         };
-        if let Ok(mut eng) = self.engine.lock() {
-            eng.set_runtime_load_ratio(ratio);
+        self.engine.set_runtime_load_ratio(ratio);
+    }
+
+    fn drain_control_events(&mut self) {
+        while let Ok(event) = self.control_rx.try_recv() {
+            match event {
+                EngineEvent::NoteOn {
+                    instrument_slot,
+                    note,
+                    velocity,
+                    duration_ms,
+                } => self
+                    .engine
+                    .note_on(instrument_slot, note, velocity, duration_ms),
+                EngineEvent::NoteOff {
+                    instrument_slot,
+                    note,
+                } => self.engine.note_off(instrument_slot, note),
+                EngineEvent::Cc {
+                    instrument_slot,
+                    controller,
+                    value,
+                } => {
+                    if controller == 120 || controller == 123 {
+                        self.engine.all_notes_off();
+                    }
+                    self.engine.cc(instrument_slot, controller, value);
+                }
+                EngineEvent::SetInstruments(config) => self.engine.set_instruments(config),
+                EngineEvent::SetVoiceStealingMode(mode) => {
+                    self.engine.set_voice_stealing_mode(mode)
+                }
+            }
         }
     }
 }

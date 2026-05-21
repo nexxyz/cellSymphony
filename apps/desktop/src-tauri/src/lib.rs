@@ -7,15 +7,15 @@ use audio_config::{
     build_audio_slot_configs, parse_voice_stealing_mode, synth_payload, AudioInstrumentsConfig,
     AudioRuntimePolicyConfig,
 };
-use audio_source::EngineSource;
+use audio_source::{EngineEvent, EngineSource};
 use midi::{midi_list_inputs, midi_list_outputs, midi_select_input, midi_select_output, midi_send};
 use samples::{resolve_sample_file, sample_list, sample_preview};
-use std::sync::mpsc::{self, Sender};
-use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::Mutex;
 use std::thread;
 
 use midir::MidiInputConnection;
-use realtime_engine::synth::{SynthEngine, INSTRUMENT_SLOT_COUNT};
+use realtime_engine::synth::INSTRUMENT_SLOT_COUNT;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use serde::Deserialize;
 
@@ -48,7 +48,7 @@ struct AudioRuntime {
 }
 
 #[derive(Clone, Copy)]
-struct QueuedNote {
+pub(crate) struct QueuedNote {
     instrument_slot: u8,
     note: u8,
     velocity: u8,
@@ -56,7 +56,7 @@ struct QueuedNote {
 }
 
 #[derive(Clone)]
-enum QueuedAudioEvent {
+pub(crate) enum QueuedAudioEvent {
     Note(QueuedNote),
     NoteOff {
         instrument_slot: u8,
@@ -72,6 +72,8 @@ enum QueuedAudioEvent {
         gain: f32,
         rate: f32,
     },
+    SetInstruments(realtime_engine::synth::InstrumentsConfig),
+    SetVoiceStealingMode(realtime_engine::synth::VoiceStealingMode),
 }
 
 impl AudioRuntime {
@@ -84,8 +86,8 @@ impl AudioRuntime {
         })
     }
 
-    fn start_engine(&self, engine: Arc<Mutex<SynthEngine>>) -> Result<(), String> {
-        let source = EngineSource::new(engine, 48_000);
+    fn start_engine(&self, control_rx: Receiver<EngineEvent>) -> Result<(), String> {
+        let source = EngineSource::new(control_rx, 48_000);
         let sink = Sink::try_new(&self.handle).map_err(|e| format!("sink create failed: {e}"))?;
         sink.append(source);
         sink.play();
@@ -96,7 +98,6 @@ impl AudioRuntime {
 
 pub(crate) struct AppState {
     pub(crate) trigger_tx: Sender<QueuedAudioEvent>,
-    engine: Arc<Mutex<SynthEngine>>,
     synth_slots: Mutex<[bool; INSTRUMENT_SLOT_COUNT]>,
     sample_cfgs: Mutex<[SampleSlotConfig; INSTRUMENT_SLOT_COUNT]>,
     pub(crate) midi_out: Mutex<Option<midir::MidiOutputConnection>>,
@@ -224,12 +225,10 @@ fn audio_set_instruments(
         *sample_cfgs = next_sample_cfgs;
     }
     let synth_payload = synth_payload(&config);
-    let mut eng = state
-        .engine
-        .lock()
-        .map_err(|_| "audio engine mutex poisoned".to_string())?;
-    eng.set_instruments(synth_payload);
-    Ok(())
+    state
+        .trigger_tx
+        .send(QueuedAudioEvent::SetInstruments(synth_payload))
+        .map_err(|e| format!("audio queue send failed: {e}"))
 }
 
 #[tauri::command]
@@ -238,22 +237,18 @@ fn audio_set_runtime_policy(
     state: tauri::State<AppState>,
 ) -> Result<(), String> {
     let mode = parse_voice_stealing_mode(&policy.voice_stealing_mode);
-    let mut eng = state
-        .engine
-        .lock()
-        .map_err(|_| "audio engine mutex poisoned".to_string())?;
-    eng.set_voice_stealing_mode(mode);
-    Ok(())
+    state
+        .trigger_tx
+        .send(QueuedAudioEvent::SetVoiceStealingMode(mode))
+        .map_err(|e| format!("audio queue send failed: {e}"))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let (trigger_tx, trigger_rx) = mpsc::channel::<QueuedAudioEvent>();
 
-    let engine = Arc::new(Mutex::new(SynthEngine::new(48_000)));
-    let engine2 = engine.clone();
-
     thread::spawn(move || {
+        let (engine_tx, engine_rx) = mpsc::channel::<EngineEvent>();
         let audio = match AudioRuntime::new() {
             Ok(audio) => audio,
             Err(error) => {
@@ -262,7 +257,7 @@ pub fn run() {
             }
         };
 
-        if let Err(error) = audio.start_engine(engine2.clone()) {
+        if let Err(error) = audio.start_engine(engine_rx) {
             eprintln!("audio engine start failed: {error}");
             return;
         }
@@ -270,34 +265,32 @@ pub fn run() {
         while let Ok(event) = trigger_rx.recv() {
             match event {
                 QueuedAudioEvent::Note(note) => {
-                    if let Ok(mut eng) = engine2.lock() {
-                        eng.note_on(
-                            note.instrument_slot,
-                            note.note,
-                            note.velocity,
-                            note.duration_ms,
-                        );
-                    }
+                    let _ = engine_tx.send(EngineEvent::NoteOn {
+                        instrument_slot: note.instrument_slot,
+                        note: note.note,
+                        velocity: note.velocity,
+                        duration_ms: note.duration_ms,
+                    });
                 }
                 QueuedAudioEvent::Cc {
                     instrument_slot,
                     controller,
                     value,
                 } => {
-                    if let Ok(mut eng) = engine2.lock() {
-                        if controller == 120 || controller == 123 {
-                            eng.all_notes_off();
-                        }
-                        eng.cc(instrument_slot, controller, value);
-                    }
+                    let _ = engine_tx.send(EngineEvent::Cc {
+                        instrument_slot,
+                        controller,
+                        value,
+                    });
                 }
                 QueuedAudioEvent::NoteOff {
                     instrument_slot,
                     note,
                 } => {
-                    if let Ok(mut eng) = engine2.lock() {
-                        eng.note_off(instrument_slot, note);
-                    }
+                    let _ = engine_tx.send(EngineEvent::NoteOff {
+                        instrument_slot,
+                        note,
+                    });
                 }
                 QueuedAudioEvent::Sample { path, gain, rate } => {
                     if let Ok(file) = std::fs::File::open(&path) {
@@ -311,6 +304,12 @@ pub fn run() {
                         }
                     }
                 }
+                QueuedAudioEvent::SetInstruments(config) => {
+                    let _ = engine_tx.send(EngineEvent::SetInstruments(config));
+                }
+                QueuedAudioEvent::SetVoiceStealingMode(mode) => {
+                    let _ = engine_tx.send(EngineEvent::SetVoiceStealingMode(mode));
+                }
             }
         }
     });
@@ -318,7 +317,6 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState {
             trigger_tx,
-            engine,
             synth_slots: Mutex::new([true; INSTRUMENT_SLOT_COUNT]),
             sample_cfgs: Mutex::new(std::array::from_fn(|_| SampleSlotConfig::default())),
             midi_out: Mutex::new(None),
