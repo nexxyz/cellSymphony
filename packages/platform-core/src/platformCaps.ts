@@ -6,6 +6,7 @@ export type PlatformCapabilities = {
   partCount: number;
   instrumentCount: number;
   sampleSlotCount: number;
+  busCount: number;
 };
 
 function toPositiveInt(value: unknown, key: keyof PlatformCapabilities): number {
@@ -23,7 +24,8 @@ export function validatePlatformCapabilities(raw: unknown): PlatformCapabilities
     gridHeight: toPositiveInt(source.gridHeight, "gridHeight"),
     partCount: toPositiveInt(source.partCount, "partCount"),
     instrumentCount: toPositiveInt(source.instrumentCount, "instrumentCount"),
-    sampleSlotCount: toPositiveInt(source.sampleSlotCount, "sampleSlotCount")
+    sampleSlotCount: toPositiveInt(source.sampleSlotCount, "sampleSlotCount"),
+    busCount: toPositiveInt(source.busCount, "busCount")
   };
 }
 

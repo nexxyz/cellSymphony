@@ -185,10 +185,37 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
         midiEngine: {
           ...(f as any).midiEngine,
           ...((s as any).midiEngine ?? {})
+        },
+        mixer: {
+          route: (() => {
+            const raw = String((s as any).mixer?.route ?? (f as any).mixer?.route ?? "direct");
+            if (raw === "direct") return "direct";
+            const m = /^bus_(\d+)$/.exec(raw);
+            if (!m) return "direct";
+            const idx = Number(m[1]);
+            if (!Number.isFinite(idx) || idx < 1 || idx > PLATFORM_CAPS.busCount) return "direct";
+            return `bus_${idx}`;
+          })(),
+          panPos: Math.max(0, Math.min(PLATFORM_CAPS.gridWidth - 1, Number((s as any).mixer?.panPos ?? (f as any).mixer?.panPos ?? Math.floor(PLATFORM_CAPS.gridWidth / 2))))
         }
       });
     }
     return out;
+  };
+
+  const sanitizeMixer = (incoming: any): any => {
+    const factoryMixer = (factory.runtimeConfig as any).mixer;
+    const sourceBuses = Array.isArray(incoming?.buses) ? incoming.buses : (Array.isArray(factoryMixer?.buses) ? factoryMixer.buses : []);
+    const buses: any[] = [];
+    for (let i = 0; i < PLATFORM_CAPS.busCount; i += 1) {
+      const src = sourceBuses[i] ?? {};
+      buses.push({
+        slot1: src.slot1 === "none" ? "none" : "none",
+        slot2: src.slot2 === "none" ? "none" : "none",
+        panPos: Math.max(0, Math.min(PLATFORM_CAPS.gridWidth - 1, Number(src.panPos ?? Math.floor(PLATFORM_CAPS.gridWidth / 2))))
+      });
+    }
+    return { buses };
   };
 
   const mergedRuntime: RuntimeConfig = {
@@ -215,7 +242,8 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     },
     activePartIndex: clampPartIndex(rt.activePartIndex ?? (factory.runtimeConfig as any).activePartIndex ?? 0),
     parts: Array.isArray(rt.parts) ? rt.parts : Array.isArray((factory.runtimeConfig as any).parts) ? (factory.runtimeConfig as any).parts : [],
-    instruments: sanitizeInstruments(rt.instruments)
+    instruments: sanitizeInstruments(rt.instruments),
+    mixer: sanitizeMixer(rt.mixer)
   };
 
   const voiceStealingMode = (mergedRuntime as any).sound?.voiceStealingMode;

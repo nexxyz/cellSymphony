@@ -69,6 +69,14 @@ export type InstrumentSlotConfig = {
     velocity: number;
     durationMs: number;
   };
+  mixer?: { route: string; panPos: number };
+};
+
+export type BusEffectType = "none";
+export type FxBusConfig = {
+  slot1: BusEffectType;
+  slot2: BusEffectType;
+  panPos: number;
 };
 
 export type PartSenseConfig = {
@@ -110,6 +118,7 @@ export type RuntimeConfig = {
   pitch: PitchSettings; x: AxisModConfig; y: AxisModConfig;
   activePartIndex: number; parts: PartConfig[];
   instruments: InstrumentSlotConfig[];
+  mixer?: { buses: FxBusConfig[] };
 };
 
 export type ActionSpec =

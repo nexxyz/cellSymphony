@@ -4,6 +4,8 @@ import type { PartConfig, PlatformState, RuntimeConfig } from "./platformTypes";
 import { SYNTH_PRESETS } from "./synthPresets";
 import { PLATFORM_CAPS } from "./platformCaps";
 
+const DEFAULT_PAN_POS = Math.floor(PLATFORM_CAPS.gridWidth / 2);
+
 export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
   const defaultMapping = loadDefaultMappingConfig();
   const instruments = Array.from({ length: PLATFORM_CAPS.instrumentCount }, (_, idx) => ({
@@ -26,7 +28,8 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       filterEnv: structuredClone((SYNTH_PRESETS[idx % 8]!.synth as any).filterEnv),
       assignments: []
     },
-    midiEngine: { velocity: 100, durationMs: 120 }
+    midiEngine: { velocity: 100, durationMs: 120 },
+    mixer: { route: "direct" as const, panPos: DEFAULT_PAN_POS }
   }));
 
   const runtimeConfig: RuntimeConfig = {
@@ -70,7 +73,10 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
     },
     activePartIndex: 0,
     parts: [],
-    instruments
+    instruments,
+    mixer: {
+      buses: Array.from({ length: PLATFORM_CAPS.busCount }, () => ({ slot1: "none" as const, slot2: "none" as const, panPos: DEFAULT_PAN_POS }))
+    }
   };
   const makePart = (idx: number): PartConfig => ({
     l1: {

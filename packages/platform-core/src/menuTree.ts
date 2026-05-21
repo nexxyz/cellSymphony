@@ -1,7 +1,7 @@
 import { listBehaviorIds, type BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { MenuNode, PlatformState } from "./index";
 import { SYNTH_PRESETS } from "./synthPresets";
-import { clampSampleSlotIndex, instrumentIndexOptions, partIndexOptions, sampleSlotOptions } from "./platformCaps";
+import { clampSampleSlotIndex, instrumentIndexOptions, partIndexOptions, PLATFORM_CAPS, sampleSlotOptions } from "./platformCaps";
 
 type MenuTreeDeps<TState> = {
   resolveBehavior: (id: string) => BehaviorEngine<any, any>;
@@ -316,10 +316,31 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
                       { kind: "bool", label: "Enabled", key: `${prefix}.midi.enabled` },
                       { kind: "number", label: "Channel", key: `${prefix}.midi.channel`, min: 0, max: 15, step: 1 }
                     ]
+                  },
+                  {
+                    kind: "group",
+                    label: "Mixer",
+                    children: [
+                      { kind: "enum", label: "Route", key: `${prefix}.mixer.route`, options: ["direct", ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, i) => `bus_${i + 1}`)] },
+                      { kind: "number", label: "Pan Pos", key: `${prefix}.mixer.panPos`, min: 0, max: PLATFORM_CAPS.gridWidth - 1, step: 1 }
+                    ]
                   }
                 ]
               } satisfies MenuNode;
             })
+          },
+          {
+            kind: "group",
+            label: "FX Buses",
+            children: Array.from({ length: PLATFORM_CAPS.busCount }, (_, busIdx) => ({
+              kind: "group",
+              label: `Bus ${busIdx + 1}`,
+              children: [
+                { kind: "enum", label: "Slot 1", key: `mixer.buses.${busIdx}.slot1`, options: ["none"] },
+                { kind: "enum", label: "Slot 2", key: `mixer.buses.${busIdx}.slot2`, options: ["none"] },
+                { kind: "number", label: "Pan Pos", key: `mixer.buses.${busIdx}.panPos`, min: 0, max: PLATFORM_CAPS.gridWidth - 1, step: 1 }
+              ]
+            }))
           }
         ]
       },

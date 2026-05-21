@@ -172,7 +172,22 @@ L3: Voice
     │   └── MIDI (group)
     │       ├── Enabled: [on | off]       default off
     │       └── Channel: [1..16]
+    │   └── Mixer (group)
+    │       ├── Route: [direct | bus_1..bus_N] default direct (N from platform capabilities)
+    │       └── Pan Pos: [0..gridWidth-1] quantized
+    └── FX Buses (group)
+        ├── Bus 1..4 (group)
+        │   ├── Slot 1: [None] default None
+        │   ├── Slot 2: [None] default None
+        │   └── Pan Pos: [0..gridWidth-1] quantized
 ```
+
+Routing semantics:
+
+- Instrument `Route=direct` sends post-fader output to main mix using instrument `Pan Pos`.
+- Instrument `Route=bus_n` sends post-fader output to the selected bus (exclusive send).
+- Each bus runs `Slot 1` then `Slot 2` in order; with `None` selected this is passthrough.
+- Bus output is then panned by bus `Pan Pos` and summed to main mix.
 
 Sample assignment mode semantics:
 
