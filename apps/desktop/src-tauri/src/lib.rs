@@ -1,5 +1,4 @@
 mod audio_config;
-mod audio_source;
 mod midi;
 mod samples;
 
@@ -7,8 +6,8 @@ use audio_config::{
     build_audio_slot_configs, parse_voice_stealing_mode, synth_payload, AudioInstrumentsConfig,
     AudioRuntimePolicyConfig,
 };
-use audio_source::{EngineEvent, EngineSource};
 use midi::{midi_list_inputs, midi_list_outputs, midi_select_input, midi_select_output, midi_send};
+use rodio_engine_source::{EngineEvent, EngineSource};
 use samples::{resolve_sample_file, sample_list, sample_preview};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Mutex;

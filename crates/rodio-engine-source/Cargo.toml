@@ -1,0 +1,11 @@
+[package]
+name = "rodio-engine-source"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+realtime-engine = { path = "../realtime-engine" }
+rodio = "0.20"

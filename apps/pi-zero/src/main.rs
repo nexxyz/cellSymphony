@@ -6,16 +6,21 @@ use cellsymphony_hal::{
     pinmap::*,
 };
 use midir::MidiInput;
+use realtime_engine::synth::{
+    default_synth_config, InstrumentMixerConfig, InstrumentSlotConfig, InstrumentsConfig,
+    DEFAULT_PAN_POSITIONS, INSTRUMENT_SLOT_COUNT,
+};
 use rodio::{OutputStream, Sink};
+use rodio_engine_source::{EngineEvent, EngineSource};
 use std::sync::mpsc;
-use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
 /// Audio output manager using rodio (works when compiled natively on Pi)
 struct AudioManager {
     _stream: OutputStream, // Keep alive
-    sink: Mutex<Sink>,
+    _sink: Sink,
+    engine_tx: mpsc::Sender<EngineEvent>,
 }
 
 impl AudioManager {
@@ -23,36 +28,71 @@ impl AudioManager {
         let (stream, handle) = OutputStream::try_default()
             .map_err(|e| format!("Failed to create audio stream: {}", e))?;
         let sink = Sink::try_new(&handle).map_err(|e| format!("Failed to create sink: {}", e))?;
+        let (engine_tx, engine_rx) = mpsc::channel::<EngineEvent>();
+        sink.append(EngineSource::new(engine_rx, 48_000));
+        sink.play();
+        let _ = engine_tx.send(EngineEvent::SetInstruments(default_pi_instruments()));
         Ok(Self {
             _stream: stream,
-            sink: Mutex::new(sink),
+            _sink: sink,
+            engine_tx,
         })
     }
 
-    fn play_note(&self, note: u8, velocity: u8, duration_ms: u32) -> Result<(), String> {
-        use rodio::Source;
-        let freq_hz = 440.0_f32 * 2.0_f32.powf((note as f32 - 69.0) / 12.0);
-        let amp = (velocity as f32 / 127.0).clamp(0.0, 1.0) * 0.3;
-        let source = rodio::source::SineWave::new(freq_hz)
-            .take_duration(Duration::from_millis(u64::from(duration_ms)))
-            .amplify(amp);
-
-        let sink = self.sink.lock().unwrap();
-        sink.append(source);
-        Ok(())
+    fn note_on(&self, slot: u8, note: u8, velocity: u8, duration_ms: u32) -> Result<(), String> {
+        self.engine_tx
+            .send(EngineEvent::NoteOn {
+                instrument_slot: slot.min((INSTRUMENT_SLOT_COUNT - 1) as u8),
+                note: note.min(127),
+                velocity: velocity.clamp(1, 127),
+                duration_ms: duration_ms.clamp(10, 86_400_000),
+            })
+            .map_err(|e| format!("audio event send failed: {e}"))
     }
 
-    fn stop(&self) {
-        let sink = self.sink.lock().unwrap();
-        sink.stop();
+    fn note_off(&self, slot: u8, note: u8) -> Result<(), String> {
+        self.engine_tx
+            .send(EngineEvent::NoteOff {
+                instrument_slot: slot.min((INSTRUMENT_SLOT_COUNT - 1) as u8),
+                note: note.min(127),
+            })
+            .map_err(|e| format!("audio event send failed: {e}"))
+    }
+
+    fn cc(&self, slot: u8, cc: u8, value: u8) -> Result<(), String> {
+        self.engine_tx
+            .send(EngineEvent::Cc {
+                instrument_slot: slot.min((INSTRUMENT_SLOT_COUNT - 1) as u8),
+                controller: cc,
+                value,
+            })
+            .map_err(|e| format!("audio event send failed: {e}"))
     }
 }
 
 /// MIDI message for cross-thread communication
 enum MidiMessage {
-    NoteOn { note: u8, velocity: u8 },
-    NoteOff { note: u8 },
-    CC { cc: u8, value: u8 },
+    NoteOn { channel: u8, note: u8, velocity: u8 },
+    NoteOff { channel: u8, note: u8 },
+    CC { channel: u8, cc: u8, value: u8 },
+}
+
+fn default_pi_instruments() -> InstrumentsConfig {
+    let synth = default_synth_config();
+    InstrumentsConfig {
+        instruments: (0..INSTRUMENT_SLOT_COUNT)
+            .map(|idx| InstrumentSlotConfig {
+                kind: "synth".to_string(),
+                synth,
+                mixer: Some(InstrumentMixerConfig {
+                    route: "direct".to_string(),
+                    pan_pos: idx.min(DEFAULT_PAN_POSITIONS - 1),
+                }),
+            })
+            .collect(),
+        mixer: None,
+        pan_positions: DEFAULT_PAN_POSITIONS,
+    }
 }
 
 fn main() {
@@ -108,15 +148,21 @@ fn main() {
                     move |_timestamp, message, _| {
                         if message.len() >= 3 {
                             let status = message[0] & 0xF0;
+                            let channel = message[0] & 0x0F;
                             let data1 = message[1];
                             let data2 = message[2];
                             let msg = match status {
                                 0x90 if data2 > 0 => MidiMessage::NoteOn {
+                                    channel,
                                     note: data1,
                                     velocity: data2,
                                 },
-                                0x90 | 0x80 => MidiMessage::NoteOff { note: data1 },
+                                0x90 | 0x80 => MidiMessage::NoteOff {
+                                    channel,
+                                    note: data1,
+                                },
                                 0xB0 => MidiMessage::CC {
+                                    channel,
                                     cc: data1,
                                     value: data2,
                                 },
@@ -136,8 +182,8 @@ fn main() {
 
     // Test tone on startup
     if let Some(ref audio) = audio {
-        let _ = audio.play_note(60, 100, 500);
-        println!("Test tone played (C4)");
+        let _ = audio.note_on(0, 60, 100, 500);
+        println!("Synth test note played (C4)");
     }
 
     // Event channel for encoder interrupts
@@ -170,17 +216,30 @@ fn main() {
         // Handle MIDI messages (sent from callback via channel)
         while let Ok(msg) = midi_rx.try_recv() {
             match msg {
-                MidiMessage::NoteOn { note, velocity } => {
-                    println!("MIDI Note On: {} vel {}", note, velocity);
+                MidiMessage::NoteOn {
+                    channel,
+                    note,
+                    velocity,
+                } => {
+                    println!(
+                        "MIDI Note On: ch {} note {} vel {}",
+                        channel, note, velocity
+                    );
                     if let Some(ref audio) = audio {
-                        let _ = audio.play_note(note, velocity, 1000);
+                        let _ = audio.note_on(channel, note, velocity, 1000);
                     }
                 }
-                MidiMessage::NoteOff { note } => {
-                    println!("MIDI Note Off: {}", note);
+                MidiMessage::NoteOff { channel, note } => {
+                    println!("MIDI Note Off: ch {} note {}", channel, note);
+                    if let Some(ref audio) = audio {
+                        let _ = audio.note_off(channel, note);
+                    }
                 }
-                MidiMessage::CC { cc, value } => {
-                    println!("MIDI CC: {} = {}", cc, value);
+                MidiMessage::CC { channel, cc, value } => {
+                    println!("MIDI CC: ch {} cc {} = {}", channel, cc, value);
+                    if let Some(ref audio) = audio {
+                        let _ = audio.cc(channel, cc, value);
+                    }
                 }
             }
         }
@@ -207,7 +266,7 @@ fn main() {
                     let note = (y * 8 + x) as u8 + 60; // C4 + position
                     println!("Grid ({}, {}) pressed -> Note {}", x, y, note);
                     if let Some(ref audio) = audio {
-                        let _ = audio.play_note(note, 100, 500);
+                        let _ = audio.note_on(0, note, 100, 500);
                     }
                 }
             }

@@ -126,7 +126,7 @@ aseqdump -p <client>:<port>
 
 ✅ Hardware initialization (I2C, OLED, NeoTrellis, NeoKey, Encoders)
 ✅ Main loop with 8ms ticks (125Hz)
-✅ Grid press → triggers note (when audio is working)
+✅ Grid press and MIDI note input route through the realtime synth engine
 ✅ Encoder events logged
 ⚠️ Audio output: Requires on-device verification with the PCM5102/I2S DAC
 ⚠️ MIDI input: Requires on-device verification with the target USB MIDI hardware

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/realtime-engine",
+    "crates/rodio-engine-source",
     "crates/hal",
     "apps/desktop/src-tauri",
     "apps/pi-zero",

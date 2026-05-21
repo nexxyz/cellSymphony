@@ -339,6 +339,7 @@ dependencies = [
  "midir",
  "realtime-engine",
  "rodio",
+ "rodio-engine-source",
  "serde",
  "serde_json",
  "tauri",
@@ -364,6 +365,7 @@ dependencies = [
  "midir",
  "realtime-engine",
  "rodio",
+ "rodio-engine-source",
  "simple_logger",
 ]
 
@@ -3003,6 +3005,14 @@ dependencies = [
  "hound",
  "lewton",
  "symphonia",
+]
+
+[[package]]
+name = "rodio-engine-source"
+version = "0.1.0"
+dependencies = [
+ "realtime-engine",
+ "rodio",
 ]
 
 [[package]]
