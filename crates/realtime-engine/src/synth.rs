@@ -1,5 +1,6 @@
 mod engine;
 mod fx;
+mod fx_params;
 #[cfg(test)]
 mod tests;
 mod types;

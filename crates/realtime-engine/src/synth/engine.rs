@@ -1,4 +1,5 @@
-use super::fx::{bus_fx_state_from_cfg, process_bus_slot, BusFxState};
+use super::fx::{bus_fx_state_from_params, process_bus_slot, BusFxState};
+use super::fx_params::{compile_bus_fx_params, BusFxParams};
 use super::types::*;
 use std::f32::consts::PI;
 
@@ -12,7 +13,7 @@ pub struct SynthEngine {
     slot_pan_pos: [usize; INSTRUMENT_SLOT_COUNT],
     bus_pan_pos: Vec<usize>,
     bus_mono_scratch: Vec<f32>,
-    bus_slot_cfgs: Vec<[BusSlotConfig; BUS_SLOTS_PER_BUS]>,
+    bus_slot_params: Vec<[BusFxParams; BUS_SLOTS_PER_BUS]>,
     bus_slot_state: Vec<[BusFxState; BUS_SLOTS_PER_BUS]>,
     pan_positions: usize,
     voice_stealing_mode: VoiceStealingMode,
@@ -32,7 +33,7 @@ impl SynthEngine {
             slot_pan_pos: [DEFAULT_PAN_POSITIONS / 2; INSTRUMENT_SLOT_COUNT],
             bus_pan_pos: Vec::new(),
             bus_mono_scratch: Vec::new(),
-            bus_slot_cfgs: Vec::new(),
+            bus_slot_params: Vec::new(),
             bus_slot_state: Vec::new(),
             pan_positions: DEFAULT_PAN_POSITIONS,
             voice_stealing_mode: VoiceStealingMode::Balanced,
@@ -70,7 +71,7 @@ impl SynthEngine {
         }
         self.bus_pan_pos.clear();
         self.bus_mono_scratch.clear();
-        self.bus_slot_cfgs.clear();
+        self.bus_slot_params.clear();
         self.bus_slot_state.clear();
         if let Some(mixer) = cfg.mixer {
             for bus in mixer.buses.into_iter() {
@@ -81,9 +82,11 @@ impl SynthEngine {
                 for (j, slot) in bus.slots.into_iter().enumerate().take(BUS_SLOTS_PER_BUS) {
                     cfgs[j] = slot;
                 }
+                let params: [BusFxParams; BUS_SLOTS_PER_BUS] =
+                    std::array::from_fn(|j| compile_bus_fx_params(&cfgs[j]));
                 let states: [BusFxState; BUS_SLOTS_PER_BUS] =
-                    std::array::from_fn(|j| bus_fx_state_from_cfg(&cfgs[j], self.sample_rate));
-                self.bus_slot_cfgs.push(cfgs);
+                    std::array::from_fn(|j| bus_fx_state_from_params(&params[j], self.sample_rate));
+                self.bus_slot_params.push(params);
                 self.bus_slot_state.push(states);
             }
         }
@@ -262,20 +265,18 @@ impl SynthEngine {
         for (bus_idx, bus_sample) in bus_mono.iter().enumerate() {
             let mut processed = *bus_sample;
             let mut pan_override: Option<f32> = None;
-            if let (Some(cfgs), Some(states)) = (
-                self.bus_slot_cfgs.get(bus_idx),
+            if let (Some(params), Some(states)) = (
+                self.bus_slot_params.get(bus_idx),
                 self.bus_slot_state.get_mut(bus_idx),
             ) {
                 for j in 0..BUS_SLOTS_PER_BUS {
                     processed = process_bus_slot(
-                        &cfgs[j],
+                        &params[j],
                         &mut states[j],
                         processed,
-                        bus_idx,
                         &slot_out,
                         &bus_mono,
                         self.sample_rate,
-                        self.sample_clock,
                     );
                     if let BusFxState::AutoPan { pos, .. } = states[j] {
                         pan_override = Some(pos.clamp(0.0, 1.0));
