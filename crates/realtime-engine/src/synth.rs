@@ -108,13 +108,35 @@ pub struct InstrumentMixerConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BusSlotConfig {
-    #[serde(default = "default_bus_slot_type")]
-    pub kind: String,
+#[serde(untagged)]
+pub enum BusSlotConfig {
+    Kind(String),
+    Config {
+        #[serde(rename = "type", default = "default_bus_slot_type")]
+        kind: String,
+        #[serde(default)]
+        params: std::collections::BTreeMap<String, serde_json::Value>,
+    },
 }
 
 fn default_bus_slot_type() -> String {
     "none".to_string()
+}
+
+impl BusSlotConfig {
+    fn kind_str(&self) -> &str {
+        match self {
+            BusSlotConfig::Kind(s) => s.as_str(),
+            BusSlotConfig::Config { kind, .. } => kind.as_str(),
+        }
+    }
+
+    fn params(&self) -> Option<&std::collections::BTreeMap<String, serde_json::Value>> {
+        match self {
+            BusSlotConfig::Kind(_) => None,
+            BusSlotConfig::Config { params, .. } => Some(params),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -463,7 +485,7 @@ impl SynthEngine {
                     .push(bus.pan_pos.min(self.pan_positions - 1));
                 let mut kinds = [0_u8; BUS_SLOTS_PER_BUS];
                 for (j, slot) in bus.slots.into_iter().enumerate().take(BUS_SLOTS_PER_BUS) {
-                    kinds[j] = if slot.kind == "none" { 0 } else { 0 };
+                    kinds[j] = if slot.kind_str() == "none" { 0 } else { 0 };
                 }
                 self.bus_slot_kinds.push(kinds);
             }

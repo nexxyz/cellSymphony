@@ -10,6 +10,7 @@ use realtime_engine::synth::{
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use serde::Deserialize;
 use serde::Serialize;
+use serde_json;
 use std::fs;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -215,9 +216,9 @@ struct AudioMixerConfig {
 #[serde(rename_all = "camelCase")]
 struct AudioBusConfig {
     #[serde(default)]
-    slot1: Option<String>,
+    slot1: Option<serde_json::Value>,
     #[serde(default)]
-    slot2: Option<String>,
+    slot2: Option<serde_json::Value>,
     #[serde(default)]
     pan_pos: Option<usize>,
 }
@@ -687,12 +688,14 @@ fn audio_set_instruments(
                 .iter()
                 .map(|b| BusConfig {
                     slots: vec![
-                        BusSlotConfig {
-                            kind: b.slot1.clone().unwrap_or_else(|| "none".to_string()),
-                        },
-                        BusSlotConfig {
-                            kind: b.slot2.clone().unwrap_or_else(|| "none".to_string()),
-                        },
+                        b.slot1
+                            .clone()
+                            .and_then(|v| serde_json::from_value::<BusSlotConfig>(v).ok())
+                            .unwrap_or_else(|| BusSlotConfig::Kind("none".to_string())),
+                        b.slot2
+                            .clone()
+                            .and_then(|v| serde_json::from_value::<BusSlotConfig>(v).ok())
+                            .unwrap_or_else(|| BusSlotConfig::Kind("none".to_string())),
                     ],
                     pan_pos: b.pan_pos.unwrap_or(4),
                 })
