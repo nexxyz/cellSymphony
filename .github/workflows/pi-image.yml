@@ -18,13 +18,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           target: aarch64-unknown-linux-gnu
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@v2.9.1
       - name: Install cross (prebuilt binary)
         run: |
           curl -sSL https://github.com/cross-rs/cross/releases/download/v0.2.5/cross-x86_64-unknown-linux-gnu.tar.gz | tar xz -C /usr/local/bin
@@ -32,7 +32,7 @@ jobs:
       - name: Build Pi app with cross
         run: cross build --target aarch64-unknown-linux-gnu -p cellsymphony-pi
       - name: Upload Pi binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cellsymphony-pi-aarch64
           path: target/aarch64-unknown-linux-gnu/debug/cellsymphony-pi
@@ -45,10 +45,10 @@ jobs:
     timeout-minutes: 360
     steps:
       - name: Checkout cellSymphony repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Download cellsymphony-pi binary artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: cellsymphony-pi-aarch64
           path: tools/pi-image/stage4-cellsymphony/files/root/usr/local/bin/
@@ -88,7 +88,7 @@ jobs:
         run: sudo ./build.sh
 
       - name: Upload generated image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: cellsymphony-pi-zero-2w-image
           path: pi-gen/deploy/*.zip
