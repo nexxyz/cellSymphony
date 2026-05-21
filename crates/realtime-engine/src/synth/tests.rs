@@ -1,8 +1,9 @@
 use super::{
     default_synth_config, BusConfig, BusSlotConfig, FilterType, InstrumentMixerConfig,
-    InstrumentSlotConfig, InstrumentsConfig, MixerConfig, SynthEngine, DEFAULT_PAN_POSITIONS,
-    INSTRUMENT_SLOT_COUNT,
+    InstrumentSlotConfig, InstrumentsConfig, MixerConfig, SampleBankConfig, SampleBuffer,
+    SampleSlotConfig, SynthEngine, DEFAULT_PAN_POSITIONS, INSTRUMENT_SLOT_COUNT,
 };
+use std::collections::BTreeMap;
 
 #[test]
 fn generates_samples() {
@@ -70,6 +71,71 @@ fn routes_through_dynamic_bus_count_without_allocating_bus_vec() {
         assert!(left.is_finite());
         assert!(right.is_finite());
     }
+}
+
+#[test]
+fn sample_instrument_routes_through_bus_fx_delay_tail() {
+    let mut engine = SynthEngine::new(48_000);
+    engine.set_instruments(InstrumentsConfig {
+        instruments: vec![InstrumentSlotConfig {
+            kind: "sample".to_string(),
+            synth: default_synth_config(),
+            mixer: Some(InstrumentMixerConfig {
+                route: "bus_1".to_string(),
+                pan_pos: DEFAULT_PAN_POSITIONS / 2,
+            }),
+        }],
+        mixer: Some(MixerConfig {
+            buses: vec![BusConfig {
+                slots: vec![BusSlotConfig::Config {
+                    kind: "delay".to_string(),
+                    params: BTreeMap::from([
+                        ("timeMs".to_string(), serde_json::json!(1.0)),
+                        ("feedback".to_string(), serde_json::json!(0.0)),
+                        ("mixPct".to_string(), serde_json::json!(100.0)),
+                    ]),
+                }],
+                pan_pos: DEFAULT_PAN_POSITIONS / 2,
+            }],
+        }),
+        pan_positions: DEFAULT_PAN_POSITIONS,
+    });
+    engine.set_sample_banks(vec![sample_bank(vec![1.0, 0.0, 0.0, 0.0])]);
+    engine.note_on(0, 36, 127, 1_000);
+
+    for _ in 0..47 {
+        let _ = engine.next_stereo_sample();
+    }
+    let before_tail = engine.next_sample().abs();
+    let tail = engine.next_sample().abs();
+
+    assert!(before_tail < 1.0e-6);
+    assert!(
+        tail > 0.1,
+        "sample routed through delay bus should produce a delayed tail"
+    );
+}
+
+#[test]
+fn duck_reduces_target_bus_when_source_instrument_is_active() {
+    let mut dry = duck_test_engine(false);
+    let mut ducked = duck_test_engine(true);
+    dry.note_on(0, 36, 127, 1_000);
+    dry.note_on(1, 36, 127, 1_000);
+    ducked.note_on(0, 36, 127, 1_000);
+    ducked.note_on(1, 36, 127, 1_000);
+
+    let mut dry_sum = 0.0;
+    let mut ducked_sum = 0.0;
+    for _ in 0..256 {
+        dry_sum += dry.next_sample().abs();
+        ducked_sum += ducked.next_sample().abs();
+    }
+
+    assert!(
+        ducked_sum < dry_sum * 0.8,
+        "duck FX should audibly attenuate the target bus"
+    );
 }
 
 #[test]
@@ -227,4 +293,72 @@ fn long_running_event_stream_stays_finite() {
             assert!((-1.0..=1.0).contains(&s));
         }
     }
+}
+
+fn sample_bank(samples: Vec<f32>) -> SampleBankConfig {
+    let mut bank = SampleBankConfig::default();
+    bank.slots[0] = SampleSlotConfig {
+        buffer: Some(SampleBuffer {
+            samples: samples.into(),
+            channels: 1,
+            sample_rate: 48_000,
+        }),
+    };
+    bank
+}
+
+fn duck_test_engine(with_duck: bool) -> SynthEngine {
+    let mut engine = SynthEngine::new(48_000);
+    let slot1 = if with_duck {
+        BusSlotConfig::Config {
+            kind: "duck".to_string(),
+            params: BTreeMap::from([
+                ("source".to_string(), serde_json::json!("I1")),
+                ("threshold".to_string(), serde_json::json!(0.01)),
+                ("amountPct".to_string(), serde_json::json!(100.0)),
+                ("attackMs".to_string(), serde_json::json!(1.0)),
+                ("releaseMs".to_string(), serde_json::json!(20.0)),
+            ]),
+        }
+    } else {
+        BusSlotConfig::Kind("none".to_string())
+    };
+    engine.set_instruments(InstrumentsConfig {
+        instruments: vec![
+            InstrumentSlotConfig {
+                kind: "sample".to_string(),
+                synth: default_synth_config(),
+                mixer: Some(InstrumentMixerConfig {
+                    route: "bus_2".to_string(),
+                    pan_pos: DEFAULT_PAN_POSITIONS / 2,
+                }),
+            },
+            InstrumentSlotConfig {
+                kind: "sample".to_string(),
+                synth: default_synth_config(),
+                mixer: Some(InstrumentMixerConfig {
+                    route: "bus_1".to_string(),
+                    pan_pos: DEFAULT_PAN_POSITIONS / 2,
+                }),
+            },
+        ],
+        mixer: Some(MixerConfig {
+            buses: vec![
+                BusConfig {
+                    slots: vec![slot1],
+                    pan_pos: DEFAULT_PAN_POSITIONS / 2,
+                },
+                BusConfig {
+                    slots: vec![BusSlotConfig::Kind("none".to_string())],
+                    pan_pos: DEFAULT_PAN_POSITIONS / 2,
+                },
+            ],
+        }),
+        pan_positions: DEFAULT_PAN_POSITIONS,
+    });
+    engine.set_sample_banks(vec![
+        sample_bank(vec![1.0; 512]),
+        sample_bank(vec![0.5; 512]),
+    ]);
+    engine
 }

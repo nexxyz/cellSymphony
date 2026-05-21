@@ -190,6 +190,7 @@ Routing semantics:
 
 - Instrument `Route=direct` sends post-fader output to main mix using instrument `Pan Pos`.
 - Instrument `Route=bus_n` sends post-fader output to the selected bus (exclusive send).
+- Internal synth and sample instruments use the same route/pan/bus-FX mixer path; MIDI instruments emit external MIDI and are not processed by audio FX.
 - Each bus runs `Slot 1` then `Slot 2` in order; with `None` selected this is passthrough.
 - Selecting a slot `Type` initializes that effect's editable parameter defaults immediately; loaded presets/defaults with missing or invalid effect params are repaired to those defaults.
 - Bus output is then panned by bus `Pan Pos` and summed to main mix.
@@ -207,6 +208,7 @@ Sample assignment mode semantics:
 - Shift + cell applies the same toggle/step to the whole row
 - Shift + double cell applies the same toggle/step to the whole column
 - In `Choose Sample`, Space previews the highlighted wav file (folders and `..` are no-op)
+- Sample preview is a direct audition path; assigned sample playback from grid/musical events follows instrument route/pan and bus FX.
 
 Part runtime behavior:
 

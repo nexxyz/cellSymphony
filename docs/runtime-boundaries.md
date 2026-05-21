@@ -27,12 +27,18 @@ Authoritative menu/control behavior spec: `docs/menu-and-controls-spec.md`.
   - desktop audio sink maps musical events to native Tauri/rodio
   - MIDI output via `tauriMidi.ts` (Tauri→midir)
 
+- Realtime audio engine (`crates/realtime-engine`, `crates/rodio-engine-source`)
+  - owns all internal musical audio rendering, instrument route/pan, bus sends, bus FX, sidechain ducking, and final stereo mix
+  - receives platform-decoded sample buffers and control events; it does not perform file I/O or sample decoding in the audio callback
+  - is the only path for synth/sample instrument audio before device output
+
 ## Dependency Rules
 
 - UI may import runtime modules and type contracts only.
 - UI must not call `tick`, `routeInput`, or native audio/MIDI bridges directly.
 - Runtime may import core and output/input adapters.
 - Core packages must stay platform-agnostic.
+- Platform adapters must not create independent musical audio sinks that bypass the realtime engine mixer. Direct audio playback is allowed only for explicitly documented preview/audition paths.
 
 ## Data Flow
 
@@ -41,6 +47,14 @@ Authoritative menu/control behavior spec: `docs/menu-and-controls-spec.md`.
 3. Runtime scheduler triggers tick -> `platform-core` processing
 4. Runtime publishes snapshot -> UI render (OLED + NeoKey LEDs)
 5. Runtime publishes musical events -> output adapters (audio/MIDI)
+
+## Audio Routing Contract
+
+- Internal synth and sample instruments must enter the realtime engine before audio output.
+- Instrument `Route=direct` bypasses bus FX and pans directly into the main mix.
+- Instrument `Route=bus_n` enters the selected bus, runs bus slot FX in order, then pans into the main mix.
+- MIDI instruments emit external MIDI/control data and are not an internal audio source unless a future audio return path is added.
+- Sample browser preview is an audition path only and may bypass the mixer; grid/musical sample playback must not.
 
 ## Grid Coordinate Contract
 

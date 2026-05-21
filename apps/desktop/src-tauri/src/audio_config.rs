@@ -1,9 +1,13 @@
 use crate::SampleSlotConfig;
 use realtime_engine::synth::{
     BusConfig, BusSlotConfig, InstrumentMixerConfig, InstrumentSlotConfig, InstrumentsConfig,
-    MixerConfig, SynthConfig, VoiceStealingMode, INSTRUMENT_SLOT_COUNT,
+    MixerConfig, SampleBankConfig, SampleBuffer, SampleSlotConfig as EngineSampleSlotConfig,
+    SynthConfig, VoiceStealingMode, INSTRUMENT_SLOT_COUNT, SAMPLE_SLOTS_PER_INSTRUMENT,
 };
+use rodio::Source;
 use serde::Deserialize;
+use std::fs::File;
+use std::io::BufReader;
 
 #[derive(Deserialize)]
 pub struct AudioInstrumentsConfig {
@@ -139,6 +143,55 @@ pub fn build_audio_slot_configs(
     (synth_slots, sample_cfgs)
 }
 
+pub fn sample_banks(
+    config: &AudioInstrumentsConfig,
+    resolve_sample: impl Fn(&str) -> Option<String>,
+    mut load_sample: impl FnMut(&str) -> Option<SampleBuffer>,
+) -> Vec<SampleBankConfig> {
+    config
+        .instruments
+        .iter()
+        .take(INSTRUMENT_SLOT_COUNT)
+        .map(|slot| {
+            if slot.kind != "sample" {
+                return SampleBankConfig::default();
+            }
+            let Some(sample) = &slot.sample else {
+                return SampleBankConfig::default();
+            };
+            let mut slots = vec![EngineSampleSlotConfig::default(); SAMPLE_SLOTS_PER_INSTRUMENT];
+            for (idx, entry) in sample
+                .slots
+                .iter()
+                .enumerate()
+                .take(SAMPLE_SLOTS_PER_INSTRUMENT)
+            {
+                let Some(path) = &entry.path else {
+                    continue;
+                };
+                let Some(full_path) = resolve_sample(path) else {
+                    continue;
+                };
+                slots[idx].buffer = load_sample(&full_path);
+            }
+            SampleBankConfig {
+                slots,
+                tune_semis: sample.tune_semis.unwrap_or(0.0),
+                gain_pct: sample
+                    .amp
+                    .as_ref()
+                    .and_then(|amp| amp.gain_pct)
+                    .unwrap_or(100.0),
+                velocity_sensitivity_pct: sample
+                    .amp
+                    .as_ref()
+                    .and_then(|amp| amp.velocity_sensitivity_pct)
+                    .unwrap_or(100.0),
+            }
+        })
+        .collect()
+}
+
 fn mixer_buses(config: &AudioInstrumentsConfig) -> Vec<BusConfig> {
     config
         .mixer
@@ -160,6 +213,22 @@ fn bus_slot(value: &Option<serde_json::Value>) -> BusSlotConfig {
         .clone()
         .and_then(|v| serde_json::from_value::<BusSlotConfig>(v).ok())
         .unwrap_or_else(|| BusSlotConfig::Kind("none".to_string()))
+}
+
+pub fn decode_sample_file(path: &str) -> Option<SampleBuffer> {
+    let file = File::open(path).ok()?;
+    let decoder = rodio::Decoder::new(BufReader::new(file)).ok()?;
+    let channels = decoder.channels();
+    let sample_rate = decoder.sample_rate();
+    let samples = decoder.convert_samples::<f32>().collect::<Vec<_>>();
+    if samples.is_empty() {
+        return None;
+    }
+    Some(SampleBuffer {
+        samples: samples.into(),
+        channels,
+        sample_rate,
+    })
 }
 
 fn sample_slot_config(slot: &AudioInstrumentSlotConfig) -> SampleSlotConfig {
@@ -228,5 +297,36 @@ mod tests {
         assert_eq!(cfgs[0].slots[0], Some("a.wav".to_string()));
         assert_eq!(cfgs[0].slots[1], Some("b.wav".to_string()));
         assert_eq!(slots.len(), INSTRUMENT_SLOT_COUNT);
+    }
+
+    #[test]
+    fn sample_banks_preserve_sample_playback_controls_without_decoding_in_audio_thread() {
+        let config = AudioInstrumentsConfig {
+            instruments: vec![AudioInstrumentSlotConfig {
+                kind: "sample".to_string(),
+                synth: None,
+                sample: Some(AudioSampleConfig {
+                    slots: vec![AudioSampleSlotEntry {
+                        path: Some("missing.wav".to_string()),
+                    }],
+                    tune_semis: Some(-5.0),
+                    amp: Some(AudioAmpConfig {
+                        gain_pct: Some(70.0),
+                        velocity_sensitivity_pct: Some(40.0),
+                    }),
+                }),
+                mixer: None,
+            }],
+            mixer: None,
+            pan_positions: None,
+        };
+
+        let banks = sample_banks(&config, |_| None, |_| None);
+
+        assert_eq!(banks.len(), 1);
+        assert_eq!(banks[0].tune_semis, -5.0);
+        assert_eq!(banks[0].gain_pct, 70.0);
+        assert_eq!(banks[0].velocity_sensitivity_pct, 40.0);
+        assert!(banks[0].slots[0].buffer.is_none());
     }
 }

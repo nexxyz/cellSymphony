@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::f32::consts::PI;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -24,6 +25,7 @@ pub const INSTRUMENT_SLOT_COUNT: usize = 8;
 pub const VOICES_PER_SLOT: usize = 8;
 pub const BUS_SLOTS_PER_BUS: usize = 2;
 pub const DEFAULT_PAN_POSITIONS: usize = 8;
+pub const SAMPLE_SLOTS_PER_INSTRUMENT: usize = 8;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -98,6 +100,37 @@ pub struct InstrumentSlotConfig {
     pub synth: SynthConfig,
     #[serde(default)]
     pub mixer: Option<InstrumentMixerConfig>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SampleBuffer {
+    pub samples: Arc<[f32]>,
+    pub channels: u16,
+    pub sample_rate: u32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SampleSlotConfig {
+    pub buffer: Option<SampleBuffer>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SampleBankConfig {
+    pub slots: Vec<SampleSlotConfig>,
+    pub tune_semis: f32,
+    pub gain_pct: f32,
+    pub velocity_sensitivity_pct: f32,
+}
+
+impl Default for SampleBankConfig {
+    fn default() -> Self {
+        Self {
+            slots: vec![SampleSlotConfig::default(); SAMPLE_SLOTS_PER_INSTRUMENT],
+            tune_semis: 0.0,
+            gain_pct: 100.0,
+            velocity_sensitivity_pct: 100.0,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

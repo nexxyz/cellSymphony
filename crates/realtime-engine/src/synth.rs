@@ -9,6 +9,7 @@ pub use engine::SynthEngine;
 pub use types::{
     default_synth_config, BusConfig, BusSlotConfig, EnvConfig, FilterConfig, FilterType,
     InstrumentMixerConfig, InstrumentSlotConfig, InstrumentsConfig, MixerConfig, OscConfig,
-    SynthConfig, VoiceStealingMode, BUS_SLOTS_PER_BUS, DEFAULT_PAN_POSITIONS,
-    INSTRUMENT_SLOT_COUNT, VOICES_PER_SLOT,
+    SampleBankConfig, SampleBuffer, SampleSlotConfig, SynthConfig, VoiceStealingMode,
+    BUS_SLOTS_PER_BUS, DEFAULT_PAN_POSITIONS, INSTRUMENT_SLOT_COUNT, SAMPLE_SLOTS_PER_INSTRUMENT,
+    VOICES_PER_SLOT,
 };

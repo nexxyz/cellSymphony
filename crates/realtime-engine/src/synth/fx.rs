@@ -397,7 +397,7 @@ fn process_duck(
     let rel = (params.release_ms / 1000.0 * sample_rate as f32).max(1.0);
     let coef = if x > *env { 1.0 / atk } else { 1.0 / rel };
     *env += (x - *env) * coef;
-    let over = ((*env - params.threshold) / (1.0 - params.threshold).max(1.0e-6)).clamp(0.0, 1.0);
+    let over = ((*env - params.threshold) / params.threshold.max(1.0e-6)).clamp(0.0, 1.0);
     input * (1.0 - params.amount * over)
 }
 

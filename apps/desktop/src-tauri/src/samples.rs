@@ -1,7 +1,7 @@
 use crate::{AppState, QueuedAudioEvent};
 use serde::Serialize;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Serialize)]
 pub struct SampleEntry {
@@ -22,7 +22,7 @@ pub fn sample_preview(path: String, state: tauri::State<AppState>) -> Result<(),
     let full_path = resolve_sample_file(&path).ok_or_else(|| "invalid sample path".to_string())?;
     state
         .trigger_tx
-        .send(QueuedAudioEvent::Sample {
+        .send(QueuedAudioEvent::PreviewSample {
             path: full_path,
             gain: 1.0,
             rate: 1.0,
@@ -101,13 +101,13 @@ fn resolve_samples_root() -> Result<PathBuf, String> {
     Ok(create_at)
 }
 
-fn sample_root_candidates(cwd: &PathBuf, manifest_dir: &PathBuf) -> Vec<PathBuf> {
+fn sample_root_candidates(cwd: &Path, manifest_dir: &Path) -> Vec<PathBuf> {
     let mut candidates = parent_sample_dirs(cwd);
     candidates.extend(parent_sample_dirs(manifest_dir));
     candidates
 }
 
-fn parent_sample_dirs(base: &PathBuf) -> Vec<PathBuf> {
+fn parent_sample_dirs(base: &Path) -> Vec<PathBuf> {
     let mut candidates = vec![base.join("samples")];
     let mut current = base.parent();
     for _ in 0..3 {

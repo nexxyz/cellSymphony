@@ -1,4 +1,4 @@
-use realtime_engine::synth::{InstrumentsConfig, SynthEngine, VoiceStealingMode};
+use realtime_engine::synth::{InstrumentsConfig, SampleBankConfig, SynthEngine, VoiceStealingMode};
 use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
@@ -32,6 +32,7 @@ pub enum EngineEvent {
         value: u8,
     },
     SetInstruments(InstrumentsConfig),
+    SetSampleBanks(Vec<SampleBankConfig>),
     SetVoiceStealingMode(VoiceStealingMode),
 }
 
@@ -94,6 +95,7 @@ impl EngineSource {
                     self.engine.cc(instrument_slot, controller, value);
                 }
                 EngineEvent::SetInstruments(config) => self.engine.set_instruments(config),
+                EngineEvent::SetSampleBanks(banks) => self.engine.set_sample_banks(banks),
                 EngineEvent::SetVoiceStealingMode(mode) => {
                     self.engine.set_voice_stealing_mode(mode)
                 }

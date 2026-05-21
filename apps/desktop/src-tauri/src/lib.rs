@@ -3,8 +3,8 @@ mod midi;
 mod samples;
 
 use audio_config::{
-    build_audio_slot_configs, parse_voice_stealing_mode, synth_payload, AudioInstrumentsConfig,
-    AudioRuntimePolicyConfig,
+    build_audio_slot_configs, decode_sample_file, parse_voice_stealing_mode, sample_banks,
+    synth_payload, AudioInstrumentsConfig, AudioRuntimePolicyConfig,
 };
 use midi::{midi_list_inputs, midi_list_outputs, midi_select_input, midi_select_output, midi_send};
 use rodio_engine_source::{EngineEvent, EngineSource};
@@ -17,6 +17,7 @@ use midir::MidiInputConnection;
 use realtime_engine::synth::INSTRUMENT_SLOT_COUNT;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use serde::Deserialize;
+use std::collections::HashMap;
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -66,12 +67,13 @@ pub(crate) enum QueuedAudioEvent {
         controller: u8,
         value: u8,
     },
-    Sample {
+    PreviewSample {
         path: String,
         gain: f32,
         rate: f32,
     },
     SetInstruments(realtime_engine::synth::InstrumentsConfig),
+    SetSampleBanks(Vec<realtime_engine::synth::SampleBankConfig>),
     SetVoiceStealingMode(realtime_engine::synth::VoiceStealingMode),
 }
 
@@ -98,7 +100,7 @@ impl AudioRuntime {
 pub(crate) struct AppState {
     pub(crate) trigger_tx: Sender<QueuedAudioEvent>,
     synth_slots: Mutex<[bool; INSTRUMENT_SLOT_COUNT]>,
-    sample_cfgs: Mutex<[SampleSlotConfig; INSTRUMENT_SLOT_COUNT]>,
+    sample_cache: Mutex<HashMap<String, realtime_engine::synth::SampleBuffer>>,
     pub(crate) midi_out: Mutex<Option<midir::MidiOutputConnection>>,
     pub(crate) midi_in: Mutex<Option<MidiInputConnection<()>>>,
 }
@@ -141,30 +143,6 @@ fn trigger_musical_event(
             duration_ms,
         } => {
             let slot = channel.clamp(0, (INSTRUMENT_SLOT_COUNT - 1) as u8);
-            if !is_synth_slot(slot) {
-                if let Ok(cfgs) = state.sample_cfgs.lock() {
-                    let cfg = &cfgs[(slot as usize).min(INSTRUMENT_SLOT_COUNT - 1)];
-                    let sample_slot = (note.saturating_sub(36)).min(7) as usize;
-                    if let Some(path) = &cfg.slots[sample_slot] {
-                        let Some(sample_path) = resolve_sample_file(path) else {
-                            return Ok(());
-                        };
-                        let vel_norm = (velocity as f32 / 127.0).clamp(0.0, 1.0);
-                        let sens = (cfg.vel_sens_pct / 100.0).clamp(0.0, 2.0);
-                        let gain = ((cfg.gain_pct / 100.0) * vel_norm * sens).clamp(0.0, 2.0);
-                        let rate = 2.0_f32.powf(cfg.tune_semis / 12.0).clamp(0.25, 4.0);
-                        state
-                            .trigger_tx
-                            .send(QueuedAudioEvent::Sample {
-                                path: sample_path,
-                                gain,
-                                rate,
-                            })
-                            .map_err(|e| format!("audio queue send failed: {e}"))?;
-                    }
-                }
-                return Ok(());
-            }
             let duration = duration_ms.unwrap_or(86_400_000).clamp(10, 86_400_000);
             state
                 .trigger_tx
@@ -196,9 +174,6 @@ fn trigger_musical_event(
         }
         MusicalEventPayload::NoteOff { channel, note } => {
             let slot = channel.clamp(0, (INSTRUMENT_SLOT_COUNT - 1) as u8);
-            if !is_synth_slot(slot) {
-                return Ok(());
-            }
             state
                 .trigger_tx
                 .send(QueuedAudioEvent::NoteOff {
@@ -216,17 +191,32 @@ fn audio_set_instruments(
     config: AudioInstrumentsConfig,
     state: tauri::State<AppState>,
 ) -> Result<(), String> {
-    let (next_slots, next_sample_cfgs) = build_audio_slot_configs(&config.instruments);
+    let (next_slots, _) = build_audio_slot_configs(&config.instruments);
+    let next_sample_banks = {
+        let mut cache = state
+            .sample_cache
+            .lock()
+            .map_err(|_| "sample cache lock failed".to_string())?;
+        sample_banks(&config, resolve_sample_file, |path| {
+            if let Some(buffer) = cache.get(path) {
+                return Some(buffer.clone());
+            }
+            let buffer = decode_sample_file(path)?;
+            cache.insert(path.to_string(), buffer.clone());
+            Some(buffer)
+        })
+    };
     if let Ok(mut slots) = state.synth_slots.lock() {
         *slots = next_slots;
-    }
-    if let Ok(mut sample_cfgs) = state.sample_cfgs.lock() {
-        *sample_cfgs = next_sample_cfgs;
     }
     let synth_payload = synth_payload(&config);
     state
         .trigger_tx
         .send(QueuedAudioEvent::SetInstruments(synth_payload))
+        .map_err(|e| format!("audio queue send failed: {e}"))?;
+    state
+        .trigger_tx
+        .send(QueuedAudioEvent::SetSampleBanks(next_sample_banks))
         .map_err(|e| format!("audio queue send failed: {e}"))
 }
 
@@ -291,7 +281,7 @@ pub fn run() {
                         note,
                     });
                 }
-                QueuedAudioEvent::Sample { path, gain, rate } => {
+                QueuedAudioEvent::PreviewSample { path, gain, rate } => {
                     if let Ok(file) = std::fs::File::open(&path) {
                         let reader = std::io::BufReader::new(file);
                         if let Ok(decoder) = rodio::Decoder::new(reader) {
@@ -306,6 +296,9 @@ pub fn run() {
                 QueuedAudioEvent::SetInstruments(config) => {
                     let _ = engine_tx.send(EngineEvent::SetInstruments(config));
                 }
+                QueuedAudioEvent::SetSampleBanks(banks) => {
+                    let _ = engine_tx.send(EngineEvent::SetSampleBanks(banks));
+                }
                 QueuedAudioEvent::SetVoiceStealingMode(mode) => {
                     let _ = engine_tx.send(EngineEvent::SetVoiceStealingMode(mode));
                 }
@@ -317,7 +310,7 @@ pub fn run() {
         .manage(AppState {
             trigger_tx,
             synth_slots: Mutex::new([true; INSTRUMENT_SLOT_COUNT]),
-            sample_cfgs: Mutex::new(std::array::from_fn(|_| SampleSlotConfig::default())),
+            sample_cache: Mutex::new(HashMap::new()),
             midi_out: Mutex::new(None),
             midi_in: Mutex::new(None),
         })

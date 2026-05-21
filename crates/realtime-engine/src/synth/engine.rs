@@ -6,9 +6,12 @@ use std::f32::consts::PI;
 pub struct SynthEngine {
     sample_rate: u32,
     sample_clock: u64,
+    slot_kind: [InstrumentKind; INSTRUMENT_SLOT_COUNT],
     instruments: [SynthConfig; INSTRUMENT_SLOT_COUNT],
+    sample_banks: Vec<SampleBankConfig>,
     mods: [InstrumentMod; INSTRUMENT_SLOT_COUNT],
     voices: [[Voice; VOICES_PER_SLOT]; INSTRUMENT_SLOT_COUNT],
+    sample_voices: [[SampleVoice; VOICES_PER_SLOT]; INSTRUMENT_SLOT_COUNT],
     slot_route: [usize; INSTRUMENT_SLOT_COUNT],
     slot_pan_pos: [usize; INSTRUMENT_SLOT_COUNT],
     bus_pan_pos: Vec<usize>,
@@ -20,15 +23,46 @@ pub struct SynthEngine {
     smoothed_load_ratio: f32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum InstrumentKind {
+    Synth,
+    Sample,
+    Midi,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct SampleVoice {
+    active: bool,
+    sample_slot: usize,
+    pos: f32,
+    step: f32,
+    gain: f32,
+}
+
+impl SampleVoice {
+    const fn off() -> Self {
+        Self {
+            active: false,
+            sample_slot: 0,
+            pos: 0.0,
+            step: 1.0,
+            gain: 0.0,
+        }
+    }
+}
+
 impl SynthEngine {
     pub fn new(sample_rate: u32) -> Self {
         let default = default_synth_config();
         Self {
             sample_rate,
             sample_clock: 0,
+            slot_kind: [InstrumentKind::Synth; INSTRUMENT_SLOT_COUNT],
             instruments: [default; INSTRUMENT_SLOT_COUNT],
+            sample_banks: vec![SampleBankConfig::default(); INSTRUMENT_SLOT_COUNT],
             mods: [InstrumentMod::new(); INSTRUMENT_SLOT_COUNT],
             voices: [[Voice::off(); VOICES_PER_SLOT]; INSTRUMENT_SLOT_COUNT],
+            sample_voices: [[SampleVoice::off(); VOICES_PER_SLOT]; INSTRUMENT_SLOT_COUNT],
             slot_route: [0; INSTRUMENT_SLOT_COUNT],
             slot_pan_pos: [DEFAULT_PAN_POSITIONS / 2; INSTRUMENT_SLOT_COUNT],
             bus_pan_pos: Vec::new(),
@@ -56,7 +90,8 @@ impl SynthEngine {
             if idx >= INSTRUMENT_SLOT_COUNT {
                 break;
             }
-            if slot.kind != "synth" {
+            self.slot_kind[idx] = parse_instrument_kind(&slot.kind);
+            if self.slot_kind[idx] != InstrumentKind::Synth {
                 if let Some(m) = slot.mixer {
                     self.slot_route[idx] = parse_route(&m.route);
                     self.slot_pan_pos[idx] = m.pan_pos.min(self.pan_positions - 1);
@@ -93,8 +128,26 @@ impl SynthEngine {
         self.bus_mono_scratch.resize(self.bus_pan_pos.len(), 0.0);
     }
 
+    pub fn set_sample_banks(&mut self, banks: Vec<SampleBankConfig>) {
+        self.sample_banks = banks;
+        self.sample_banks
+            .resize(INSTRUMENT_SLOT_COUNT, SampleBankConfig::default());
+        for pool in self.sample_voices.iter_mut() {
+            for voice in pool.iter_mut() {
+                voice.active = false;
+            }
+        }
+    }
+
     pub fn note_on(&mut self, instrument_slot: u8, midi_note: u8, velocity: u8, duration_ms: u32) {
         let slot = (instrument_slot as usize).min(INSTRUMENT_SLOT_COUNT - 1);
+        if self.slot_kind[slot] == InstrumentKind::Sample {
+            self.sample_note_on(slot, midi_note, velocity);
+            return;
+        }
+        if self.slot_kind[slot] != InstrumentKind::Synth {
+            return;
+        }
         let v = velocity.max(1);
         let duration_samples = ms_to_samples(duration_ms as f32, self.sample_rate).max(1) as u64;
         let note_off_sample = self.sample_clock.saturating_add(duration_samples);
@@ -144,6 +197,15 @@ impl SynthEngine {
 
     pub fn note_off(&mut self, instrument_slot: u8, midi_note: u8) {
         let slot = (instrument_slot as usize).min(INSTRUMENT_SLOT_COUNT - 1);
+        if self.slot_kind[slot] == InstrumentKind::Sample {
+            let sample_slot = sample_slot_for_note(midi_note);
+            for voice in self.sample_voices[slot].iter_mut() {
+                if voice.active && voice.sample_slot == sample_slot {
+                    voice.active = false;
+                }
+            }
+            return;
+        }
         let cfg = self.instruments[slot];
         for voice in self.voices[slot].iter_mut() {
             if !voice.active {
@@ -161,6 +223,11 @@ impl SynthEngine {
     }
 
     pub fn all_notes_off(&mut self) {
+        for pool in self.sample_voices.iter_mut() {
+            for voice in pool.iter_mut() {
+                voice.active = false;
+            }
+        }
         for slot in 0..INSTRUMENT_SLOT_COUNT {
             let cfg = self.instruments[slot];
             for voice in self.voices[slot].iter_mut() {
@@ -183,6 +250,7 @@ impl SynthEngine {
 
     pub fn next_stereo_sample(&mut self) -> (f32, f32) {
         let mut slot_out = [0.0_f32; INSTRUMENT_SLOT_COUNT];
+        self.render_sample_voices(&mut slot_out);
         for pool in self.voices.iter_mut() {
             for v in pool.iter_mut() {
                 if !v.active {
@@ -297,6 +365,64 @@ impl SynthEngine {
         (left.clamp(-1.0, 1.0), right.clamp(-1.0, 1.0))
     }
 
+    fn sample_note_on(&mut self, slot: usize, midi_note: u8, velocity: u8) {
+        let sample_slot = sample_slot_for_note(midi_note);
+        let Some(bank) = self.sample_banks.get(slot) else {
+            return;
+        };
+        let Some(Some(buffer)) = bank.slots.get(sample_slot).map(|s| s.buffer.as_ref()) else {
+            return;
+        };
+        if buffer.samples.is_empty() || buffer.channels == 0 || buffer.sample_rate == 0 {
+            return;
+        }
+        let vel = (velocity.max(1) as f32 / 127.0).clamp(0.0, 1.0);
+        let vel_sens = (bank.velocity_sensitivity_pct / 100.0).clamp(0.0, 1.0);
+        let gain = (bank.gain_pct / 100.0).clamp(0.0, 2.0) * ((1.0 - vel_sens) + vel_sens * vel);
+        let pitch = 2.0_f32.powf(bank.tune_semis / 12.0);
+        let step = pitch * buffer.sample_rate as f32 / self.sample_rate as f32;
+        let pool = &mut self.sample_voices[slot];
+        let voice_index = pool.iter().position(|voice| !voice.active).unwrap_or(0);
+        pool[voice_index] = SampleVoice {
+            active: true,
+            sample_slot,
+            pos: 0.0,
+            step,
+            gain,
+        };
+    }
+
+    fn render_sample_voices(&mut self, slot_out: &mut [f32; INSTRUMENT_SLOT_COUNT]) {
+        for (slot, out) in slot_out.iter_mut().enumerate().take(INSTRUMENT_SLOT_COUNT) {
+            let Some(bank) = self.sample_banks.get(slot) else {
+                continue;
+            };
+            for voice in self.sample_voices[slot].iter_mut() {
+                if !voice.active {
+                    continue;
+                }
+                let Some(Some(buffer)) =
+                    bank.slots.get(voice.sample_slot).map(|s| s.buffer.as_ref())
+                else {
+                    voice.active = false;
+                    continue;
+                };
+                let frames = buffer.samples.len() / buffer.channels as usize;
+                if frames == 0 || voice.pos >= frames as f32 {
+                    voice.active = false;
+                    continue;
+                }
+                let frame = voice.pos.floor() as usize;
+                let frac = voice.pos - frame as f32;
+                let next_frame = (frame + 1).min(frames - 1);
+                let sample = mono_frame(buffer, frame) * (1.0 - frac)
+                    + mono_frame(buffer, next_frame) * frac;
+                *out += sample * voice.gain;
+                voice.pos += voice.step;
+            }
+        }
+    }
+
     fn steal_voice_index(pool: &[Voice; VOICES_PER_SLOT]) -> usize {
         let mut best_i = 0;
         let mut best_score = f32::MAX;
@@ -402,6 +528,30 @@ fn parse_route(route: &str) -> usize {
         }
     }
     0
+}
+
+fn parse_instrument_kind(kind: &str) -> InstrumentKind {
+    match kind {
+        "sample" => InstrumentKind::Sample,
+        "midi" => InstrumentKind::Midi,
+        _ => InstrumentKind::Synth,
+    }
+}
+
+fn sample_slot_for_note(note: u8) -> usize {
+    note.saturating_sub(36)
+        .min((SAMPLE_SLOTS_PER_INSTRUMENT - 1) as u8) as usize
+}
+
+fn mono_frame(buffer: &SampleBuffer, frame: usize) -> f32 {
+    let channels = buffer.channels.max(1) as usize;
+    let base = frame.saturating_mul(channels);
+    if channels == 1 {
+        return buffer.samples.get(base).copied().unwrap_or(0.0);
+    }
+    let left = buffer.samples.get(base).copied().unwrap_or(0.0);
+    let right = buffer.samples.get(base + 1).copied().unwrap_or(left);
+    (left + right) * 0.5
 }
 
 fn pan_gains(pan_pos: usize, positions: usize) -> (f32, f32) {
