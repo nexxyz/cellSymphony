@@ -1,3 +1,6 @@
+mod audio_source;
+
+use audio_source::EngineSource;
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -13,7 +16,6 @@ use serde::Serialize;
 use serde_json;
 use std::fs;
 use std::path::PathBuf;
-use std::time::Instant;
 use tauri::Emitter;
 
 #[derive(Deserialize)]
@@ -88,84 +90,6 @@ impl AudioRuntime {
         sink.play();
         sink.detach();
         Ok(())
-    }
-}
-
-struct EngineSource {
-    engine: Arc<Mutex<SynthEngine>>,
-    sample_rate: u32,
-    buf: Vec<f32>,
-    idx: usize,
-}
-
-impl EngineSource {
-    fn new(engine: Arc<Mutex<SynthEngine>>, sample_rate: u32) -> Self {
-        Self {
-            engine,
-            sample_rate,
-            buf: Vec::new(),
-            idx: 0,
-        }
-    }
-
-    fn refill(&mut self) {
-        const BLOCK: usize = 128;
-        let t0 = Instant::now();
-        self.buf.clear();
-        self.buf.reserve(BLOCK * 2);
-        if let Ok(mut eng) = self.engine.lock() {
-            for _ in 0..BLOCK {
-                let (l, r) = eng.next_stereo_sample();
-                self.buf.push(l);
-                self.buf.push(r);
-            }
-        } else {
-            for _ in 0..BLOCK {
-                self.buf.push(0.0);
-                self.buf.push(0.0);
-            }
-        }
-        self.idx = 0;
-        let elapsed = t0.elapsed().as_secs_f32();
-        let block_seconds = (BLOCK as f32) / (self.sample_rate as f32);
-        let ratio = if block_seconds > 0.0 {
-            elapsed / block_seconds
-        } else {
-            0.0
-        };
-        if let Ok(mut eng) = self.engine.lock() {
-            eng.set_runtime_load_ratio(ratio);
-        }
-    }
-}
-
-impl Iterator for EngineSource {
-    type Item = f32;
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.idx >= self.buf.len() {
-            self.refill();
-        }
-        let v = self.buf.get(self.idx).copied().unwrap_or(0.0);
-        self.idx += 1;
-        Some(v)
-    }
-}
-
-impl rodio::Source for EngineSource {
-    fn current_frame_len(&self) -> Option<usize> {
-        None
-    }
-
-    fn channels(&self) -> u16 {
-        2
-    }
-
-    fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
-
-    fn total_duration(&self) -> Option<std::time::Duration> {
-        None
     }
 }
 
