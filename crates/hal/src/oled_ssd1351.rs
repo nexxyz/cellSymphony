@@ -34,8 +34,8 @@ const CMD_SET_COMMAND_LOCK: u8 = 0xFD;
 #[cfg(feature = "pi-zero")]
 pub struct OledSsd1351 {
     spi: Spidev,
-    dc: OutputPin,  // GPIO24 for Data/Command
-    rst: OutputPin, // GPIO25 for Reset
+    dc: OutputPin,   // GPIO24 for Data/Command
+    _rst: OutputPin, // GPIO25 for Reset
 }
 
 #[cfg(feature = "pi-zero")]
@@ -89,7 +89,7 @@ impl OledSsd1351 {
 
         Self::write_command(&mut spi, &mut dc, CMD_DISPLAY_ON, &[])?;
 
-        Ok(Self { spi, dc, rst })
+        Ok(Self { spi, dc, _rst: rst })
     }
 
     /// Write command + optional data bytes

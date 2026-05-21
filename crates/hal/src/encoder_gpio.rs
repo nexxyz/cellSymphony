@@ -19,12 +19,12 @@ pub enum HardwareEvent {
 /// Rotary encoder with GPIO interrupt handling
 #[cfg(feature = "pi-zero")]
 pub struct EncoderGpio {
-    id: &'static str,
-    a: InputPin,
-    b: InputPin,
-    sw: InputPin,
-    last_ab: (Level, Level),
-    tx: Sender<HardwareEvent>,
+    _id: &'static str,
+    _a: InputPin,
+    _b: InputPin,
+    _sw: InputPin,
+    _last_ab: (Level, Level),
+    _tx: Sender<HardwareEvent>,
 }
 
 #[cfg(feature = "pi-zero")]
@@ -79,12 +79,12 @@ impl EncoderGpio {
         .map_err(|e| e.to_string())?;
 
         Ok(Self {
-            id,
-            a,
-            b,
-            sw,
-            last_ab,
-            tx,
+            _id: id,
+            _a: a,
+            _b: b,
+            _sw: sw,
+            _last_ab: last_ab,
+            _tx: tx,
         })
     }
 }
