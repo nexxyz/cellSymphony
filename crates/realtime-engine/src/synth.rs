@@ -424,10 +424,20 @@ pub struct SynthEngine {
     slot_route: [usize; INSTRUMENT_SLOT_COUNT],
     slot_pan_pos: [usize; INSTRUMENT_SLOT_COUNT],
     bus_pan_pos: Vec<usize>,
-    bus_slot_kinds: Vec<[u8; BUS_SLOTS_PER_BUS]>,
+    bus_slot_cfgs: Vec<[BusSlotConfig; BUS_SLOTS_PER_BUS]>,
+    bus_slot_state: Vec<[BusFxState; BUS_SLOTS_PER_BUS]>,
     pan_positions: usize,
     voice_stealing_mode: VoiceStealingMode,
     smoothed_load_ratio: f32,
+}
+
+#[derive(Clone, Debug)]
+enum BusFxState {
+    None,
+    Tremolo { phase: f32 },
+    Delay { buf: Vec<f32>, idx: usize },
+    Duck { env: f32 },
+    Bitcrusher { hold: u32, count: u32, last: f32 },
 }
 
 impl SynthEngine {
@@ -442,7 +452,8 @@ impl SynthEngine {
             slot_route: [0; INSTRUMENT_SLOT_COUNT],
             slot_pan_pos: [DEFAULT_PAN_POSITIONS / 2; INSTRUMENT_SLOT_COUNT],
             bus_pan_pos: Vec::new(),
-            bus_slot_kinds: Vec::new(),
+            bus_slot_cfgs: Vec::new(),
+            bus_slot_state: Vec::new(),
             pan_positions: DEFAULT_PAN_POSITIONS,
             voice_stealing_mode: VoiceStealingMode::Balanced,
             smoothed_load_ratio: 0.0,
@@ -478,16 +489,22 @@ impl SynthEngine {
             }
         }
         self.bus_pan_pos.clear();
-        self.bus_slot_kinds.clear();
+        self.bus_slot_cfgs.clear();
+        self.bus_slot_state.clear();
         if let Some(mixer) = cfg.mixer {
             for bus in mixer.buses.into_iter() {
                 self.bus_pan_pos
                     .push(bus.pan_pos.min(self.pan_positions - 1));
-                let mut kinds = [0_u8; BUS_SLOTS_PER_BUS];
+                let mut cfgs: [BusSlotConfig; BUS_SLOTS_PER_BUS] =
+                    std::array::from_fn(|_| BusSlotConfig::Kind("none".to_string()));
                 for (j, slot) in bus.slots.into_iter().enumerate().take(BUS_SLOTS_PER_BUS) {
-                    kinds[j] = if slot.kind_str() == "none" { 0 } else { 0 };
+                    cfgs[j] = slot;
                 }
-                self.bus_slot_kinds.push(kinds);
+                let states: [BusFxState; BUS_SLOTS_PER_BUS] = std::array::from_fn(|j| {
+                    bus_fx_state_from_cfg(&cfgs[j], self.sample_rate)
+                });
+                self.bus_slot_cfgs.push(cfgs);
+                self.bus_slot_state.push(states);
             }
         }
     }
@@ -657,7 +674,24 @@ impl SynthEngine {
             }
         }
         for (bus_idx, bus_sample) in bus_mono.iter().enumerate() {
-            let processed = *bus_sample;
+            let mut processed = *bus_sample;
+            if let (Some(cfgs), Some(states)) = (
+                self.bus_slot_cfgs.get(bus_idx),
+                self.bus_slot_state.get_mut(bus_idx),
+            ) {
+                for j in 0..BUS_SLOTS_PER_BUS {
+                    processed = process_bus_slot(
+                        &cfgs[j],
+                        &mut states[j],
+                        processed,
+                        bus_idx,
+                        &slot_out,
+                        &bus_mono,
+                        self.sample_rate,
+                        self.sample_clock,
+                    );
+                }
+            }
             let pan = self.bus_pan_pos.get(bus_idx).copied().unwrap_or(0);
             let (gl, gr) = pan_gains(pan, self.pan_positions);
             left += processed * gl;
@@ -782,6 +816,169 @@ fn pan_gains(pan_pos: usize, positions: usize) -> (f32, f32) {
     let t = (pan_pos.min(positions - 1) as f32) / ((positions - 1) as f32);
     let theta = t * (std::f32::consts::FRAC_PI_2);
     (theta.cos(), theta.sin())
+}
+
+fn bus_fx_state_from_cfg(cfg: &BusSlotConfig, sample_rate: u32) -> BusFxState {
+    match cfg.kind_str() {
+        "delay" => {
+            // Default 250ms delay line.
+            let len = ((sample_rate as f32) * 0.25) as usize;
+            BusFxState::Delay {
+                buf: vec![0.0; len.max(1)],
+                idx: 0,
+            }
+        }
+        "tremolo" => BusFxState::Tremolo { phase: 0.0 },
+        "duck" => BusFxState::Duck { env: 0.0 },
+        "bitcrusher" => BusFxState::Bitcrusher {
+            hold: 1,
+            count: 0,
+            last: 0.0,
+        },
+        _ => BusFxState::None,
+    }
+}
+
+fn get_param_f32(params: Option<&std::collections::BTreeMap<String, serde_json::Value>>, key: &str, fallback: f32) -> f32 {
+    let Some(p) = params else { return fallback; };
+    let Some(v) = p.get(key) else { return fallback; };
+    v.as_f64().map(|x| x as f32).unwrap_or(fallback)
+}
+
+fn get_param_str<'a>(params: Option<&'a std::collections::BTreeMap<String, serde_json::Value>>, key: &str, fallback: &'a str) -> String {
+    let Some(p) = params else { return fallback.to_string(); };
+    let Some(v) = p.get(key) else { return fallback.to_string(); };
+    v.as_str().unwrap_or(fallback).to_string()
+}
+
+fn process_bus_slot(
+    cfg: &BusSlotConfig,
+    state: &mut BusFxState,
+    input: f32,
+    bus_idx: usize,
+    slot_out: &[f32; INSTRUMENT_SLOT_COUNT],
+    bus_in: &[f32],
+    sample_rate: u32,
+    sample_clock: u64,
+) -> f32 {
+    let kind = cfg.kind_str();
+    match kind {
+        "none" => input,
+        "tremolo" => {
+            let rate_hz = get_param_f32(cfg.params(), "rateHz", 4.0).clamp(0.05, 40.0);
+            let depth = (get_param_f32(cfg.params(), "depthPct", 60.0) / 100.0).clamp(0.0, 1.0);
+            let BusFxState::Tremolo { phase } = state else {
+                *state = BusFxState::Tremolo { phase: 0.0 };
+                return input;
+            };
+            let gain = (1.0 - depth) + depth * ((phase.sin() + 1.0) * 0.5);
+            *phase += 2.0 * PI * rate_hz / (sample_rate as f32);
+            if *phase > 2.0 * PI {
+                *phase -= 2.0 * PI;
+            }
+            input * gain
+        }
+        "delay" => {
+            let time_ms = get_param_f32(cfg.params(), "timeMs", 250.0).clamp(1.0, 2000.0);
+            let feedback = get_param_f32(cfg.params(), "feedback", 0.35).clamp(0.0, 0.98);
+            let mix = (get_param_f32(cfg.params(), "mixPct", 35.0) / 100.0).clamp(0.0, 1.0);
+            let desired_len = ((time_ms / 1000.0) * (sample_rate as f32)).round() as usize;
+            let BusFxState::Delay { buf, idx } = state else {
+                *state = BusFxState::Delay {
+                    buf: vec![0.0; desired_len.max(1)],
+                    idx: 0,
+                };
+                return input;
+            };
+            if buf.len() != desired_len.max(1) {
+                *buf = vec![0.0; desired_len.max(1)];
+                *idx = 0;
+            }
+            let delayed = buf[*idx];
+            buf[*idx] = input + delayed * feedback;
+            *idx += 1;
+            if *idx >= buf.len() {
+                *idx = 0;
+            }
+            (input * (1.0 - mix) + delayed * mix).clamp(-1.5, 1.5)
+        }
+        "duck" => {
+            let source = get_param_str(cfg.params(), "source", "I1");
+            let threshold = get_param_f32(cfg.params(), "threshold", 0.08).clamp(0.0, 1.0);
+            let amount = (get_param_f32(cfg.params(), "amountPct", 60.0) / 100.0).clamp(0.0, 1.0);
+            let attack_ms = get_param_f32(cfg.params(), "attackMs", 8.0).clamp(0.1, 200.0);
+            let release_ms = get_param_f32(cfg.params(), "releaseMs", 160.0).clamp(1.0, 2000.0);
+
+            let sc = if let Some(rest) = source.strip_prefix('I') {
+                rest.parse::<usize>()
+                    .ok()
+                    .and_then(|n| n.checked_sub(1))
+                    .and_then(|i| slot_out.get(i).copied())
+                    .unwrap_or(0.0)
+            } else if let Some(rest) = source.strip_prefix('B') {
+                rest.parse::<usize>()
+                    .ok()
+                    .and_then(|n| n.checked_sub(1))
+                    .and_then(|i| bus_in.get(i).copied())
+                    .unwrap_or(0.0)
+            } else {
+                0.0
+            };
+
+            let BusFxState::Duck { env } = state else {
+                *state = BusFxState::Duck { env: 0.0 };
+                return input;
+            };
+
+            let x = sc.abs().min(1.0);
+            let atk = (attack_ms / 1000.0 * sample_rate as f32).max(1.0);
+            let rel = (release_ms / 1000.0 * sample_rate as f32).max(1.0);
+            let coef = if x > *env { 1.0 / atk } else { 1.0 / rel };
+            *env += (x - *env) * coef;
+
+            let over = ((*env - threshold) / (1.0 - threshold).max(1.0e-6)).clamp(0.0, 1.0);
+            let gain = 1.0 - amount * over;
+            let _ = (bus_idx, sample_clock); // reserved for future transport-aware ducking
+            input * gain
+        }
+        "saturator" => {
+            let drive = get_param_f32(cfg.params(), "drive", 1.8).clamp(0.0, 20.0);
+            let mix = (get_param_f32(cfg.params(), "mixPct", 100.0) / 100.0).clamp(0.0, 1.0);
+            let y = (input * drive).tanh();
+            input * (1.0 - mix) + y * mix
+        }
+        "distortion" => {
+            let drive = get_param_f32(cfg.params(), "drive", 2.5).clamp(0.0, 50.0);
+            let clip = get_param_f32(cfg.params(), "clip", 0.6).clamp(0.05, 2.0);
+            let mix = (get_param_f32(cfg.params(), "mixPct", 100.0) / 100.0).clamp(0.0, 1.0);
+            let y = (input * drive).clamp(-clip, clip) / clip;
+            input * (1.0 - mix) + y * mix
+        }
+        "bitcrusher" => {
+            let rate_div = get_param_f32(cfg.params(), "rateDiv", 4.0).round().clamp(1.0, 128.0) as u32;
+            let bits = get_param_f32(cfg.params(), "bits", 6.0).round().clamp(1.0, 16.0) as u32;
+            let mix = (get_param_f32(cfg.params(), "mixPct", 100.0) / 100.0).clamp(0.0, 1.0);
+            let BusFxState::Bitcrusher { hold, count, last } = state else {
+                *state = BusFxState::Bitcrusher {
+                    hold: rate_div,
+                    count: 0,
+                    last: input,
+                };
+                return input;
+            };
+            *hold = rate_div;
+            if *count == 0 {
+                *last = input;
+            }
+            *count = (*count + 1) % (*hold).max(1);
+
+            let levels = (1_u32 << bits.min(16)).max(2) as f32;
+            let q = ((*last + 1.0) * 0.5 * (levels - 1.0)).round();
+            let crushed = (q / (levels - 1.0)) * 2.0 - 1.0;
+            input * (1.0 - mix) + crushed * mix
+        }
+        _ => input,
+    }
 }
 
 fn ms_to_samples(ms: f32, sample_rate: u32) -> u32 {

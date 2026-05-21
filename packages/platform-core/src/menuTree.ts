@@ -2,6 +2,7 @@ import { listBehaviorIds, type BehaviorEngine } from "@cellsymphony/behavior-api
 import type { MenuNode, PlatformState } from "./index";
 import { SYNTH_PRESETS } from "./synthPresets";
 import { clampSampleSlotIndex, instrumentIndexOptions, partIndexOptions, PLATFORM_CAPS, sampleSlotOptions } from "./platformCaps";
+import { fxBusesMenuNode } from "./fxBusMenu";
 
 type MenuTreeDeps<TState> = {
   resolveBehavior: (id: string) => BehaviorEngine<any, any>;
@@ -329,63 +330,7 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
               } satisfies MenuNode;
             })
           },
-          {
-            kind: "group",
-            label: "FX Buses",
-            children: Array.from({ length: PLATFORM_CAPS.busCount }, (_, busIdx) => ({
-              kind: "group",
-              label: `Bus ${busIdx + 1}`,
-              children: [
-                {
-                  kind: "group",
-                  label: "Slot 1",
-                  children: [
-                    { kind: "enum", label: "Type", key: `mixer.buses.${busIdx}.slot1.type`, options: ["none", "reverb", "delay", "tremolo", "vibrato", "auto_pan", "chorus", "flanger", "wah", "filter_lfo", "duck", "bitcrusher", "saturator", "distortion", "glitch"] },
-                    {
-                      kind: "group",
-                      label: "Duck",
-                      visible: (c: any) => c.mixer?.buses?.[busIdx]?.slot1?.type === "duck",
-                      children: [
-                        {
-                          kind: "enum",
-                          label: "Source",
-                          key: `mixer.buses.${busIdx}.slot1.params.source`,
-                          options: [
-                            ...Array.from({ length: PLATFORM_CAPS.instrumentCount }, (_, i) => `I${i + 1}`),
-                            ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, i) => `B${i + 1}`)
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                {
-                  kind: "group",
-                  label: "Slot 2",
-                  children: [
-                    { kind: "enum", label: "Type", key: `mixer.buses.${busIdx}.slot2.type`, options: ["none", "reverb", "delay", "tremolo", "vibrato", "auto_pan", "chorus", "flanger", "wah", "filter_lfo", "duck", "bitcrusher", "saturator", "distortion", "glitch"] },
-                    {
-                      kind: "group",
-                      label: "Duck",
-                      visible: (c: any) => c.mixer?.buses?.[busIdx]?.slot2?.type === "duck",
-                      children: [
-                        {
-                          kind: "enum",
-                          label: "Source",
-                          key: `mixer.buses.${busIdx}.slot2.params.source`,
-                          options: [
-                            ...Array.from({ length: PLATFORM_CAPS.instrumentCount }, (_, i) => `I${i + 1}`),
-                            ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, i) => `B${i + 1}`)
-                          ]
-                        }
-                      ]
-                    }
-                  ]
-                },
-                { kind: "number", label: "Pan Pos", key: `mixer.buses.${busIdx}.panPos`, min: 0, max: PLATFORM_CAPS.gridWidth - 1, step: 1 }
-              ]
-            }))
-          }
+          fxBusesMenuNode()
         ]
       },
       { kind: "spacer" },
