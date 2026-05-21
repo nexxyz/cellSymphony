@@ -107,7 +107,9 @@ export function turnMenuInput<TState>(state: PlatformState<TState>, delta: -1 | 
 
   if (selected.kind === "number") {
     const current = deps.readAnyValue(state, selected.key);
-    const nextValue = clamp(Number(current) + delta * selected.step, selected.min, selected.max);
+    const rawBase = Number(current);
+    const base = Number.isFinite(rawBase) ? rawBase : selected.min;
+    const nextValue = clamp(base + delta * selected.step, selected.min, selected.max);
     const nextState = deps.writeAnyValue(state, selected.key, nextValue);
     if (selected.key.startsWith("behaviorConfig.") || selected.key.includes(".l1.behaviorConfig.")) {
       const finalState = deps.reinitBehaviorState(nextState, selected.key);

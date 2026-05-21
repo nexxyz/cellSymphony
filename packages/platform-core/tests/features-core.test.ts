@@ -103,6 +103,78 @@ test("behavior config enum param edit via menu", () => {
   assert.equal(val, 2, "randomTickInterval should be 2 (incremented from default 1)");
 });
 
+test("FX type selection seeds editable default parameters", () => {
+  let state = makeState();
+
+  state = selectLabel(state, "L3: Voice");
+  state = press(state).state;
+  state = selectLabel(state, "FX Buses");
+  state = press(state).state;
+  state = selectLabel(state, "Bus 1");
+  state = press(state).state;
+  state = selectLabel(state, "Slot 1");
+  state = press(state).state;
+  state = selectLabel(state, "Type");
+  state = press(state).state;
+  state = turn(state, 1).state;
+  state = turn(state, 1).state;
+  state = press(state).state;
+
+  const slot = (state.runtimeConfig as any).mixer.buses[0].slot1;
+  assert.equal(slot.type, "delay");
+  assert.equal(slot.params.timeMs, 250);
+  assert.equal(slot.params.feedback, 0.35);
+  assert.equal(slot.params.mixPct, 35);
+});
+
+test("newly selected FX parameters edit as finite numbers", () => {
+  let state = makeState();
+
+  state = selectLabel(state, "L3: Voice");
+  state = press(state).state;
+  state = selectLabel(state, "FX Buses");
+  state = press(state).state;
+  state = selectLabel(state, "Bus 1");
+  state = press(state).state;
+  state = selectLabel(state, "Slot 1");
+  state = press(state).state;
+  state = selectLabel(state, "Type");
+  state = press(state).state;
+  state = turn(state, 1).state;
+  state = turn(state, 1).state;
+  state = press(state).state;
+  state = selectLabel(state, "Delay");
+  state = press(state).state;
+  state = selectLabel(state, "Time ms");
+
+  const frame = toSimulatorFrame(state, mockBehavior);
+  assert.equal(frame.display.lines.some((line) => line.includes("undefined") || line.includes("NaN")), false);
+
+  state = press(state).state;
+  state = turn(state, 1).state;
+
+  const timeMs = (state.runtimeConfig as any).mixer.buses[0].slot1.params.timeMs;
+  assert.equal(Number.isFinite(timeMs), true);
+  assert.equal(timeMs, 255);
+});
+
+test("loading saved FX slots repairs missing and invalid parameters", () => {
+  let state = makeState();
+  const payload = extractConfigPayload(state) as any;
+  payload.runtimeConfig.mixer.buses[0].slot1 = { type: "delay", params: {} };
+  payload.runtimeConfig.mixer.buses[0].slot2 = { type: "duck", params: { source: "B999", amountPct: "bad" } };
+
+  state = applyConfigPayload(state, payload, mockBehavior);
+
+  const slot1 = (state.runtimeConfig as any).mixer.buses[0].slot1;
+  const slot2 = (state.runtimeConfig as any).mixer.buses[0].slot2;
+  assert.deepEqual(slot1, { type: "delay", params: { timeMs: 250, feedback: 0.35, mixPct: 35 } });
+  assert.equal(slot2.type, "duck");
+  assert.equal(slot2.params.source, "I1");
+  assert.equal(slot2.params.amountPct, 60);
+  assert.equal(slot2.params.threshold, 0.08);
+});
+
 // ─── Active Behavior Switching ────────────────────────────────────
 
 test("active behavior switching reinitializes state", () => {

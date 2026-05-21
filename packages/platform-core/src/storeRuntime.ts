@@ -2,6 +2,7 @@ import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import { getBehavior } from "@cellsymphony/behavior-api";
 import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { ConfigPayload, PlatformEffect, PlatformState, RuntimeConfig, StoreResult } from "./index";
+import { isBusEffectType, sanitizeFxParams } from "./fxDefaults";
 import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
 
 type StoreDeps<TState> = {
@@ -227,26 +228,11 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
       ]);
       if (typeof raw === "string") {
         const type = allowed.has(raw) ? raw : "none";
-        return { type, params: {} };
+        return { type, params: sanitizeFxParams(type, {}) };
       }
       const typeRaw = typeof raw?.type === "string" ? raw.type : "none";
-      const type = allowed.has(typeRaw) ? typeRaw : "none";
-      const paramsIn = raw && typeof raw.params === "object" && raw.params ? raw.params : {};
-      const params: any = { ...paramsIn };
-      if (type === "duck") {
-        const src = String((paramsIn as any).source ?? "I1");
-        const mInst = /^I(\d+)$/.exec(src);
-        const mBus = /^B(\d+)$/.exec(src);
-        if (mInst) {
-          const n = Number(mInst[1]);
-          params.source = Number.isFinite(n) && n >= 1 && n <= PLATFORM_CAPS.instrumentCount ? `I${n}` : "I1";
-        } else if (mBus) {
-          const n = Number(mBus[1]);
-          params.source = Number.isFinite(n) && n >= 1 && n <= PLATFORM_CAPS.busCount ? `B${n}` : "I1";
-        } else {
-          params.source = "I1";
-        }
-      }
+      const type = isBusEffectType(typeRaw) && allowed.has(typeRaw) ? typeRaw : "none";
+      const params = sanitizeFxParams(type, raw?.params);
       return { type, params };
     };
     for (let i = 0; i < PLATFORM_CAPS.busCount; i += 1) {

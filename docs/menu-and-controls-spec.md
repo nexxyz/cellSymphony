@@ -191,6 +191,7 @@ Routing semantics:
 - Instrument `Route=direct` sends post-fader output to main mix using instrument `Pan Pos`.
 - Instrument `Route=bus_n` sends post-fader output to the selected bus (exclusive send).
 - Each bus runs `Slot 1` then `Slot 2` in order; with `None` selected this is passthrough.
+- Selecting a slot `Type` initializes that effect's editable parameter defaults immediately; loaded presets/defaults with missing or invalid effect params are repaired to those defaults.
 - Bus output is then panned by bus `Pan Pos` and summed to main mix.
 - `Duck` source options are stable and capability-sized: `I1..I{instrumentCount}` and `B1..B{busCount}`.
 - `Auto-pan` modulates the bus stereo output position after the slot chain.

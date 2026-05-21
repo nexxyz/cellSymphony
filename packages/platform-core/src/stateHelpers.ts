@@ -2,6 +2,7 @@ import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { TransportFrame } from "@cellsymphony/device-contracts";
 import { clamp, mod, readNestedValue, readValue, writeNestedValue, writeValue } from "./coreUtils";
+import { defaultFxParam, defaultFxParams, isBusEffectType } from "./fxDefaults";
 import type { ConfigPayload, MenuNode, PlatformState, SystemState } from "./platformTypes";
 import { clampPartIndex } from "./platformCaps";
 
@@ -116,10 +117,24 @@ export function readAnyValue<TState>(state: PlatformState<TState>, key: string):
   if (key.startsWith("transport.")) return readNestedValue(state.transport, key.slice("transport.".length));
   if (key.startsWith("mapping.")) return readNestedValue(state.mappingConfig, key.slice("mapping.".length));
   if (key.startsWith("system.")) return readNestedValue(state.system, key.slice("system.".length));
+  const fxParamMatch = /^mixer\.buses\.(\d+)\.(slot[12])\.params\.([^.]+)$/.exec(key);
+  if (fxParamMatch) {
+    const value = readValue(state.runtimeConfig, key);
+    const type = readValue(state.runtimeConfig, `mixer.buses.${fxParamMatch[1]}.${fxParamMatch[2]}.type`);
+    const fallback = defaultFxParam(type, fxParamMatch[3]);
+    if (fallback !== undefined && (value === undefined || (typeof fallback === "number" && !Number.isFinite(Number(value))))) return fallback;
+    return value;
+  }
   return readValue(state.runtimeConfig, key);
 }
 
 export function writeAnyValue<TState>(state: PlatformState<TState>, key: string, value: unknown): PlatformState<TState> {
+  const fxTypeMatch = /^mixer\.buses\.(\d+)\.(slot[12])\.type$/.exec(key);
+  if (fxTypeMatch) {
+    const type = isBusEffectType(value) ? value : "none";
+    const nextState = { ...state, runtimeConfig: writeValue(state.runtimeConfig, `mixer.buses.${fxTypeMatch[1]}.${fxTypeMatch[2]}`, { type, params: defaultFxParams(type) }) };
+    return syncActivePartFromLegacy(nextState);
+  }
   if (key.startsWith("transport.")) {
     const transport = writeNestedValue(state.transport, key.slice("transport.".length), value) as TransportFrame;
     return { ...state, transport };

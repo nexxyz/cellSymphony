@@ -1,23 +1,6 @@
 import type { MenuNode } from "./index";
+import { FX_SLOT_TYPES } from "./fxDefaults";
 import { PLATFORM_CAPS } from "./platformCaps";
-
-const FX_SLOT_TYPES = [
-  "none",
-  "reverb",
-  "delay",
-  "tremolo",
-  "vibrato",
-  "auto_pan",
-  "chorus",
-  "flanger",
-  "wah",
-  "filter_lfo",
-  "duck",
-  "bitcrusher",
-  "saturator",
-  "distortion",
-  "glitch"
-];
 
 function duckSourceOptions(): string[] {
   return [
