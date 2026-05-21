@@ -329,7 +329,14 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
         kind: "group",
         label: "System",
         children: [
-          { kind: "group", label: "Audio", children: [{ kind: "number", label: "Master Vol", key: "masterVolume", min: 0, max: 100, step: 1 }] },
+          {
+            kind: "group",
+            label: "Audio",
+            children: [
+              { kind: "number", label: "Master Vol", key: "masterVolume", min: 0, max: 100, step: 1 },
+              { kind: "enum", label: "Voice Stealing", key: "sound.voiceStealingMode", options: ["off", "lenient", "balanced", "aggressive"] }
+            ]
+          },
           {
             kind: "group",
             label: "Presets",

@@ -20,6 +20,7 @@ export type SimulatorSnapshot = {
   displayBrightness: number;
   buttonBrightness: number;
   masterVolume: number;
+  voiceStealingMode: "off" | "lenient" | "balanced" | "aggressive";
   instruments: unknown[];
 };
 

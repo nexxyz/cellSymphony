@@ -6,6 +6,7 @@ export type ScanAxis = "rows" | "columns";
 export type Direction = "forward" | "reverse";
 export type NoteUnit = "1/16" | "1/8" | "1/4" | "1/2" | "1/1";
 export type Curve = "linear" | "curve";
+export type VoiceStealingMode = "off" | "lenient" | "balanced" | "aggressive";
 export type ScaleId = "chromatic" | "major" | "natural_minor" | "dorian" | "mixolydian" | "major_pentatonic" | "minor_pentatonic" | "harmonic_minor";
 export type RootName = "C" | "C#" | "D" | "D#" | "E" | "F" | "F#" | "G" | "G#" | "A" | "A#" | "B";
 type OutOfRangeMode = "clamp" | "wrap";
@@ -103,7 +104,7 @@ export type PartConfig = {
 export type RuntimeConfig = {
   masterVolume: number; displayBrightness: number; gridBrightness: number; buttonBrightness: number; screenSleepSeconds: number;
   midi: { enabled: boolean; outId: string | null; clockOutEnabled: boolean; inId: string | null; clockInEnabled: boolean; syncMode: "internal" | "external"; respondToStartStop: boolean };
-  sound: { noteLengthMs: number; velocityScalePct: number; velocityCurve: "linear" | "soft" | "hard" };
+  sound: { noteLengthMs: number; velocityScalePct: number; velocityCurve: "linear" | "soft" | "hard"; voiceStealingMode: VoiceStealingMode };
   scanMode: ScanMode; scanAxis: ScanAxis; scanUnit: NoteUnit; scanDirection: Direction; algorithmStepUnit: NoteUnit;
   activeBehavior: string; autoSaveDefault: boolean; behaviorConfig: Record<string, unknown>; eventEnabled: boolean; stateEnabled: boolean;
   pitch: PitchSettings; x: AxisModConfig; y: AxisModConfig;

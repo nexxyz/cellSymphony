@@ -4,13 +4,15 @@ use std::thread;
 
 use midir::{Ignore, MidiInput, MidiInputConnection, MidiOutput};
 use realtime_engine::synth::{
-    InstrumentSlotConfig, InstrumentsConfig, SynthConfig, SynthEngine, INSTRUMENT_SLOT_COUNT,
+    InstrumentSlotConfig, InstrumentsConfig, SynthConfig, SynthEngine, VoiceStealingMode,
+    INSTRUMENT_SLOT_COUNT,
 };
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use serde::Deserialize;
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
+use std::time::Instant;
 use tauri::Emitter;
 
 #[derive(Deserialize)]
@@ -107,6 +109,7 @@ impl EngineSource {
 
     fn refill(&mut self) {
         const BLOCK: usize = 128;
+        let t0 = Instant::now();
         self.buf.clear();
         self.buf.reserve(BLOCK);
         if let Ok(mut eng) = self.engine.lock() {
@@ -119,6 +122,16 @@ impl EngineSource {
             }
         }
         self.idx = 0;
+        let elapsed = t0.elapsed().as_secs_f32();
+        let block_seconds = (BLOCK as f32) / (self.sample_rate as f32);
+        let ratio = if block_seconds > 0.0 {
+            elapsed / block_seconds
+        } else {
+            0.0
+        };
+        if let Ok(mut eng) = self.engine.lock() {
+            eng.set_runtime_load_ratio(ratio);
+        }
     }
 }
 
@@ -183,6 +196,12 @@ impl Default for SampleSlotConfig {
 #[derive(Deserialize)]
 struct AudioInstrumentsConfig {
     instruments: Vec<AudioInstrumentSlotConfig>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AudioRuntimePolicyConfig {
+    voice_stealing_mode: String,
 }
 
 #[derive(Deserialize)]
@@ -542,7 +561,7 @@ fn trigger_musical_event(
             velocity,
             duration_ms,
         } => {
-            let slot = channel.clamp(0, 15);
+            let slot = channel.clamp(0, (INSTRUMENT_SLOT_COUNT - 1) as u8);
             if !is_synth_slot(slot) {
                 if let Ok(cfgs) = state.sample_cfgs.lock() {
                     let cfg = &cfgs[(slot as usize).min(INSTRUMENT_SLOT_COUNT - 1)];
@@ -583,7 +602,7 @@ fn trigger_musical_event(
             controller,
             value,
         } => {
-            let slot = channel.clamp(0, 15);
+            let slot = channel.clamp(0, (INSTRUMENT_SLOT_COUNT - 1) as u8);
             if !is_synth_slot(slot) {
                 return Ok(());
             }
@@ -597,7 +616,7 @@ fn trigger_musical_event(
                 .map_err(|e| format!("audio queue send failed: {e}"))
         }
         MusicalEventPayload::NoteOff { channel, note } => {
-            let slot = channel.clamp(0, 15);
+            let slot = channel.clamp(0, (INSTRUMENT_SLOT_COUNT - 1) as u8);
             if !is_synth_slot(slot) {
                 return Ok(());
             }
@@ -642,6 +661,29 @@ fn audio_set_instruments(
         .lock()
         .map_err(|_| "audio engine mutex poisoned".to_string())?;
     eng.set_instruments(synth_payload);
+    Ok(())
+}
+
+fn parse_voice_stealing_mode(raw: &str) -> VoiceStealingMode {
+    match raw {
+        "off" => VoiceStealingMode::Off,
+        "lenient" => VoiceStealingMode::Lenient,
+        "aggressive" => VoiceStealingMode::Aggressive,
+        _ => VoiceStealingMode::Balanced,
+    }
+}
+
+#[tauri::command]
+fn audio_set_runtime_policy(
+    policy: AudioRuntimePolicyConfig,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let mode = parse_voice_stealing_mode(&policy.voice_stealing_mode);
+    let mut eng = state
+        .engine
+        .lock()
+        .map_err(|_| "audio engine mutex poisoned".to_string())?;
+    eng.set_voice_stealing_mode(mode);
     Ok(())
 }
 
@@ -888,7 +930,8 @@ pub fn run() {
             midi_select_input,
             midi_send,
             sample_list,
-            sample_preview
+            sample_preview,
+            audio_set_runtime_policy
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

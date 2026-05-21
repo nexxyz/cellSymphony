@@ -205,7 +205,8 @@ Playback
 ```
 System
 ├── Audio (group)
-│   └── Master Vol: [0..100] step 1  default 73
+│   ├── Master Vol: [0..100] step 1  default 73
+│   └── Voice Stealing: [off | lenient | balanced | aggressive]  default balanced
 ├── Presets (group)
 │   ├── Library (group)
 │   │   ├── Save As (group)

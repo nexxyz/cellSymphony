@@ -1243,6 +1243,15 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "Soft raises low velocities; hard emphasizes stronger hits."
   },
   {
+    "id": "voice_stealing_mode",
+    "path": "*",
+    "key": "key:sound.voiceStealingMode",
+    "kind": "enum",
+    "title": "Voice Stealing",
+    "line1": "Controls global load-aware voice stealing behavior: off, lenient, balanced, aggressive.",
+    "line2": "Aggressive keeps more CPU headroom under load; lenient preserves longer tails."
+  },
+  {
     "id": "ui_group",
     "path": "Menu > System > UI Settings",
     "key": "",

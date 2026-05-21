@@ -33,6 +33,7 @@ export function App() {
   const frame = snapshot.frame;
   const oledCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const lastInstrumentsJson = useRef<string>("");
+  const lastVoiceStealingMode = useRef<string>("");
 
   const oledFrame = frame.oled;
   const oledImage = useMemo(() => toOledImage(oledFrame), [oledFrame]);
@@ -87,6 +88,13 @@ export function App() {
     lastInstrumentsJson.current = json;
     void nativeAudioBridge.setInstruments(instruments);
   }, [snapshot]);
+
+  useEffect(() => {
+    const mode = snapshot.voiceStealingMode ?? "balanced";
+    if (mode === lastVoiceStealingMode.current) return;
+    lastVoiceStealingMode.current = mode;
+    void nativeAudioBridge.setRuntimePolicy({ voiceStealingMode: mode });
+  }, [snapshot.voiceStealingMode]);
 
   return (
     <main className="app-shell" onMouseUp={endPaint} onMouseLeave={endPaint}>

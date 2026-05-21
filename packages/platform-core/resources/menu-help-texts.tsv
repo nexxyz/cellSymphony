@@ -145,6 +145,7 @@ playback_section	Menu > Playback		group	Playback	Transport tempo and timing cont
 bpm_help	*	key:transport.bpm	number	BPM	Sets master tempo in beats per minute.	Affects internal clock rate and algorithm pulse timing.
 sys_audio_group	Menu > System > Audio		group	Audio	Global output level controls.	Applies after per-instrument voice shaping.
 master_vol	*	key:masterVolume	number	Master Volume	Sets overall output volume scaling.	Use this for final level trim without changing patch balance.
+voice_stealing_mode	*	key:sound.voiceStealingMode	enum	Voice Stealing	Controls global load-aware voice stealing behavior: off, lenient, balanced, aggressive.	Aggressive keeps more CPU headroom under load; lenient preserves longer tails.
 presets_group	Menu > System > Presets		group	Presets	Save, load, and manage configuration snapshots.	Use defaults for boot state and library for named variants.
 default_save	System > Presets > Default > Save Default	action:default_save	action	Save Default	Stores current state as startup default payload.	Use with Auto Save when you want edits to persist automatically.
 default_load	System > Presets > Default > Load Default	action:default_load	action	Load Default	Loads the saved default payload into current state.	Replaces current runtime settings immediately.

@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 export interface NativeAudioBridge {
   trigger(event: MusicalEvent): Promise<void>;
   setInstruments(instruments: unknown[]): Promise<void>;
+  setRuntimePolicy(policy: { voiceStealingMode: "off" | "lenient" | "balanced" | "aggressive" }): Promise<void>;
 }
 
 class TauriNativeAudioBridge implements NativeAudioBridge {
@@ -20,6 +21,12 @@ class TauriNativeAudioBridge implements NativeAudioBridge {
       instruments: Array.isArray(instruments) ? instruments : []
     };
     await invoke("audio_set_instruments", { config: payload });
+  }
+
+  async setRuntimePolicy(policy: { voiceStealingMode: "off" | "lenient" | "balanced" | "aggressive" }): Promise<void> {
+    const isTauri = "__TAURI_INTERNALS__" in window;
+    if (!isTauri) return;
+    await invoke("audio_set_runtime_policy", { policy });
   }
 }
 

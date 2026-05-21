@@ -36,7 +36,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
     buttonBrightness: 75,
     screenSleepSeconds: 60,
     midi: { enabled: false, outId: null, clockOutEnabled: false, inId: null, clockInEnabled: false, syncMode: "internal", respondToStartStop: true },
-    sound: { noteLengthMs: 120, velocityScalePct: 100, velocityCurve: "linear" },
+    sound: { noteLengthMs: 120, velocityScalePct: 100, velocityCurve: "linear", voiceStealingMode: "balanced" },
     scanMode: "immediate",
     scanAxis: "columns",
     scanUnit: "1/8",

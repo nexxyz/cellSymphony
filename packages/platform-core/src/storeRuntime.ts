@@ -218,6 +218,11 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     instruments: sanitizeInstruments(rt.instruments)
   };
 
+  const voiceStealingMode = (mergedRuntime as any).sound?.voiceStealingMode;
+  if (voiceStealingMode !== "off" && voiceStealingMode !== "lenient" && voiceStealingMode !== "balanced" && voiceStealingMode !== "aggressive") {
+    (mergedRuntime as any).sound.voiceStealingMode = (factory.runtimeConfig as any).sound?.voiceStealingMode ?? "balanced";
+  }
+
   if (!Array.isArray((mergedRuntime as any).parts) || (mergedRuntime as any).parts.length === 0) {
     (mergedRuntime as any).parts = Array.isArray((factory.runtimeConfig as any).parts) ? structuredClone((factory.runtimeConfig as any).parts) : [];
   }
