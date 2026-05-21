@@ -4,8 +4,8 @@ use std::thread;
 
 use midir::{Ignore, MidiInput, MidiInputConnection, MidiOutput};
 use realtime_engine::synth::{
-    InstrumentSlotConfig, InstrumentsConfig, SynthConfig, SynthEngine, VoiceStealingMode,
-    INSTRUMENT_SLOT_COUNT,
+    BusConfig, BusSlotConfig, InstrumentMixerConfig, InstrumentSlotConfig, InstrumentsConfig,
+    MixerConfig, SynthConfig, SynthEngine, VoiceStealingMode, INSTRUMENT_SLOT_COUNT,
 };
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use serde::Deserialize;
@@ -111,13 +111,16 @@ impl EngineSource {
         const BLOCK: usize = 128;
         let t0 = Instant::now();
         self.buf.clear();
-        self.buf.reserve(BLOCK);
+        self.buf.reserve(BLOCK * 2);
         if let Ok(mut eng) = self.engine.lock() {
             for _ in 0..BLOCK {
-                self.buf.push(eng.next_sample());
+                let (l, r) = eng.next_stereo_sample();
+                self.buf.push(l);
+                self.buf.push(r);
             }
         } else {
             for _ in 0..BLOCK {
+                self.buf.push(0.0);
                 self.buf.push(0.0);
             }
         }
@@ -153,7 +156,7 @@ impl rodio::Source for EngineSource {
     }
 
     fn channels(&self) -> u16 {
-        1
+        2
     }
 
     fn sample_rate(&self) -> u32 {
@@ -196,6 +199,27 @@ impl Default for SampleSlotConfig {
 #[derive(Deserialize)]
 struct AudioInstrumentsConfig {
     instruments: Vec<AudioInstrumentSlotConfig>,
+    #[serde(default)]
+    mixer: Option<AudioMixerConfig>,
+    #[serde(default, rename = "panPositions")]
+    pan_positions: Option<usize>,
+}
+
+#[derive(Deserialize)]
+struct AudioMixerConfig {
+    #[serde(default)]
+    buses: Vec<AudioBusConfig>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AudioBusConfig {
+    #[serde(default)]
+    slot1: Option<String>,
+    #[serde(default)]
+    slot2: Option<String>,
+    #[serde(default)]
+    pan_pos: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -212,6 +236,17 @@ struct AudioInstrumentSlotConfig {
     synth: Option<SynthConfig>,
     #[serde(default)]
     sample: Option<AudioSampleConfig>,
+    #[serde(default)]
+    mixer: Option<AudioInstrumentMixerConfig>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AudioInstrumentMixerConfig {
+    #[serde(default)]
+    route: Option<String>,
+    #[serde(default)]
+    pan_pos: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -644,6 +679,26 @@ fn audio_set_instruments(
     if let Ok(mut sample_cfgs) = state.sample_cfgs.lock() {
         *sample_cfgs = next_sample_cfgs;
     }
+    let buses = config
+        .mixer
+        .as_ref()
+        .map(|m| {
+            m.buses
+                .iter()
+                .map(|b| BusConfig {
+                    slots: vec![
+                        BusSlotConfig {
+                            kind: b.slot1.clone().unwrap_or_else(|| "none".to_string()),
+                        },
+                        BusSlotConfig {
+                            kind: b.slot2.clone().unwrap_or_else(|| "none".to_string()),
+                        },
+                    ],
+                    pan_pos: b.pan_pos.unwrap_or(4),
+                })
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
     let synth_payload = InstrumentsConfig {
         instruments: config
             .instruments
@@ -653,8 +708,18 @@ fn audio_set_instruments(
                 synth: slot
                     .synth
                     .unwrap_or_else(realtime_engine::synth::default_synth_config),
+                mixer: Some(InstrumentMixerConfig {
+                    route: slot
+                        .mixer
+                        .as_ref()
+                        .and_then(|m| m.route.clone())
+                        .unwrap_or_else(|| "direct".to_string()),
+                    pan_pos: slot.mixer.as_ref().and_then(|m| m.pan_pos).unwrap_or(4),
+                }),
             })
             .collect(),
+        mixer: Some(MixerConfig { buses }),
+        pan_positions: config.pan_positions.unwrap_or(8),
     };
     let mut eng = state
         .engine

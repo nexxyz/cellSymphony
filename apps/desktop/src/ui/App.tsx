@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
-import { GRID_DOMAIN, OLED_HEIGHT, OLED_WIDTH } from "@cellsymphony/platform-core";
+import { GRID_DOMAIN, OLED_HEIGHT, OLED_WIDTH, PLATFORM_CAPS } from "@cellsymphony/platform-core";
 import { mapKeyboardEventToInputAction, mapKeyboardKeyupToInputAction, shouldPreventKeyboardDefault } from "../runtime/inputAdapters/keyboardAdapter";
 import { sendEventsToAudio } from "../runtime/outputAdapters/audioSink";
 import { createSimulatorRuntime } from "../runtime/simulatorRuntime";
@@ -83,10 +83,12 @@ export function App() {
 
   useEffect(() => {
     const instruments = (snapshot as any).instruments ?? [];
-    const json = JSON.stringify(instruments);
+    const mixer = (snapshot as any).mixer ?? { buses: [] };
+    const panPositions = PLATFORM_CAPS.gridWidth;
+    const json = JSON.stringify({ instruments, mixer, panPositions });
     if (json === lastInstrumentsJson.current) return;
     lastInstrumentsJson.current = json;
-    void nativeAudioBridge.setInstruments(instruments);
+    void nativeAudioBridge.setInstruments({ instruments, mixer, panPositions });
   }, [snapshot]);
 
   useEffect(() => {

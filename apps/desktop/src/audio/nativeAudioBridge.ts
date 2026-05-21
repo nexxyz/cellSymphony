@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface NativeAudioBridge {
   trigger(event: MusicalEvent): Promise<void>;
-  setInstruments(instruments: unknown[]): Promise<void>;
+  setInstruments(config: { instruments: unknown[]; mixer: unknown; panPositions: number }): Promise<void>;
   setRuntimePolicy(policy: { voiceStealingMode: "off" | "lenient" | "balanced" | "aggressive" }): Promise<void>;
 }
 
@@ -14,12 +14,10 @@ class TauriNativeAudioBridge implements NativeAudioBridge {
     await invoke("trigger_musical_event", { event });
   }
 
-  async setInstruments(instruments: unknown[]): Promise<void> {
+  async setInstruments(config: { instruments: unknown[]; mixer: unknown; panPositions: number }): Promise<void> {
     const isTauri = "__TAURI_INTERNALS__" in window;
     if (!isTauri) return;
-    const payload = {
-      instruments: Array.isArray(instruments) ? instruments : []
-    };
+    const payload = config ?? { instruments: [], mixer: { buses: [] }, panPositions: 8 };
     await invoke("audio_set_instruments", { config: payload });
   }
 

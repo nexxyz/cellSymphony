@@ -22,6 +22,7 @@ export type SimulatorSnapshot = {
   masterVolume: number;
   voiceStealingMode: "off" | "lenient" | "balanced" | "aggressive";
   instruments: unknown[];
+  mixer: unknown;
 };
 
 export type RuntimeListener = (snapshot: SimulatorSnapshot) => void;

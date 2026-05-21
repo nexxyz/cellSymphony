@@ -22,6 +22,8 @@ pub enum FilterType {
 
 pub const INSTRUMENT_SLOT_COUNT: usize = 8;
 pub const VOICES_PER_SLOT: usize = 8;
+pub const BUS_SLOTS_PER_BUS: usize = 2;
+pub const DEFAULT_PAN_POSITIONS: usize = 8;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -94,11 +96,52 @@ pub struct InstrumentSlotConfig {
     #[serde(rename = "type")]
     pub kind: String,
     pub synth: SynthConfig,
+    #[serde(default)]
+    pub mixer: Option<InstrumentMixerConfig>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct InstrumentMixerConfig {
+    pub route: String,
+    #[serde(rename = "panPos")]
+    pub pan_pos: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BusSlotConfig {
+    #[serde(default = "default_bus_slot_type")]
+    pub kind: String,
+}
+
+fn default_bus_slot_type() -> String {
+    "none".to_string()
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BusConfig {
+    #[serde(default)]
+    pub slots: Vec<BusSlotConfig>,
+    #[serde(rename = "panPos")]
+    pub pan_pos: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct MixerConfig {
+    #[serde(default)]
+    pub buses: Vec<BusConfig>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct InstrumentsConfig {
     pub instruments: Vec<InstrumentSlotConfig>,
+    #[serde(default)]
+    pub mixer: Option<MixerConfig>,
+    #[serde(default = "default_pan_positions", rename = "panPositions")]
+    pub pan_positions: usize,
+}
+
+fn default_pan_positions() -> usize {
+    DEFAULT_PAN_POSITIONS
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -356,6 +399,11 @@ pub struct SynthEngine {
     instruments: [SynthConfig; INSTRUMENT_SLOT_COUNT],
     mods: [InstrumentMod; INSTRUMENT_SLOT_COUNT],
     voices: [[Voice; VOICES_PER_SLOT]; INSTRUMENT_SLOT_COUNT],
+    slot_route: [usize; INSTRUMENT_SLOT_COUNT],
+    slot_pan_pos: [usize; INSTRUMENT_SLOT_COUNT],
+    bus_pan_pos: Vec<usize>,
+    bus_slot_kinds: Vec<[u8; BUS_SLOTS_PER_BUS]>,
+    pan_positions: usize,
     voice_stealing_mode: VoiceStealingMode,
     smoothed_load_ratio: f32,
 }
@@ -369,6 +417,11 @@ impl SynthEngine {
             instruments: [default; INSTRUMENT_SLOT_COUNT],
             mods: [InstrumentMod::new(); INSTRUMENT_SLOT_COUNT],
             voices: [[Voice::off(); VOICES_PER_SLOT]; INSTRUMENT_SLOT_COUNT],
+            slot_route: [0; INSTRUMENT_SLOT_COUNT],
+            slot_pan_pos: [DEFAULT_PAN_POSITIONS / 2; INSTRUMENT_SLOT_COUNT],
+            bus_pan_pos: Vec::new(),
+            bus_slot_kinds: Vec::new(),
+            pan_positions: DEFAULT_PAN_POSITIONS,
             voice_stealing_mode: VoiceStealingMode::Balanced,
             smoothed_load_ratio: 0.0,
         }
@@ -384,14 +437,36 @@ impl SynthEngine {
     }
 
     pub fn set_instruments(&mut self, cfg: InstrumentsConfig) {
+        self.pan_positions = cfg.pan_positions.max(1);
         for (idx, slot) in cfg.instruments.into_iter().enumerate() {
             if idx >= INSTRUMENT_SLOT_COUNT {
                 break;
             }
             if slot.kind != "synth" {
+                if let Some(m) = slot.mixer {
+                    self.slot_route[idx] = parse_route(&m.route);
+                    self.slot_pan_pos[idx] = m.pan_pos.min(self.pan_positions - 1);
+                }
                 continue;
             }
             self.instruments[idx] = slot.synth;
+            if let Some(m) = slot.mixer {
+                self.slot_route[idx] = parse_route(&m.route);
+                self.slot_pan_pos[idx] = m.pan_pos.min(self.pan_positions - 1);
+            }
+        }
+        self.bus_pan_pos.clear();
+        self.bus_slot_kinds.clear();
+        if let Some(mixer) = cfg.mixer {
+            for bus in mixer.buses.into_iter() {
+                self.bus_pan_pos
+                    .push(bus.pan_pos.min(self.pan_positions - 1));
+                let mut kinds = [0_u8; BUS_SLOTS_PER_BUS];
+                for (j, slot) in bus.slots.into_iter().enumerate().take(BUS_SLOTS_PER_BUS) {
+                    kinds[j] = if slot.kind == "none" { 0 } else { 0 };
+                }
+                self.bus_slot_kinds.push(kinds);
+            }
         }
     }
 
@@ -479,7 +554,12 @@ impl SynthEngine {
     }
 
     pub fn next_sample(&mut self) -> f32 {
-        let mut out = 0.0_f32;
+        let (l, r) = self.next_stereo_sample();
+        (l + r) * 0.5
+    }
+
+    pub fn next_stereo_sample(&mut self) -> (f32, f32) {
+        let mut slot_out = [0.0_f32; INSTRUMENT_SLOT_COUNT];
         for pool in self.voices.iter_mut() {
             for v in pool.iter_mut() {
                 if !v.active {
@@ -530,12 +610,40 @@ impl SynthEngine {
                     .process(dry, cfg.filter.kind, cutoff, q, self.sample_rate);
 
                 let sample = filtered * amp_env * vel_gain * gain * 0.35;
-                out += sample;
+                slot_out[slot] += sample;
             }
         }
 
+        let mut bus_mono = vec![0.0_f32; self.bus_pan_pos.len()];
+        let mut left = 0.0_f32;
+        let mut right = 0.0_f32;
+        for (slot, sample) in slot_out.iter().enumerate() {
+            let route = self.slot_route[slot] as usize;
+            if route == 0 {
+                let (gl, gr) = pan_gains(self.slot_pan_pos[slot], self.pan_positions);
+                left += *sample * gl;
+                right += *sample * gr;
+            } else {
+                let bus = route - 1;
+                if bus < bus_mono.len() {
+                    bus_mono[bus] += *sample;
+                } else {
+                    let (gl, gr) = pan_gains(self.slot_pan_pos[slot], self.pan_positions);
+                    left += *sample * gl;
+                    right += *sample * gr;
+                }
+            }
+        }
+        for (bus_idx, bus_sample) in bus_mono.iter().enumerate() {
+            let processed = *bus_sample;
+            let pan = self.bus_pan_pos.get(bus_idx).copied().unwrap_or(0);
+            let (gl, gr) = pan_gains(pan, self.pan_positions);
+            left += processed * gl;
+            right += processed * gr;
+        }
+
         self.sample_clock = self.sample_clock.saturating_add(1);
-        out.clamp(-1.0, 1.0)
+        (left.clamp(-1.0, 1.0), right.clamp(-1.0, 1.0))
     }
 
     fn steal_voice_index(pool: &[Voice; VOICES_PER_SLOT]) -> usize {
@@ -631,6 +739,29 @@ impl SynthEngine {
     }
 }
 
+fn parse_route(route: &str) -> usize {
+    if route == "direct" {
+        return 0;
+    }
+    if let Some(rest) = route.strip_prefix("bus_") {
+        if let Ok(n) = rest.parse::<usize>() {
+            if n >= 1 {
+                return n;
+            }
+        }
+    }
+    0
+}
+
+fn pan_gains(pan_pos: usize, positions: usize) -> (f32, f32) {
+    if positions <= 1 {
+        return (0.70710677, 0.70710677);
+    }
+    let t = (pan_pos.min(positions - 1) as f32) / ((positions - 1) as f32);
+    let theta = t * (std::f32::consts::FRAC_PI_2);
+    (theta.cos(), theta.sin())
+}
+
 fn ms_to_samples(ms: f32, sample_rate: u32) -> u32 {
     if ms <= 0.0 {
         return 0;
@@ -720,7 +851,7 @@ pub fn default_synth_config() -> SynthConfig {
 mod tests {
     use super::{
         default_synth_config, FilterType, InstrumentSlotConfig, InstrumentsConfig, SynthEngine,
-        INSTRUMENT_SLOT_COUNT,
+        DEFAULT_PAN_POSITIONS, INSTRUMENT_SLOT_COUNT,
     };
 
     #[test]
@@ -746,7 +877,10 @@ mod tests {
             instruments: vec![InstrumentSlotConfig {
                 kind: "synth".to_string(),
                 synth: cfg,
+                mixer: None,
             }],
+            mixer: None,
+            pan_positions: DEFAULT_PAN_POSITIONS,
         });
         engine.note_on(0, 60, 100, 120);
         let s = engine.next_sample();
@@ -773,7 +907,10 @@ mod tests {
                 instruments: vec![InstrumentSlotConfig {
                     kind: "synth".to_string(),
                     synth: cfg,
+                    mixer: None,
                 }],
+                mixer: None,
+                pan_positions: DEFAULT_PAN_POSITIONS,
             });
 
             engine.note_on(0, 64, 110, 220);
