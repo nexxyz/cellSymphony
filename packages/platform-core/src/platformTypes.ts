@@ -72,10 +72,31 @@ export type InstrumentSlotConfig = {
   mixer?: { route: string; panPos: number };
 };
 
-export type BusEffectType = "none";
+export type BusEffectType =
+  | "none"
+  | "reverb"
+  | "delay"
+  | "tremolo"
+  | "vibrato"
+  | "auto_pan"
+  | "chorus"
+  | "flanger"
+  | "wah"
+  | "filter_lfo"
+  | "duck"
+  | "bitcrusher"
+  | "saturator"
+  | "distortion"
+  | "glitch";
+
+export type FxSlotConfig = {
+  type: BusEffectType;
+  params: Record<string, unknown>;
+};
+
 export type FxBusConfig = {
-  slot1: BusEffectType;
-  slot2: BusEffectType;
+  slot1: FxSlotConfig;
+  slot2: FxSlotConfig;
   panPos: number;
 };
 

@@ -75,7 +75,11 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
     parts: [],
     instruments,
     mixer: {
-      buses: Array.from({ length: PLATFORM_CAPS.busCount }, () => ({ slot1: "none" as const, slot2: "none" as const, panPos: DEFAULT_PAN_POS }))
+      buses: Array.from({ length: PLATFORM_CAPS.busCount }, () => ({
+        slot1: { type: "none" as const, params: {} },
+        slot2: { type: "none" as const, params: {} },
+        panPos: DEFAULT_PAN_POS
+      }))
     }
   };
   const makePart = (idx: number): PartConfig => ({

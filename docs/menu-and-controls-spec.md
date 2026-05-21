@@ -177,8 +177,12 @@ L3: Voice
     │       └── Pan Pos: [0..gridWidth-1] quantized
     └── FX Buses (group)
         ├── Bus 1..4 (group)
-        │   ├── Slot 1: [None] default None
-        │   ├── Slot 2: [None] default None
+        │   ├── Slot 1 (group)
+        │   │   ├── Type: [none | reverb | delay | tremolo | vibrato | auto_pan | chorus | flanger | wah | filter_lfo | duck | bitcrusher | saturator | distortion | glitch] default none
+        │   │   └── (effect params, visible per Type)
+        │   ├── Slot 2 (group)
+        │   │   ├── Type: [same options] default none
+        │   │   └── (effect params, visible per Type)
         │   └── Pan Pos: [0..gridWidth-1] quantized
 ```
 

@@ -207,11 +207,53 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     const factoryMixer = (factory.runtimeConfig as any).mixer;
     const sourceBuses = Array.isArray(incoming?.buses) ? incoming.buses : (Array.isArray(factoryMixer?.buses) ? factoryMixer.buses : []);
     const buses: any[] = [];
+    const normalizeSlot = (raw: any): any => {
+      const allowed = new Set([
+        "none",
+        "reverb",
+        "delay",
+        "tremolo",
+        "vibrato",
+        "auto_pan",
+        "chorus",
+        "flanger",
+        "wah",
+        "filter_lfo",
+        "duck",
+        "bitcrusher",
+        "saturator",
+        "distortion",
+        "glitch"
+      ]);
+      if (typeof raw === "string") {
+        const type = allowed.has(raw) ? raw : "none";
+        return { type, params: {} };
+      }
+      const typeRaw = typeof raw?.type === "string" ? raw.type : "none";
+      const type = allowed.has(typeRaw) ? typeRaw : "none";
+      const paramsIn = raw && typeof raw.params === "object" && raw.params ? raw.params : {};
+      const params: any = { ...paramsIn };
+      if (type === "duck") {
+        const src = String((paramsIn as any).source ?? "I1");
+        const mInst = /^I(\d+)$/.exec(src);
+        const mBus = /^B(\d+)$/.exec(src);
+        if (mInst) {
+          const n = Number(mInst[1]);
+          params.source = Number.isFinite(n) && n >= 1 && n <= PLATFORM_CAPS.instrumentCount ? `I${n}` : "I1";
+        } else if (mBus) {
+          const n = Number(mBus[1]);
+          params.source = Number.isFinite(n) && n >= 1 && n <= PLATFORM_CAPS.busCount ? `B${n}` : "I1";
+        } else {
+          params.source = "I1";
+        }
+      }
+      return { type, params };
+    };
     for (let i = 0; i < PLATFORM_CAPS.busCount; i += 1) {
       const src = sourceBuses[i] ?? {};
       buses.push({
-        slot1: src.slot1 === "none" ? "none" : "none",
-        slot2: src.slot2 === "none" ? "none" : "none",
+        slot1: normalizeSlot(src.slot1),
+        slot2: normalizeSlot(src.slot2),
         panPos: Math.max(0, Math.min(PLATFORM_CAPS.gridWidth - 1, Number(src.panPos ?? Math.floor(PLATFORM_CAPS.gridWidth / 2))))
       });
     }

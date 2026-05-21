@@ -336,8 +336,52 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
               kind: "group",
               label: `Bus ${busIdx + 1}`,
               children: [
-                { kind: "enum", label: "Slot 1", key: `mixer.buses.${busIdx}.slot1`, options: ["none"] },
-                { kind: "enum", label: "Slot 2", key: `mixer.buses.${busIdx}.slot2`, options: ["none"] },
+                {
+                  kind: "group",
+                  label: "Slot 1",
+                  children: [
+                    { kind: "enum", label: "Type", key: `mixer.buses.${busIdx}.slot1.type`, options: ["none", "reverb", "delay", "tremolo", "vibrato", "auto_pan", "chorus", "flanger", "wah", "filter_lfo", "duck", "bitcrusher", "saturator", "distortion", "glitch"] },
+                    {
+                      kind: "group",
+                      label: "Duck",
+                      visible: (c: any) => c.mixer?.buses?.[busIdx]?.slot1?.type === "duck",
+                      children: [
+                        {
+                          kind: "enum",
+                          label: "Source",
+                          key: `mixer.buses.${busIdx}.slot1.params.source`,
+                          options: [
+                            ...Array.from({ length: PLATFORM_CAPS.instrumentCount }, (_, i) => `I${i + 1}`),
+                            ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, i) => `B${i + 1}`)
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  kind: "group",
+                  label: "Slot 2",
+                  children: [
+                    { kind: "enum", label: "Type", key: `mixer.buses.${busIdx}.slot2.type`, options: ["none", "reverb", "delay", "tremolo", "vibrato", "auto_pan", "chorus", "flanger", "wah", "filter_lfo", "duck", "bitcrusher", "saturator", "distortion", "glitch"] },
+                    {
+                      kind: "group",
+                      label: "Duck",
+                      visible: (c: any) => c.mixer?.buses?.[busIdx]?.slot2?.type === "duck",
+                      children: [
+                        {
+                          kind: "enum",
+                          label: "Source",
+                          key: `mixer.buses.${busIdx}.slot2.params.source`,
+                          options: [
+                            ...Array.from({ length: PLATFORM_CAPS.instrumentCount }, (_, i) => `I${i + 1}`),
+                            ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, i) => `B${i + 1}`)
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
                 { kind: "number", label: "Pan Pos", key: `mixer.buses.${busIdx}.panPos`, min: 0, max: PLATFORM_CAPS.gridWidth - 1, step: 1 }
               ]
             }))

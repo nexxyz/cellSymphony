@@ -213,7 +213,18 @@ inst_mixer_group	Menu > L3: Voice > Instruments > Instrument * > Mixer		group	In
 inst_mixer_route	Menu > L3: Voice > Instruments > Instrument * > Mixer > Route	key:instruments.*.mixer.route	enum	Route	Options: direct, bus_1, bus_2, bus_3, bus_4.	Direct sends to main output; bus routes send to the selected FX bus.
 inst_mixer_pan	Menu > L3: Voice > Instruments > Instrument * > Mixer > Pan Pos	key:instruments.*.mixer.panPos	number	Pan Position	Sets quantized pan position for direct output sends.	0 is left, max is right, midpoint is centered.
 fx_buses_group	Menu > L3: Voice > FX Buses		group	FX Buses	Configures four shared buses used by instrument bus routing.	Each bus has two effect slots and output pan.
-fx_bus_group	Menu > L3: Voice > FX Buses > Bus *		group	FX Bus	Settings for one FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
+fx_bus_1	Menu > L3: Voice > FX Buses > Bus 1		group	FX Bus	Settings for this FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
+fx_bus_2	Menu > L3: Voice > FX Buses > Bus 2		group	FX Bus	Settings for this FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
+fx_bus_3	Menu > L3: Voice > FX Buses > Bus 3		group	FX Bus	Settings for this FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
+fx_bus_4	Menu > L3: Voice > FX Buses > Bus 4		group	FX Bus	Settings for this FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
 fx_bus_slot1	Menu > L3: Voice > FX Buses > Bus * > Slot 1	key:mixer.buses.*.slot1	enum	Bus Slot 1	First effect slot in the bus chain.	Default None means passthrough.
 fx_bus_slot2	Menu > L3: Voice > FX Buses > Bus * > Slot 2	key:mixer.buses.*.slot2	enum	Bus Slot 2	Second effect slot in the bus chain.	Default None means passthrough.
 fx_bus_pan	Menu > L3: Voice > FX Buses > Bus * > Pan Pos	key:mixer.buses.*.panPos	number	Bus Pan Position	Sets quantized output pan position for this bus.	0 is left, max is right, midpoint is centered.
+fx_bus_slot1_group	Menu > L3: Voice > FX Buses > Bus * > Slot 1		group	Bus Slot	Configures one effect slot in the bus chain.	Choose Type, then edit effect parameters below.
+fx_bus_slot2_group	Menu > L3: Voice > FX Buses > Bus * > Slot 2		group	Bus Slot	Configures one effect slot in the bus chain.	Choose Type, then edit effect parameters below.
+fx_bus_slot1_type	Menu > L3: Voice > FX Buses > Bus * > Slot 1 > Type	key:mixer.buses.*.slot1.type	enum	Slot Type	Selects which effect runs in this slot.	None is passthrough.
+fx_bus_slot2_type	Menu > L3: Voice > FX Buses > Bus * > Slot 2 > Type	key:mixer.buses.*.slot2.type	enum	Slot Type	Selects which effect runs in this slot.	None is passthrough.
+fx_bus_slot1_duck_group	Menu > L3: Voice > FX Buses > Bus * > Slot 1 > Duck		group	Duck	Sidechain-style ducking effect.	Reduces this bus level when the selected source is loud.
+fx_bus_slot2_duck_group	Menu > L3: Voice > FX Buses > Bus * > Slot 2 > Duck		group	Duck	Sidechain-style ducking effect.	Reduces this bus level when the selected source is loud.
+fx_bus_slot1_duck_source	Menu > L3: Voice > FX Buses > Bus * > Slot 1 > Duck > Source	key:mixer.buses.*.slot1.params.source	enum	Duck Source	Selects which signal triggers ducking.	Options are I# (instrument) and B# (bus), capability-sized.
+fx_bus_slot2_duck_source	Menu > L3: Voice > FX Buses > Bus * > Slot 2 > Duck > Source	key:mixer.buses.*.slot2.params.source	enum	Duck Source	Selects which signal triggers ducking.	Options are I# (instrument) and B# (bus), capability-sized.
