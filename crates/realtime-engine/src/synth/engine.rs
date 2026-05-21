@@ -245,7 +245,7 @@ impl SynthEngine {
         let mut left = 0.0_f32;
         let mut right = 0.0_f32;
         for (slot, sample) in slot_out.iter().enumerate() {
-            let route = self.slot_route[slot] as usize;
+            let route = self.slot_route[slot];
             if route == 0 {
                 let (gl, gr) = pan_gains(self.slot_pan_pos[slot], self.pan_positions);
                 left += *sample * gl;
@@ -275,7 +275,7 @@ impl SynthEngine {
                         &mut states[j],
                         processed,
                         &slot_out,
-                        &bus_mono,
+                        bus_mono,
                         self.sample_rate,
                     );
                     if let BusFxState::AutoPan { pos, .. } = states[j] {

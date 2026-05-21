@@ -148,11 +148,13 @@ pub(super) fn process_bus_slot(
         } => process_filter_lfo(
             state,
             input,
-            kind,
-            rate_hz,
-            depth,
-            center_hz,
-            q,
+            FilterLfoParams {
+                kind,
+                rate_hz,
+                depth,
+                center_hz,
+                q,
+            },
             sample_rate,
         ),
         BusFxParams::Reverb { mix, decay, damp } => {
@@ -196,11 +198,13 @@ pub(super) fn process_bus_slot(
         } => process_duck(
             state,
             input,
-            source,
-            threshold,
-            amount,
-            attack_ms,
-            release_ms,
+            DuckParams {
+                source,
+                threshold,
+                amount,
+                attack_ms,
+                release_ms,
+            },
             slot_out,
             bus_in,
             sample_rate,
@@ -255,6 +259,22 @@ struct ModDelayParams {
     mix: f32,
 }
 
+struct FilterLfoParams {
+    kind: FilterLfoKind,
+    rate_hz: f32,
+    depth: f32,
+    center_hz: f32,
+    q: f32,
+}
+
+struct DuckParams {
+    source: DuckSource,
+    threshold: f32,
+    amount: f32,
+    attack_ms: f32,
+    release_ms: f32,
+}
+
 fn process_mod_delay(
     state: &mut BusFxState,
     input: f32,
@@ -287,11 +307,7 @@ fn process_mod_delay(
 fn process_filter_lfo(
     state: &mut BusFxState,
     input: f32,
-    kind: FilterLfoKind,
-    rate_hz: f32,
-    depth: f32,
-    center_hz: f32,
-    q: f32,
+    params: FilterLfoParams,
     sample_rate: u32,
 ) -> f32 {
     let BusFxState::FilterLfo { filt, phase } = state else {
@@ -302,14 +318,14 @@ fn process_filter_lfo(
         return input;
     };
     let sweep = ((*phase).sin() + 1.0) * 0.5;
-    let semis = (sweep - 0.5) * 48.0 * depth;
-    let cutoff = (center_hz * 2.0_f32.powf(semis / 12.0)).clamp(40.0, 18_000.0);
-    *phase = wrap_phase(*phase + 2.0 * PI * rate_hz / sample_rate as f32);
-    let mode = match kind {
+    let semis = (sweep - 0.5) * 48.0 * params.depth;
+    let cutoff = (params.center_hz * 2.0_f32.powf(semis / 12.0)).clamp(40.0, 18_000.0);
+    *phase = wrap_phase(*phase + 2.0 * PI * params.rate_hz / sample_rate as f32);
+    let mode = match params.kind {
         FilterLfoKind::Wah => FilterType::Bandpass,
         FilterLfoKind::FilterLfo => FilterType::Lowpass,
     };
-    filt.process(input, mode, cutoff, q, sample_rate)
+    filt.process(input, mode, cutoff, params.q, sample_rate)
         .clamp(-1.5, 1.5)
 }
 
@@ -363,16 +379,12 @@ fn process_glitch(
 fn process_duck(
     state: &mut BusFxState,
     input: f32,
-    source: DuckSource,
-    threshold: f32,
-    amount: f32,
-    attack_ms: f32,
-    release_ms: f32,
+    params: DuckParams,
     slot_out: &[f32; INSTRUMENT_SLOT_COUNT],
     bus_in: &[f32],
     sample_rate: u32,
 ) -> f32 {
-    let sc = match source {
+    let sc = match params.source {
         DuckSource::Instrument(idx) => slot_out.get(idx).copied().unwrap_or(0.0),
         DuckSource::Bus(idx) => bus_in.get(idx).copied().unwrap_or(0.0),
     };
@@ -381,12 +393,12 @@ fn process_duck(
         return input;
     };
     let x = sc.abs().min(1.0);
-    let atk = (attack_ms / 1000.0 * sample_rate as f32).max(1.0);
-    let rel = (release_ms / 1000.0 * sample_rate as f32).max(1.0);
+    let atk = (params.attack_ms / 1000.0 * sample_rate as f32).max(1.0);
+    let rel = (params.release_ms / 1000.0 * sample_rate as f32).max(1.0);
     let coef = if x > *env { 1.0 / atk } else { 1.0 / rel };
     *env += (x - *env) * coef;
-    let over = ((*env - threshold) / (1.0 - threshold).max(1.0e-6)).clamp(0.0, 1.0);
-    input * (1.0 - amount * over)
+    let over = ((*env - params.threshold) / (1.0 - params.threshold).max(1.0e-6)).clamp(0.0, 1.0);
+    input * (1.0 - params.amount * over)
 }
 
 fn process_bitcrusher(
