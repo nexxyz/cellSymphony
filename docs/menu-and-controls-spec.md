@@ -179,10 +179,10 @@ L3: Voice
         ├── Bus 1..4 (group)
         │   ├── Slot 1 (group)
         │   │   ├── Type: [none | reverb | delay | tremolo | vibrato | auto_pan | chorus | flanger | wah | filter_lfo | duck | bitcrusher | saturator | distortion | glitch] default none
-        │   │   └── (effect params, visible per Type)
+        │   │   └── (effect params, visible per Type: timing/mod/filter/duck/drive/glitch controls)
         │   ├── Slot 2 (group)
         │   │   ├── Type: [same options] default none
-        │   │   └── (effect params, visible per Type)
+        │   │   └── (effect params, visible per Type: timing/mod/filter/duck/drive/glitch controls)
         │   └── Pan Pos: [0..gridWidth-1] quantized
 ```
 
@@ -192,6 +192,8 @@ Routing semantics:
 - Instrument `Route=bus_n` sends post-fader output to the selected bus (exclusive send).
 - Each bus runs `Slot 1` then `Slot 2` in order; with `None` selected this is passthrough.
 - Bus output is then panned by bus `Pan Pos` and summed to main mix.
+- `Duck` source options are stable and capability-sized: `I1..I{instrumentCount}` and `B1..B{busCount}`.
+- `Auto-pan` modulates the bus stereo output position after the slot chain.
 
 Sample assignment mode semantics:
 

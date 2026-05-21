@@ -436,8 +436,13 @@ enum BusFxState {
     None,
     Tremolo { phase: f32 },
     Delay { buf: Vec<f32>, idx: usize },
+    ModDelay { buf: Vec<f32>, idx: usize, phase: f32 },
+    FilterLfo { filt: BiquadState, phase: f32 },
     Duck { env: f32 },
     Bitcrusher { hold: u32, count: u32, last: f32 },
+    Reverb { bufs: [Vec<f32>; 4], idxs: [usize; 4], lp: [f32; 4] },
+    Glitch { buf: Vec<f32>, idx: usize, read: usize, remain: usize, rng: u32 },
+    AutoPan { phase: f32, pos: f32 },
 }
 
 impl SynthEngine {
@@ -675,6 +680,7 @@ impl SynthEngine {
         }
         for (bus_idx, bus_sample) in bus_mono.iter().enumerate() {
             let mut processed = *bus_sample;
+            let mut pan_override: Option<f32> = None;
             if let (Some(cfgs), Some(states)) = (
                 self.bus_slot_cfgs.get(bus_idx),
                 self.bus_slot_state.get_mut(bus_idx),
@@ -690,10 +696,17 @@ impl SynthEngine {
                         self.sample_rate,
                         self.sample_clock,
                     );
+                    if let BusFxState::AutoPan { pos, .. } = states[j] {
+                        pan_override = Some(pos.clamp(0.0, 1.0));
+                    }
                 }
             }
-            let pan = self.bus_pan_pos.get(bus_idx).copied().unwrap_or(0);
-            let (gl, gr) = pan_gains(pan, self.pan_positions);
+            let (gl, gr) = if let Some(pos) = pan_override {
+                pan_gains_float(pos)
+            } else {
+                let pan = self.bus_pan_pos.get(bus_idx).copied().unwrap_or(0);
+                pan_gains(pan, self.pan_positions)
+            };
             left += processed * gl;
             right += processed * gr;
         }
@@ -818,6 +831,11 @@ fn pan_gains(pan_pos: usize, positions: usize) -> (f32, f32) {
     (theta.cos(), theta.sin())
 }
 
+fn pan_gains_float(pos: f32) -> (f32, f32) {
+    let theta = pos.clamp(0.0, 1.0) * std::f32::consts::FRAC_PI_2;
+    (theta.cos(), theta.sin())
+}
+
 fn bus_fx_state_from_cfg(cfg: &BusSlotConfig, sample_rate: u32) -> BusFxState {
     match cfg.kind_str() {
         "delay" => {
@@ -829,12 +847,34 @@ fn bus_fx_state_from_cfg(cfg: &BusSlotConfig, sample_rate: u32) -> BusFxState {
             }
         }
         "tremolo" => BusFxState::Tremolo { phase: 0.0 },
+        "vibrato" | "chorus" | "flanger" => BusFxState::ModDelay {
+            buf: vec![0.0; ((sample_rate as f32) * 0.08) as usize],
+            idx: 0,
+            phase: 0.0,
+        },
+        "filter_lfo" | "wah" => BusFxState::FilterLfo {
+            filt: BiquadState::new(),
+            phase: 0.0,
+        },
         "duck" => BusFxState::Duck { env: 0.0 },
         "bitcrusher" => BusFxState::Bitcrusher {
             hold: 1,
             count: 0,
             last: 0.0,
         },
+        "reverb" => BusFxState::Reverb {
+            bufs: [1557, 1617, 1491, 1422].map(|n| vec![0.0; (n * sample_rate as usize / 44_100).max(1)]),
+            idxs: [0; 4],
+            lp: [0.0; 4],
+        },
+        "glitch" => BusFxState::Glitch {
+            buf: vec![0.0; ((sample_rate as f32) * 0.25) as usize],
+            idx: 0,
+            read: 0,
+            remain: 0,
+            rng: 0x1234_abcd,
+        },
+        "auto_pan" => BusFxState::AutoPan { phase: 0.0, pos: 0.5 },
         _ => BusFxState::None,
     }
 }
@@ -901,6 +941,112 @@ fn process_bus_slot(
                 *idx = 0;
             }
             (input * (1.0 - mix) + delayed * mix).clamp(-1.5, 1.5)
+        }
+        "vibrato" | "chorus" | "flanger" => {
+            let default_depth = if kind == "flanger" { 2.0 } else if kind == "vibrato" { 6.0 } else { 14.0 };
+            let default_base = if kind == "flanger" { 3.0 } else if kind == "vibrato" { 8.0 } else { 22.0 };
+            let rate_hz = get_param_f32(cfg.params(), "rateHz", 0.8).clamp(0.02, 20.0);
+            let depth_ms = get_param_f32(cfg.params(), "depthMs", default_depth).clamp(0.0, 40.0);
+            let base_ms = get_param_f32(cfg.params(), "baseMs", default_base).clamp(0.1, 80.0);
+            let feedback = get_param_f32(cfg.params(), "feedback", if kind == "flanger" { 0.35 } else { 0.0 }).clamp(-0.95, 0.95);
+            let mix = (get_param_f32(cfg.params(), "mixPct", if kind == "vibrato" { 100.0 } else { 45.0 }) / 100.0).clamp(0.0, 1.0);
+            let BusFxState::ModDelay { buf, idx, phase } = state else {
+                *state = BusFxState::ModDelay {
+                    buf: vec![0.0; ((sample_rate as f32) * 0.08) as usize],
+                    idx: 0,
+                    phase: 0.0,
+                };
+                return input;
+            };
+            let need = (((base_ms + depth_ms + 5.0) / 1000.0) * sample_rate as f32).ceil() as usize;
+            if buf.len() != need.max(2) {
+                *buf = vec![0.0; need.max(2)];
+                *idx = 0;
+            }
+            let delay_ms = (base_ms + depth_ms * ((*phase).sin() + 1.0) * 0.5).clamp(0.1, 100.0);
+            let delayed = read_delay(buf, *idx, delay_ms * sample_rate as f32 / 1000.0);
+            buf[*idx] = (input + delayed * feedback).clamp(-2.0, 2.0);
+            *idx = (*idx + 1) % buf.len();
+            *phase = wrap_phase(*phase + 2.0 * PI * rate_hz / sample_rate as f32);
+            (input * (1.0 - mix) + delayed * mix).clamp(-1.5, 1.5)
+        }
+        "filter_lfo" | "wah" => {
+            let rate_hz = get_param_f32(cfg.params(), "rateHz", if kind == "wah" { 1.2 } else { 0.5 }).clamp(0.02, 20.0);
+            let depth = (get_param_f32(cfg.params(), "depthPct", 70.0) / 100.0).clamp(0.0, 1.0);
+            let center = get_param_f32(cfg.params(), "centerHz", if kind == "wah" { 900.0 } else { 1600.0 }).clamp(40.0, 12_000.0);
+            let q = get_param_f32(cfg.params(), "q", if kind == "wah" { 6.0 } else { 1.0 }).clamp(0.25, 20.0);
+            let BusFxState::FilterLfo { filt, phase } = state else {
+                *state = BusFxState::FilterLfo { filt: BiquadState::new(), phase: 0.0 };
+                return input;
+            };
+            let sweep = ((*phase).sin() + 1.0) * 0.5;
+            let semis = (sweep - 0.5) * 48.0 * depth;
+            let cutoff = (center * 2.0_f32.powf(semis / 12.0)).clamp(40.0, 18_000.0);
+            *phase = wrap_phase(*phase + 2.0 * PI * rate_hz / sample_rate as f32);
+            let mode = if kind == "wah" { FilterType::Bandpass } else { FilterType::Lowpass };
+            filt.process(input, mode, cutoff, q, sample_rate).clamp(-1.5, 1.5)
+        }
+        "reverb" => {
+            let mix = (get_param_f32(cfg.params(), "mixPct", 30.0) / 100.0).clamp(0.0, 1.0);
+            let decay = get_param_f32(cfg.params(), "decay", 0.72).clamp(0.0, 0.95);
+            let damp = get_param_f32(cfg.params(), "damp", 0.35).clamp(0.0, 0.98);
+            let BusFxState::Reverb { bufs, idxs, lp } = state else {
+                *state = bus_fx_state_from_cfg(cfg, sample_rate);
+                return input;
+            };
+            let mut wet = 0.0;
+            for i in 0..4 {
+                let delayed = bufs[i][idxs[i]];
+                lp[i] = delayed * (1.0 - damp) + lp[i] * damp;
+                bufs[i][idxs[i]] = input + lp[i] * decay;
+                idxs[i] = (idxs[i] + 1) % bufs[i].len();
+                wet += delayed;
+            }
+            wet *= 0.25;
+            (input * (1.0 - mix) + wet * mix).clamp(-1.5, 1.5)
+        }
+        "glitch" => {
+            let chance = (get_param_f32(cfg.params(), "chancePct", 8.0) / 100.0).clamp(0.0, 1.0);
+            let slice_ms = get_param_f32(cfg.params(), "sliceMs", 80.0).clamp(5.0, 500.0);
+            let mix = (get_param_f32(cfg.params(), "mixPct", 100.0) / 100.0).clamp(0.0, 1.0);
+            let BusFxState::Glitch { buf, idx, read, remain, rng } = state else {
+                *state = bus_fx_state_from_cfg(cfg, sample_rate);
+                return input;
+            };
+            if buf.is_empty() {
+                *buf = vec![0.0; ((sample_rate as f32) * 0.25) as usize];
+            }
+            buf[*idx] = input;
+            let block = (slice_ms * sample_rate as f32 / 1000.0).round().max(1.0) as usize;
+            if *remain == 0 {
+                *rng = rng.wrapping_mul(1664525).wrapping_add(1013904223);
+                let roll = ((*rng >> 8) as f32) / ((u32::MAX >> 8) as f32);
+                if roll < chance {
+                    *read = (*idx + buf.len()).saturating_sub(block.min(buf.len())) % buf.len();
+                    *remain = block;
+                }
+            }
+            let wet = if *remain > 0 {
+                let out = buf[*read];
+                *read = (*read + 1) % buf.len();
+                *remain -= 1;
+                out
+            } else {
+                input
+            };
+            *idx = (*idx + 1) % buf.len();
+            input * (1.0 - mix) + wet * mix
+        }
+        "auto_pan" => {
+            let rate_hz = get_param_f32(cfg.params(), "rateHz", 0.5).clamp(0.02, 20.0);
+            let depth = (get_param_f32(cfg.params(), "depthPct", 100.0) / 100.0).clamp(0.0, 1.0);
+            let BusFxState::AutoPan { phase, pos } = state else {
+                *state = BusFxState::AutoPan { phase: 0.0, pos: 0.5 };
+                return input;
+            };
+            *pos = 0.5 + ((*phase).sin() * 0.5 * depth);
+            *phase = wrap_phase(*phase + 2.0 * PI * rate_hz / sample_rate as f32);
+            input
         }
         "duck" => {
             let source = get_param_str(cfg.params(), "source", "I1");
@@ -979,6 +1125,28 @@ fn process_bus_slot(
         }
         _ => input,
     }
+}
+
+fn wrap_phase(mut phase: f32) -> f32 {
+    while phase >= 2.0 * PI {
+        phase -= 2.0 * PI;
+    }
+    while phase < 0.0 {
+        phase += 2.0 * PI;
+    }
+    phase
+}
+
+fn read_delay(buf: &[f32], write_idx: usize, delay_samples: f32) -> f32 {
+    if buf.is_empty() {
+        return 0.0;
+    }
+    let len = buf.len() as f32;
+    let pos = (write_idx as f32 - delay_samples).rem_euclid(len);
+    let i0 = pos.floor() as usize % buf.len();
+    let i1 = (i0 + 1) % buf.len();
+    let frac = pos - pos.floor();
+    buf[i0] * (1.0 - frac) + buf[i1] * frac
 }
 
 fn ms_to_samples(ms: f32, sample_rate: u32) -> u32 {
