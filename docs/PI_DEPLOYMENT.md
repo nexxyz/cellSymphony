@@ -4,12 +4,12 @@
 
 ### Option 1: Native Compilation on Pi (Recommended)
 
-Since cross-compiling with audio libraries (rodio → alsa-sys) from Windows is complex, native compilation on the Pi is simpler.
+Cell Symphony targets Raspberry Pi OS 64-bit on Pi Zero 2W. Native compilation on the Pi remains the simplest way to validate ALSA, MIDI, I2C, SPI, and I2S together.
 
 #### 1. Set up the Pi
 
 ```bash
-# Install system dependencies
+# Install system dependencies on Raspberry Pi OS 64-bit
 sudo apt update
 sudo apt install -y \
     libasound2-dev \
@@ -75,29 +75,27 @@ journalctl -u cellsymphony -f
 
 ---
 
-### Option 2: Cross-Compilation from Windows (Advanced)
+### Option 2: Cross-Compilation (Advanced)
 
-If you must cross-compile from Windows:
+The supported cross target for Pi Zero 2W is `aarch64-unknown-linux-gnu`.
 
-#### 1. Install ARM GNU Toolchain
-- Download: `arm-gnu-toolchain-*-mingw-w64-i686-arm-none-linux-gnueabihf.zip`
-- Extract to: `F:\Tools\arm-gnu-toolchain...\`
-- Add `...\bin` to PATH
+#### 1. Install AArch64 GNU Toolchain
+- Linux CI uses `gcc-aarch64-linux-gnu`.
+- Windows development requires an AArch64 Linux GNU toolchain that provides `aarch64-linux-gnu-gcc`.
 
 #### 2. Set up ALSA Sysroot
 The issue: `rodio` → `alsa-sys` needs ALSA libraries during build.
 
 ```bash
-# Download Raspberry Pi OS sysroot (contains /usr/lib/arm-linux-gnueabihf/libasound.so)
-# Or use Docker:
-docker run --rm -v "$(pwd):/src" -t arm32v7/rust cargo build --target armv7-unknown-linux-gnueabihf -p cellsymphony-pi
+# Docker/cross path used by CI:
+cross build --target aarch64-unknown-linux-gnu -p cellsymphony-pi
 ```
 
 #### 3. Configure Cargo
 Create `.cargo/config.toml`:
 ```toml
-[target.armv7-unknown-linux-gnueabihf]
-linker = "F:\\Tools\\arm-gnu-toolchain-...\\bin\\arm-none-linux-gnueabihf-gcc.exe"
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
 ```
 
 ---
@@ -130,8 +128,8 @@ aseqdump -p <client>:<port>
 ✅ Main loop with 8ms ticks (125Hz)
 ✅ Grid press → triggers note (when audio is working)
 ✅ Encoder events logged
-⚠️ Audio output: Needs native compilation on Pi (rodio + ALSA)
-⚠️ MIDI input: Needs native compilation on Pi (midir + ALSA)
+⚠️ Audio output: Requires on-device verification with the PCM5102/I2S DAC
+⚠️ MIDI input: Requires on-device verification with the target USB MIDI hardware
 
 ---
 

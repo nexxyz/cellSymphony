@@ -1,14 +1,14 @@
-FROM ghcr.io/cross-rs/armv7-unknown-linux-gnueabihf:latest
+FROM ghcr.io/cross-rs/aarch64-unknown-linux-gnu:latest
 
-# Add ARM HF architecture and install ALSA for target
-RUN dpkg --add-architecture armhf && \
+# Add ARM64 architecture and install ALSA for target
+RUN dpkg --add-architecture arm64 && \
     apt-get update && apt-get install -y \
-    libasound2-dev:armhf \
+    libasound2-dev:arm64 \
     pkg-config \
-    libdbus-1-dev:armhf \
+    libdbus-1-dev:arm64 \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up cross-compilation environment
-ENV CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER="arm-linux-gnueabihf-gcc"
-ENV PKG_CONFIG_PATH="/usr/lib/arm-linux-gnueabihf/pkgconfig/"
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER="aarch64-linux-gnu-gcc"
+ENV PKG_CONFIG_PATH="/usr/lib/aarch64-linux-gnu/pkgconfig/"
 ENV PKG_CONFIG_ALLOW_CROSS=1

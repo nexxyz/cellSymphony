@@ -141,13 +141,13 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          target: armv7-unknown-linux-gnueabihf
+          target: aarch64-unknown-linux-gnu
       - name: Install ARM GCC
-        run: sudo apt-get update && sudo apt-get install -y gcc-arm-linux-gnueabihf
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
       - name: Build HAL for Pi Zero 2W
-        run: cargo build --target armv7-unknown-linux-gnueabihf -p cellsymphony-hal --features pi-zero
+        run: cargo build --target aarch64-unknown-linux-gnu -p cellsymphony-hal --features pi-zero
 
   pi_zero_app_build:
     name: Pi Zero App Build (cross)
@@ -158,7 +158,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          target: armv7-unknown-linux-gnueabihf
+          target: aarch64-unknown-linux-gnu
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
       - name: Install cross (prebuilt binary)
@@ -166,7 +166,7 @@ jobs:
           curl -sSL https://github.com/cross-rs/cross/releases/download/v0.2.5/cross-x86_64-unknown-linux-gnu.tar.gz | tar xz -C /usr/local/bin
           cross --version
       - name: Build Pi app with cross
-        run: cross build --target armv7-unknown-linux-gnueabihf -p cellsymphony-pi
+        run: cross build --target aarch64-unknown-linux-gnu -p cellsymphony-pi
 
   desktop_build_smoke:
     name: Desktop Build Smoke
@@ -197,5 +197,4 @@ jobs:
           path: |
             **/*.log
             **/target/**/build
-
 

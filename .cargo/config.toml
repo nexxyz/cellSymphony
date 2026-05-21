@@ -1,5 +1,4 @@
-# Cargo configuration for cross-compilation to Pi Zero 2W
-# ARM GNU Toolchain installed at: F:\Tools\arm-gnu-toolchain-15.2.rel1-mingw-w64-i686-arm-none-linux-gnueabihf
+# Cargo configuration for cross-compilation to Pi Zero 2W 64-bit Linux
 
-[target.armv7-unknown-linux-gnueabihf]
-linker = "F:\\Tools\\arm-gnu-toolchain-15.2.rel1-mingw-w64-i686-arm-none-linux-gnueabihf\\bin\\arm-none-linux-gnueabihf-gcc.exe"
+[target.aarch64-unknown-linux-gnu]
+linker = "aarch64-linux-gnu-gcc"
