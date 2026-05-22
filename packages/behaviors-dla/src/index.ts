@@ -104,7 +104,7 @@ export const dlaBehavior: BehaviorEngine<DlaState, DlaConfig> = {
   renderModel(state) {
     const count = state.cells.filter(Boolean).length;
     return {
-      name: "DLA",
+      name: "dla",
       statusLine: `Cells: ${count}`,
       cells: state.cells,
       triggerTypes: state.triggerTypes,

@@ -101,7 +101,7 @@ test("onInput rejects out-of-bounds coordinates", () => {
 test("renderModel shows name and status", () => {
   const immediate = keysBehavior.init({});
   const modelI = keysBehavior.renderModel(immediate);
-  assert.equal(modelI.name, "Keys");
+  assert.equal(modelI.name, "keys");
   assert.equal(modelI.statusLine, "Immediate");
 
   const step = keysBehavior.init({ quantize: "step" });

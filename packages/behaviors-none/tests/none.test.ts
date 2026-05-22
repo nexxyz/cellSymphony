@@ -38,10 +38,10 @@ test("onTick returns same state", () => {
   assert.equal(next, state);
 });
 
-test("renderModel returns None/Idle with empty cells", () => {
+test("renderModel returns none/Idle with empty cells", () => {
   const state = noneBehavior.init({});
   const model = noneBehavior.renderModel(state);
-  assert.equal(model.name, "None");
+  assert.equal(model.name, "none");
   assert.equal(model.statusLine, "Idle");
   assert.ok(model.cells.every((c) => c === false));
 });

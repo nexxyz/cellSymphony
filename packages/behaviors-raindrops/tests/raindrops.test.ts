@@ -61,7 +61,7 @@ test("ring expands each tick until splashRadius", () => {
 test("renderModel returns expected structure", () => {
   const state = raindropsBehavior.init({});
   const model = raindropsBehavior.renderModel(state);
-  assert.equal(model.name, "Raindrops");
+  assert.equal(model.name, "raindrops");
   assert.equal(model.cells.length, CELL_COUNT);
   assert.equal(model.triggerTypes.length, CELL_COUNT);
 });

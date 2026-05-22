@@ -81,7 +81,7 @@ export const bounceBehavior: BehaviorEngine<BounceState, BounceConfig> = {
   },
   renderModel(state) {
     return {
-      name: "Bounce",
+      name: "bounce",
       statusLine: `${state.balls.length} ball${state.balls.length !== 1 ? "s" : ""}`,
       cells: state.cells,
       triggerTypes: state.triggerTypes,

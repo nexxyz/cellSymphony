@@ -145,7 +145,7 @@ export const shapesBehavior: BehaviorEngine<PulseState, PulseConfig> = {
   },
   renderModel(state) {
     return {
-      name: "Shapes",
+      name: "shapes",
       statusLine: `${state.pulses.length} pulse${state.pulses.length !== 1 ? "s" : ""} [${state.pulseShape}]`,
       cells: state.lifetimes.map(l => l > 0),
       triggerTypes: state.triggerTypes,

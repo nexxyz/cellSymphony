@@ -31,7 +31,7 @@ test("onInput grid_press toggles cell", () => {
 test("renderModel returns expected structure", () => {
   const state = dlaBehavior.init({});
   const model = dlaBehavior.renderModel(state);
-  assert.equal(model.name, "DLA");
+  assert.equal(model.name, "dla");
   assert.equal(model.cells.length, CELL_COUNT);
   assert.equal(model.triggerTypes.length, CELL_COUNT);
 });

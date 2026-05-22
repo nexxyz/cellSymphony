@@ -20,7 +20,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       { kind: "enum", label: "Type", key: `mixer.buses.${busIdx}.${slotKey}.type`, options: FX_SLOT_TYPES },
       {
         kind: "group",
-        label: "Duck",
+        label: "duck",
         visible: (c: any) => c.mixer?.buses?.[busIdx]?.[slotKey]?.type === "duck",
         children: [
           { kind: "enum", label: "Source", key: `mixer.buses.${busIdx}.${slotKey}.params.source`, options: duckSourceOptions() },
@@ -32,7 +32,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       },
       {
         kind: "group",
-        label: "Delay",
+        label: "delay",
         visible: (c: any) => c.mixer?.buses?.[busIdx]?.[slotKey]?.type === "delay",
         children: [
           { kind: "number", label: "Time ms", key: `mixer.buses.${busIdx}.${slotKey}.params.timeMs`, min: 1, max: 2000, step: 5 },
@@ -42,7 +42,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       },
       {
         kind: "group",
-        label: "Tremolo",
+        label: "tremolo",
         visible: (c: any) => c.mixer?.buses?.[busIdx]?.[slotKey]?.type === "tremolo",
         children: [
           { kind: "number", label: "Rate Hz", key: `mixer.buses.${busIdx}.${slotKey}.params.rateHz`, min: 0.05, max: 40, step: 0.05 },
@@ -51,7 +51,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       },
       {
         kind: "group",
-        label: "Saturator",
+        label: "saturator",
         visible: (c: any) => c.mixer?.buses?.[busIdx]?.[slotKey]?.type === "saturator",
         children: [
           { kind: "number", label: "Drive", key: `mixer.buses.${busIdx}.${slotKey}.params.drive`, min: 0, max: 20, step: 0.1 },
@@ -60,7 +60,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       },
       {
         kind: "group",
-        label: "Distortion",
+        label: "distortion",
         visible: (c: any) => c.mixer?.buses?.[busIdx]?.[slotKey]?.type === "distortion",
         children: [
           { kind: "number", label: "Drive", key: `mixer.buses.${busIdx}.${slotKey}.params.drive`, min: 0, max: 50, step: 0.5 },
@@ -70,7 +70,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       },
       {
         kind: "group",
-        label: "Bitcrusher",
+        label: "bitcrusher",
         visible: (c: any) => c.mixer?.buses?.[busIdx]?.[slotKey]?.type === "bitcrusher",
         children: [
           { kind: "number", label: "Rate Div", key: `mixer.buses.${busIdx}.${slotKey}.params.rateDiv`, min: 1, max: 128, step: 1 },
@@ -80,7 +80,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       },
       {
         kind: "group",
-        label: "Mod Delay",
+        label: "mod delay",
         visible: (c: any) => ["vibrato", "chorus", "flanger"].includes(c.mixer?.buses?.[busIdx]?.[slotKey]?.type),
         children: [
           { kind: "number", label: "Rate Hz", key: `mixer.buses.${busIdx}.${slotKey}.params.rateHz`, min: 0.02, max: 20, step: 0.05 },
@@ -92,7 +92,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       },
       {
         kind: "group",
-        label: "Filter LFO",
+        label: "filter lfo",
         visible: (c: any) => ["filter_lfo", "wah"].includes(c.mixer?.buses?.[busIdx]?.[slotKey]?.type),
         children: [
           { kind: "number", label: "Rate Hz", key: `mixer.buses.${busIdx}.${slotKey}.params.rateHz`, min: 0.02, max: 20, step: 0.05 },
@@ -103,7 +103,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       },
       {
         kind: "group",
-        label: "Reverb",
+        label: "reverb",
         visible: effectVisible(busIdx, slotKey, "reverb"),
         children: [
           { kind: "number", label: "Decay", key: `mixer.buses.${busIdx}.${slotKey}.params.decay`, min: 0, max: 0.95, step: 0.01 },
@@ -113,7 +113,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       },
       {
         kind: "group",
-        label: "Auto-pan",
+        label: "auto-pan",
         visible: effectVisible(busIdx, slotKey, "auto_pan"),
         children: [
           { kind: "number", label: "Rate Hz", key: `mixer.buses.${busIdx}.${slotKey}.params.rateHz`, min: 0.02, max: 20, step: 0.05 },
@@ -122,7 +122,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       },
       {
         kind: "group",
-        label: "Glitch",
+        label: "glitch",
         visible: effectVisible(busIdx, slotKey, "glitch"),
         children: [
           { kind: "number", label: "Chance %", key: `mixer.buses.${busIdx}.${slotKey}.params.chancePct`, min: 0, max: 100, step: 1 },
@@ -132,7 +132,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       },
       {
         kind: "group",
-        label: "Compressor",
+        label: "compressor",
         visible: effectVisible(busIdx, slotKey, "compressor"),
         children: [
           { kind: "number", label: "Threshold dB", key: `mixer.buses.${busIdx}.${slotKey}.params.thresholdDb`, min: -60, max: 0, step: 0.5 },
@@ -145,7 +145,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
       },
       {
         kind: "group",
-        label: "EQ",
+        label: "eq",
         visible: effectVisible(busIdx, slotKey, "eq"),
         children: [
           { kind: "number", label: "Low Gain dB", key: `mixer.buses.${busIdx}.${slotKey}.params.lowGainDb`, min: -12, max: 12, step: 0.5 },

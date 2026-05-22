@@ -193,11 +193,11 @@ Routing semantics:
 - Instrument `Route=direct` sends post-fader output to main mix using instrument `Pan Pos`.
 - Instrument `Route=fx_bus_n` sends post-fader output to the selected FX bus (exclusive send).
 - Internal synth and sample instruments use the same route/pan/bus-FX mixer path; MIDI instruments emit external MIDI and are not processed by audio FX.
-- Each bus runs `Slot 1` then `Slot 2` in order; with `None` selected this is passthrough.
+- Each bus runs `Slot 1` then `Slot 2` in order; with `none` selected this is passthrough.
 - Selecting a slot `Type` initializes that effect's editable parameter defaults immediately; loaded presets/defaults with missing or invalid effect params are repaired to those defaults.
 - Bus output is then panned by bus `Pan Pos` and summed to main mix.
-- `Duck` source options are stable and capability-sized: `I1..I{instrumentCount}` and `B1..B{busCount}`.
-- `Auto-pan` modulates the bus stereo output position after the slot chain.
+- `duck` source options are stable and capability-sized: `I1..I{instrumentCount}` and `B1..B{busCount}`.
+- `auto-pan` modulates the bus stereo output position after the slot chain.
 
 Sample assignment mode semantics:
 

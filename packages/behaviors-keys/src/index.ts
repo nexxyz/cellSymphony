@@ -98,7 +98,7 @@ export const keysBehavior: BehaviorEngine<KeysState, KeysConfig> = {
 
   renderModel(state) {
     return {
-      name: "Keys",
+      name: "keys",
       statusLine: state.quantize === "immediate" ? "Immediate" : "Quantized",
       cells: state.cells,
       triggerTypes: state.triggerTypes

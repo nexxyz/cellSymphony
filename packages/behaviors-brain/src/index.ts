@@ -106,7 +106,7 @@ export const brainBehavior: BehaviorEngine<BrainState, BrainConfig> = {
   },
   renderModel(state) {
     return {
-      name: "Brain",
+      name: "brain",
       statusLine: `Gen ${state.generation}`,
       cells: state.cells.map(c => c === 1),
       triggerTypes: state.triggerTypes,

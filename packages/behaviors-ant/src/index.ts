@@ -77,7 +77,7 @@ export const antBehavior: BehaviorEngine<AntState, AntConfig> = {
     const vis = state.cells.slice();
     for (const ant of state.ants) vis[idx(ant.x, ant.y)] = true;
     return {
-      name: "Ant",
+      name: "ant",
       statusLine: `${state.ants.length} ant${state.ants.length !== 1 ? "s" : ""}`,
       cells: vis,
       triggerTypes: state.triggerTypes,

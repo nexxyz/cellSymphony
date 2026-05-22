@@ -97,7 +97,7 @@ export const raindropsBehavior: BehaviorEngine<RaindropsState, RaindropsConfig> 
   },
   renderModel(state) {
     return {
-      name: "Raindrops",
+      name: "raindrops",
       statusLine: `Drops:${state.drops.length} Rings:${state.rings.length}`,
       cells: state.cells,
       triggerTypes: state.triggerTypes,

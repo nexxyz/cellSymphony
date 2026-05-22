@@ -87,7 +87,7 @@ export const gliderBehavior: BehaviorEngine<GliderState, GliderConfig> = {
   renderModel(state) {
     const count = state.cells.filter(Boolean).length;
     return {
-      name: "Glider",
+      name: "glider",
       statusLine: `Cells: ${count}`,
       cells: state.cells,
       triggerTypes: state.triggerTypes,

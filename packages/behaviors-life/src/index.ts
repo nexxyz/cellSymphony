@@ -117,7 +117,7 @@ export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
   },
   renderModel(state) {
     return {
-      name: "Game of Life",
+      name: "game of life",
       statusLine: `Gen ${state.generation}`,
       cells: state.cells,
       triggerTypes: state.triggerTypes

@@ -73,7 +73,7 @@ test("maxAnts limits ants spawned via onInput", () => {
 test("renderModel returns expected structure", () => {
   const state = antBehavior.init({});
   const model = antBehavior.renderModel(state);
-  assert.equal(model.name, "Ant");
+  assert.equal(model.name, "ant");
   assert.equal(model.cells.length, CELL_COUNT);
   assert.equal(model.triggerTypes.length, CELL_COUNT);
 });

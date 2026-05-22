@@ -22,7 +22,7 @@ export const noneBehavior: BehaviorEngine<NoneState, {}> = {
   },
   renderModel() {
     return {
-      name: "None",
+      name: "none",
       statusLine: "Idle",
       cells: new Array(CELL_COUNT).fill(false)
     };

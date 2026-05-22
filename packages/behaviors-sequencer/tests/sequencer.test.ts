@@ -33,7 +33,7 @@ test("onTick is no-op", () => {
 test("renderModel returns expected structure", () => {
   const state = sequencerBehavior.init({});
   const model = sequencerBehavior.renderModel(state);
-  assert.equal(model.name, "Sequencer");
+  assert.equal(model.name, "sequencer");
   assert.equal(model.statusLine, "Manual");
   assert.equal(model.cells.length, CELL_COUNT);
 });

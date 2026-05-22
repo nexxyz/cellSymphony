@@ -20,7 +20,7 @@ const mkOsc = (
 export const SYNTH_PRESETS: SynthPreset[] = [
   {
     id: "init",
-    label: "Init",
+    label: "init",
     synth: {
       osc1: mkOsc("saw", 80, 0, 0, 50),
       osc2: mkOsc("square", 72, 0, 0, 50),
@@ -32,7 +32,7 @@ export const SYNTH_PRESETS: SynthPreset[] = [
   },
   {
     id: "soft_pad",
-    label: "Soft Pad",
+    label: "soft pad",
     synth: {
       osc1: mkOsc("triangle", 78, 0, -3, 50),
       osc2: mkOsc("pulse", 64, 0, 3, 42),
@@ -44,7 +44,7 @@ export const SYNTH_PRESETS: SynthPreset[] = [
   },
   {
     id: "bright_pluck",
-    label: "Bright Pluck",
+    label: "bright pluck",
     synth: {
       osc1: mkOsc("saw", 86, 0, 0, 50),
       osc2: mkOsc("pulse", 52, 1, 6, 30),
@@ -56,7 +56,7 @@ export const SYNTH_PRESETS: SynthPreset[] = [
   },
   {
     id: "bass_mono",
-    label: "Bass Mono",
+    label: "bass mono",
     synth: {
       osc1: mkOsc("saw", 84, -1, 0, 50),
       osc2: mkOsc("square", 68, -1, -4, 50),
@@ -68,7 +68,7 @@ export const SYNTH_PRESETS: SynthPreset[] = [
   },
   {
     id: "hollow_pwm",
-    label: "Hollow PWM",
+    label: "hollow pwm",
     synth: {
       osc1: mkOsc("pulse", 74, 0, -6, 34),
       osc2: mkOsc("pulse", 74, 0, 6, 66),
@@ -80,7 +80,7 @@ export const SYNTH_PRESETS: SynthPreset[] = [
   },
   {
     id: "lead",
-    label: "Lead",
+    label: "lead",
     synth: {
       osc1: mkOsc("saw", 88, 0, 5, 50),
       osc2: mkOsc("triangle", 64, 1, -2, 50),
@@ -92,7 +92,7 @@ export const SYNTH_PRESETS: SynthPreset[] = [
   },
   {
     id: "bell",
-    label: "Bell",
+    label: "bell",
     synth: {
       osc1: mkOsc("sine", 76, 0, 0, 50),
       osc2: mkOsc("triangle", 60, 1, 12, 50),
@@ -104,7 +104,7 @@ export const SYNTH_PRESETS: SynthPreset[] = [
   },
   {
     id: "perc_hit",
-    label: "Perc Hit",
+    label: "perc hit",
     synth: {
       osc1: mkOsc("square", 84, 0, 0, 50),
       osc2: mkOsc("pulse", 48, 1, 0, 20),

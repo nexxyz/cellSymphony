@@ -143,7 +143,7 @@ test("newly selected FX parameters edit as finite numbers", () => {
   state = turn(state, 1).state;
   state = turn(state, 1).state;
   state = press(state).state;
-  state = selectLabel(state, "Delay");
+  state = selectLabel(state, "delay");
   state = press(state).state;
   state = selectLabel(state, "Time ms");
 

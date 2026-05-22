@@ -25,7 +25,7 @@ export const sequencerBehavior: BehaviorEngine<SequencerState, {}> = {
   },
   renderModel(state) {
     return {
-      name: "Sequencer",
+      name: "sequencer",
       statusLine: "Manual",
       cells: state.cells
     };

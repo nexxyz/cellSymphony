@@ -73,7 +73,7 @@ test("renderModel returns triggerTypes for activate, stable, deactivate", () => 
   const next = gliderBehavior.onTick(s, { bpm: 120, emit: () => {} });
   const model = gliderBehavior.renderModel(next);
   assert.equal(model.triggerTypes.length, CELL_COUNT);
-  assert.equal(model.name, "Glider");
+  assert.equal(model.name, "glider");
   const totalTriggers = model.triggerTypes.filter(t => t !== "none").length;
   assert.ok(totalTriggers > 0, "some cells should have trigger types");
 });

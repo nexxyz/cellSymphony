@@ -258,7 +258,7 @@ test("loading synth preset from Voice menu requires confirm and applies to targe
   state = press(state).state;
   state = selectLabel(state, "Load");
   state = press(state).state;
-  state = selectLabel(state, "Soft Pad");
+  state = selectLabel(state, "soft pad");
   state = press(state).state;
 
   assert.equal(state.system.confirm?.kind, "load_synth_preset");
