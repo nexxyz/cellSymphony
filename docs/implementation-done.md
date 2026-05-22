@@ -15,10 +15,12 @@ All 10 behavior packages, the pluggable behavior engine architecture, the menu s
 | `behaviors-raindrops` | `raindrops` | Raindrops fall, splash into expanding rings | 6 |
 | `behaviors-dla` | `dla` | Diffusion-limited aggregation | 4 |
 | `behaviors-glider` | `glider` | Spawns Conway gliders at intervals | 6 |
+| `behaviors-none` | `none` | No-op: always-empty grid, ignores all input | 7 |
+| `behaviors-keys` | `keys` | Keyboard-style: press activates, release deactivates, optional quantize | 14 |
 
 ## Architecture
 
-- **Behavior Engine interface** in `packages/behavior-api/src/index.ts`: `BehaviorEngine<TState, TConfig>` with `init`, `onInput`, `onTick`, `renderModel`, `serialize`, `deserialize`, `triggerTypes`, `configMenu`
+- **Behavior Engine interface** in `packages/behavior-api/src/index.ts`: `BehaviorEngine<TState, TConfig>` with `init`, `onInput`, `onTick`, `renderModel`, `serialize`, `deserialize`, `interpretInputTransitions`, `configMenu`
 - **Registry** in `packages/behavior-api/src/registry.ts`: `registerBehavior`, `getBehavior`, `listBehaviorIds`
 - **Platform-core** orchestrates: `menuTree`, `routeInput`, `tick`, `extractConfigPayload`, `applyConfigPayload`, `autoSaveEffect`, `bindAuxEncoder`, `turnAuxEncoder`, `reinitBehaviorState`
 
@@ -28,7 +30,7 @@ All 10 behavior packages, the pluggable behavior engine architecture, the menu s
 Root
 ├── L1: Life
 │   ├── Step Rate: [1/16, 1/8, 1/4, 1/2, 1/1]
-│   └── Behavior: [sequencer | life | brain | ant | bounce | shapes | raindrops | dla | glider]
+│   └── Behavior: [sequencer | life | brain | ant | bounce | shapes | raindrops | dla | glider | none | keys]
 │       └── ... per-behavior config items
 ├── L2: Sense
 │   ├── Scan Mode: [immediate | scanning]
@@ -77,13 +79,13 @@ Root
 
 ## Test Coverage
 
-- **84 total tests passing**
-- Platform-core: 45 tests (24 new feature tests + 21 existing)
+- **107 total tests passing**
+- Platform-core: 50 tests (29 new feature tests + 21 existing)
 - Interpretation-core: 3 tests
 - Mapping-core: 2 tests
 - Musical-events: 2 tests
 - Device-contracts: 2 tests
-- 9 behavior packages: 30 tests total (4-7 per package)
+- 11 behavior packages: 48 tests total (5-14 per package)
 
 ## Deviations from Original Plan
 

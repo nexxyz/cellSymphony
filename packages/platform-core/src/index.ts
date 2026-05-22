@@ -8,6 +8,8 @@ import { shapesBehavior } from "@cellsymphony/behaviors-pulse";
 import { raindropsBehavior } from "@cellsymphony/behaviors-raindrops";
 import { dlaBehavior } from "@cellsymphony/behaviors-dla";
 import { gliderBehavior } from "@cellsymphony/behaviors-glider";
+import { noneBehavior } from "@cellsymphony/behaviors-none";
+import { keysBehavior } from "@cellsymphony/behaviors-keys";
 import {
   GRID_HEIGHT,
   GRID_WIDTH,
@@ -63,7 +65,6 @@ import {
   wrapOledText,
   writeValue
 } from "./coreUtils";
-
 // Register available behaviors
 registerBehavior(sequencerBehavior);
 registerBehavior(lifeBehavior);
@@ -74,11 +75,10 @@ registerBehavior(shapesBehavior);
 registerBehavior(raindropsBehavior);
 registerBehavior(dlaBehavior);
 registerBehavior(gliderBehavior);
-
+registerBehavior(noneBehavior); registerBehavior(keysBehavior);
 function resolveBehavior(activeId: string): BehaviorEngine<any, any> {
   return getBehavior(activeId) ?? sequencerBehavior;
 }
-
 import { buildSimulatorFrame } from "./simulatorFrameBuilder";
 import { emergencyBrakeState } from "./transportSafety";
 

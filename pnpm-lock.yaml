@@ -174,7 +174,45 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/behaviors-keys:
+    dependencies:
+      '@cellsymphony/behavior-api':
+        specifier: workspace:*
+        version: link:../behavior-api
+      '@cellsymphony/device-contracts':
+        specifier: workspace:*
+        version: link:../device-contracts
+    devDependencies:
+      c8:
+        specifier: ^11.0.0
+        version: 11.0.0
+      tsx:
+        specifier: ^4.22.0
+        version: 4.22.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
   packages/behaviors-life:
+    dependencies:
+      '@cellsymphony/behavior-api':
+        specifier: workspace:*
+        version: link:../behavior-api
+      '@cellsymphony/device-contracts':
+        specifier: workspace:*
+        version: link:../device-contracts
+    devDependencies:
+      c8:
+        specifier: ^11.0.0
+        version: 11.0.0
+      tsx:
+        specifier: ^4.22.0
+        version: 4.22.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/behaviors-none:
     dependencies:
       '@cellsymphony/behavior-api':
         specifier: workspace:*
@@ -341,9 +379,15 @@ importers:
       '@cellsymphony/behaviors-glider':
         specifier: workspace:*
         version: link:../behaviors-glider
+      '@cellsymphony/behaviors-keys':
+        specifier: workspace:*
+        version: link:../behaviors-keys
       '@cellsymphony/behaviors-life':
         specifier: workspace:*
         version: link:../behaviors-life
+      '@cellsymphony/behaviors-none':
+        specifier: workspace:*
+        version: link:../behaviors-none
       '@cellsymphony/behaviors-pulse':
         specifier: workspace:*
         version: link:../behaviors-pulse

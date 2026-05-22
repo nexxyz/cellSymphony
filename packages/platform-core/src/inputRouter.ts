@@ -1,9 +1,13 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
+import { interpretGrid, type AxisStrategy, type InterpretationProfile, type TickStrategy } from "@cellsymphony/interpretation-core";
+import { mapIntentsToMusicalEvents } from "@cellsymphony/mapping-core";
 import { clamp } from "./coreUtils";
 import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
-import type { PlatformEffect, PlatformState } from "./index";
+import type { PlatformEffect, PlatformState, RuntimeConfig } from "./index";
+import { toGridSnapshot } from "./runtimeHelpers";
+import { applyModulation } from "./musicTransforms";
 
 type Deps<TState> = {
   isMainEncoderInput: (id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined) => boolean;
@@ -259,9 +263,88 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     });
   }
 
+  const beforeInputGrid = behavior.interpretInputTransitions ? toGridSnapshot(behavior.renderModel(nextState.behaviorState)) : null;
   nextState.behaviorState = behavior.onInput(nextState.behaviorState, input, { bpm: nextState.transport.bpm, emit: (event) => events.push(event) });
+  if (beforeInputGrid) {
+    const afterInputGrid = toGridSnapshot(behavior.renderModel(nextState.behaviorState));
+    if (gridChanged(beforeInputGrid, afterInputGrid)) {
+      const profile = inputTransitionProfile(nextState.runtimeConfig);
+      const intents = interpretGrid(beforeInputGrid, afterInputGrid, nextState.transport.tick, profile);
+      if (intents.length > 0) {
+        const mapped = mapIntentsToMusicalEvents(intents, inputScaleSteps(nextState.mappingConfig, nextState.runtimeConfig));
+        const modulated = applyModulation(intents, mapped, nextState.runtimeConfig);
+        const shaped = inputNoteBehavior(modulated, nextState.runtimeConfig, 0, nextState.system.heldNotes);
+        nextState.system = { ...nextState.system, heldNotes: shaped.heldNotes };
+        events.push(...shaped.events);
+      }
+    }
+  }
   if (events.some((e) => e.type === "note_on")) nextState.system = { ...nextState.system, eventBlipUntilMs: Date.now() + 100 };
   return { state: nextState, events, effects };
+}
+
+function gridChanged(before: { cells: boolean[] }, after: { cells: boolean[] }): boolean {
+  const len = Math.min(before.cells.length, after.cells.length);
+  for (let i = 0; i < len; i += 1) {
+    if (before.cells[i] !== after.cells[i]) return true;
+  }
+  return false;
+}
+
+function inputTransitionProfile(cfg: RuntimeConfig): InterpretationProfile {
+  const tick: TickStrategy = { mode: "whole_grid_transitions" };
+  const axisX: AxisStrategy = cfg.x.pitch.enabled ? { mode: "scale_step", step: Math.abs(cfg.x.pitch.steps) } : { mode: "timing_only" };
+  const axisY: AxisStrategy = cfg.y.pitch.enabled ? { mode: "scale_step", step: Math.abs(cfg.y.pitch.steps) } : { mode: "timing_only" };
+  return {
+    id: "input_profile",
+    event: { enabled: cfg.eventEnabled },
+    state: { enabled: false, tick },
+    x: axisX,
+    y: axisY
+  };
+}
+
+function inputScaleSteps(mapping: any, cfg: RuntimeConfig): any {
+  return {
+    ...mapping,
+    rowStepDegrees: cfg.y.pitch.enabled ? Math.abs(cfg.y.pitch.steps) : 0,
+    columnStepDegrees: cfg.x.pitch.enabled ? Math.abs(cfg.x.pitch.steps) : 0
+  };
+}
+
+function inputNoteBehavior(
+  events: MusicalEvent[],
+  runtimeConfig: RuntimeConfig,
+  partIdx: number,
+  initialHeld: string[]
+): { events: MusicalEvent[]; heldNotes: string[] } {
+  const held = new Set(initialHeld);
+  const out: MusicalEvent[] = [];
+  const instruments: any[] = Array.isArray((runtimeConfig as any).instruments) ? ((runtimeConfig as any).instruments as any[]) : [];
+  for (const e of events) {
+    if (e.type === "note_on") {
+      const key = `${partIdx}:${e.channel}:${e.note}`;
+      const noteBehavior = instruments[e.channel]?.noteBehavior === "hold" ? "hold" : "oneshot";
+      if (noteBehavior === "hold" && held.has(key)) continue;
+      if (noteBehavior === "hold") {
+        held.add(key);
+        out.push({ ...e, durationMs: undefined });
+      } else {
+        out.push(e);
+      }
+    } else if (e.type === "note_off") {
+      const key = `${partIdx}:${e.channel}:${e.note}`;
+      if (!held.has(key)) {
+        out.push(e);
+        continue;
+      }
+      held.delete(key);
+      out.push(e);
+    } else {
+      out.push(e);
+    }
+  }
+  return { events: out, heldNotes: [...held] };
 }
 
 function applySampleAssignment<TState>(

@@ -34,6 +34,7 @@ export interface BehaviorEngine<State, Config> {
   serialize(state: State): unknown;
   deserialize(data: unknown): State;
   configMenu?(state: State): BehaviorConfigItem[];
+  interpretInputTransitions?: boolean;
 }
 
 export { registerBehavior, getBehavior, listBehaviorIds } from "./registry";

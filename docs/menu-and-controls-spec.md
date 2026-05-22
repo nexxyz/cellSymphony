@@ -68,7 +68,7 @@ L1: Life
 ├── Part: [1..8]                                 ← selects active part for L1/L2 editing (mirrors Fn+left-column select)
 ├── Save Grid State: [on | off]                  ← controls whether this part's current grid/runtime state is stored in preset/default saves
 ├── Step Rate: [1/16, 1/8, 1/4, 1/2, 1/1]    ← controls how often onTick() is called
-├── Behavior: [sequencer | life | brain | ant | bounce | shapes | raindrops | dla | glider]
+├── Behavior: [sequencer | life | brain | ant | bounce | shapes | raindrops | dla | glider | none | keys]
 └── ... per-behavior dynamic config from active engine's configMenu()
 ```
 
@@ -94,6 +94,8 @@ Behavior-specific config items (from `configMenu()`):
 | dla | !Seed Cluster [S] | action, shared route `trigger.life.spawn_now` |
 | glider | Glider Spawn Int: [0=off, 1, 2, 4, 8, 16] | enum |
 | glider | !Spawn Glider [S] | action, shared route `trigger.life.spawn_now` |
+| none | *(none)* | — |
+| keys | Quantize: [immediate, step] | enum |
 
 ### L2: Sense
 
@@ -387,12 +389,18 @@ interface BehaviorEngine<TState, TConfig> {
   renderModel: (state: TState) => BehaviorRenderModel;
   serialize: (state: TState) => unknown;
   deserialize: (data: unknown) => TState;
-  triggerTypes?: (prev: TState, next: TState) => CellTriggerType[];
-  configMenu?: () => BehaviorConfigItem[];
-}
+   interpretInputTransitions?: boolean;
+   configMenu?: () => BehaviorConfigItem[];
+ }
 ```
 
 All behaviors use `CellTriggerType`: `"activate" | "stable" | "deactivate" | "scanned" | "none"`.
+
+### Input Events
+
+`DeviceInput` supports `grid_press` and `grid_release` events. Behaviors that do not handle `grid_release` (all except `keys`) simply ignore it. The `keys` behavior uses press→activate and release→deactivate semantics.
+
+When a behavior sets `interpretInputTransitions: true`, the platform-core interprets grid changes from `onInput` through the same Sense/mapping pipeline used during tick, producing immediate musical events. The `keys` behavior uses this to provide immediate finger-drumming response.
 
 ## 4 Trigger Types
 

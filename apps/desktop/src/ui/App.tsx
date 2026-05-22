@@ -30,6 +30,7 @@ export function App() {
   const [painted, setPainted] = useState<Set<string>>(new Set());
   const [dialDrag, setDialDrag] = useState<{ id: EncoderId; y: number; acc: number } | null>(null);
   const [dialPhase, setDialPhase] = useState<Record<string, number>>({ main: 0, aux1: 0, aux2: 0, aux3: 0, aux4: 0 });
+  const lastPressedCell = useRef<{ x: number; y: number } | null>(null);
   const frame = snapshot.frame;
   const oledCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const lastInstrumentsJson = useRef<string>("");
@@ -76,6 +77,14 @@ export function App() {
     setPainted(new Set());
   }
 
+  function handleMouseUp() {
+    if (lastPressedCell.current) {
+      dispatch({ type: "grid_release", x: lastPressedCell.current.x, y: lastPressedCell.current.y });
+      lastPressedCell.current = null;
+    }
+    endPaint();
+  }
+
   useRuntimeBindings(setSnapshot);
   useKeyboardBindings(bumpDialPhase);
   useOledCanvas(oledCanvasRef, oledImage);
@@ -99,7 +108,7 @@ export function App() {
   }, [snapshot.voiceStealingMode]);
 
   return (
-    <main className="app-shell" onMouseUp={endPaint} onMouseLeave={endPaint}>
+    <main className="app-shell" onMouseUp={handleMouseUp} onMouseLeave={endPaint}>
       <header className="bar">Cell Symphony Hardware Simulator</header>
       <section className="panel-layout">
         <section className="control-grid">
@@ -189,6 +198,7 @@ export function App() {
                     const desired = !cellAlive(index);
                     setPaintMode(desired);
                     setPainted(new Set());
+                    lastPressedCell.current = { x, y };
                     applyPaint(x, y, desired);
                   }}
                   onMouseEnter={(event) => {
