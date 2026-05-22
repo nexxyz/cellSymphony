@@ -1,6 +1,6 @@
 use crate::SampleSlotConfig;
 use realtime_engine::synth::{
-    BusConfig, BusSlotConfig, InstrumentMixerConfig, InstrumentSlotConfig, InstrumentsConfig,
+    FxBusConfig, FxBusSlotConfig, InstrumentMixerConfig, InstrumentSlotConfig, InstrumentsConfig,
     MixerConfig, SampleBankConfig, SampleBuffer, SampleSlotConfig as EngineSampleSlotConfig,
     SynthConfig, VoiceStealingMode, INSTRUMENT_SLOT_COUNT, SAMPLE_SLOTS_PER_INSTRUMENT,
 };
@@ -192,14 +192,14 @@ pub fn sample_banks(
         .collect()
 }
 
-fn mixer_buses(config: &AudioInstrumentsConfig) -> Vec<BusConfig> {
+fn mixer_buses(config: &AudioInstrumentsConfig) -> Vec<FxBusConfig> {
     config
         .mixer
         .as_ref()
         .map(|m| {
             m.buses
                 .iter()
-                .map(|b| BusConfig {
+                .map(|b| FxBusConfig {
                     slots: vec![bus_slot(&b.slot1), bus_slot(&b.slot2)],
                     pan_pos: b.pan_pos.unwrap_or(4),
                 })
@@ -208,11 +208,11 @@ fn mixer_buses(config: &AudioInstrumentsConfig) -> Vec<BusConfig> {
         .unwrap_or_default()
 }
 
-fn bus_slot(value: &Option<serde_json::Value>) -> BusSlotConfig {
+fn bus_slot(value: &Option<serde_json::Value>) -> FxBusSlotConfig {
     value
         .clone()
-        .and_then(|v| serde_json::from_value::<BusSlotConfig>(v).ok())
-        .unwrap_or_else(|| BusSlotConfig::Kind("none".to_string()))
+        .and_then(|v| serde_json::from_value::<FxBusSlotConfig>(v).ok())
+        .unwrap_or_else(|| FxBusSlotConfig::Kind("none".to_string()))
 }
 
 pub fn decode_sample_file(path: &str) -> Option<SampleBuffer> {

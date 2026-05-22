@@ -175,6 +175,76 @@ test("loading saved FX slots repairs missing and invalid parameters", () => {
   assert.equal(slot2.params.threshold, 0.08);
 });
 
+test("FX compressor type selection seeds editable default parameters", () => {
+  let state = makeState();
+  state = selectLabel(state, "L3: Voice");
+  state = press(state).state;
+  state = selectLabel(state, "FX Buses");
+  state = press(state).state;
+  state = press(state).state; // enter FX Bus 1
+  state = press(state).state; // enter Slot 1
+  state = selectLabel(state, "Type");
+  state = press(state).state; // enter edit
+  // Turn from "none" past: reverb(1), delay(2), tremolo(3), vibrato(4), auto_pan(5), chorus(6), flanger(7), wah(8), filter_lfo(9), duck(10), bitcrusher(11), saturator(12), distortion(13), glitch(14), compressor(15), eq(16)
+  for (let i = 0; i < 15; i += 1) {
+    const r2 = turn(state, 1);
+    state = r2.state;
+  }
+  state = press(state).state; // confirm
+
+  const slot = (state.runtimeConfig as any).mixer.buses[0].slot1;
+  assert.equal(slot.type, "compressor");
+  assert.equal(slot.params.thresholdDb, -24);
+  assert.equal(slot.params.ratio, 4);
+  assert.equal(slot.params.attackMs, 10);
+  assert.equal(slot.params.releaseMs, 100);
+  assert.equal(slot.params.makeupDb, 0);
+  assert.equal(slot.params.mixPct, 100);
+});
+
+test("FX eq type selection seeds editable default parameters", () => {
+  let state = makeState();
+  state = selectLabel(state, "L3: Voice");
+  state = press(state).state;
+  state = selectLabel(state, "FX Buses");
+  state = press(state).state;
+  state = press(state).state; // enter FX Bus 1
+  state = press(state).state; // enter Slot 1
+  state = selectLabel(state, "Type");
+  state = press(state).state; // enter edit
+  // Turn past none, reverb, delay, tremolo, vibrato, auto_pan, chorus, flanger, wah, filter_lfo, duck, bitcrusher, saturator, distortion, glitch = 15 turns to compressor, 16 to eq
+  for (let i = 0; i < 16; i += 1) {
+    const r2 = turn(state, 1);
+    state = r2.state;
+  }
+  state = press(state).state; // confirm
+
+  const slot = (state.runtimeConfig as any).mixer.buses[0].slot1;
+  assert.equal(slot.type, "eq");
+  assert.equal(slot.params.lowGainDb, 0);
+  assert.equal(slot.params.midGainDb, 0);
+  assert.equal(slot.params.midFreqHz, 1000);
+  assert.equal(slot.params.midQ, 1);
+  assert.equal(slot.params.highGainDb, 0);
+  assert.equal(slot.params.mixPct, 100);
+});
+
+test("old bus_N route normalizes to fx_bus_N on load", () => {
+  let state = makeState();
+  const payload = extractConfigPayload(state) as any;
+  (payload.runtimeConfig as any).instruments[0].mixer = { route: "bus_2", panPos: 4 };
+  state = applyConfigPayload(state, payload, mockBehavior);
+  assert.equal((state.runtimeConfig as any).instruments[0].mixer.route, "fx_bus_2");
+});
+
+test("fx_bus_N route survives round-trip", () => {
+  let state = makeState();
+  const payload = extractConfigPayload(state) as any;
+  (payload.runtimeConfig as any).instruments[0].mixer = { route: "fx_bus_3", panPos: 4 };
+  state = applyConfigPayload(state, payload, mockBehavior);
+  assert.equal((state.runtimeConfig as any).instruments[0].mixer.route, "fx_bus_3");
+});
+
 // ─── Active Behavior Switching ────────────────────────────────────
 
 test("active behavior switching reinitializes state", () => {

@@ -1,7 +1,7 @@
 import { PLATFORM_CAPS } from "./platformCaps";
-import type { BusEffectType } from "./platformTypes";
+import type { FxBusEffectType } from "./platformTypes";
 
-export const FX_SLOT_TYPES: BusEffectType[] = [
+export const FX_SLOT_TYPES: FxBusEffectType[] = [
   "none",
   "reverb",
   "delay",
@@ -16,10 +16,12 @@ export const FX_SLOT_TYPES: BusEffectType[] = [
   "bitcrusher",
   "saturator",
   "distortion",
-  "glitch"
+  "glitch",
+  "compressor",
+  "eq"
 ];
 
-const FX_DEFAULT_PARAMS: Record<BusEffectType, Record<string, string | number>> = {
+const FX_DEFAULT_PARAMS: Record<FxBusEffectType, Record<string, string | number>> = {
   none: {},
   reverb: { mixPct: 30, decay: 0.72, damp: 0.35 },
   delay: { timeMs: 250, feedback: 0.35, mixPct: 35 },
@@ -34,10 +36,12 @@ const FX_DEFAULT_PARAMS: Record<BusEffectType, Record<string, string | number>> 
   bitcrusher: { rateDiv: 4, bits: 6, mixPct: 100 },
   saturator: { drive: 1.8, mixPct: 100 },
   distortion: { drive: 2.5, clip: 0.6, mixPct: 100 },
-  glitch: { chancePct: 8, sliceMs: 80, mixPct: 100 }
+  glitch: { chancePct: 8, sliceMs: 80, mixPct: 100 },
+  compressor: { thresholdDb: -24, ratio: 4, attackMs: 10, releaseMs: 100, makeupDb: 0, mixPct: 100 },
+  eq: { lowGainDb: 0, midGainDb: 0, midFreqHz: 1000, midQ: 1, highGainDb: 0, mixPct: 100 }
 };
 
-export function isBusEffectType(value: unknown): value is BusEffectType {
+export function isBusEffectType(value: unknown): value is FxBusEffectType {
   return typeof value === "string" && (FX_SLOT_TYPES as string[]).includes(value);
 }
 

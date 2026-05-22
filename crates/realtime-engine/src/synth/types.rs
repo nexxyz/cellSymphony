@@ -142,40 +142,40 @@ pub struct InstrumentMixerConfig {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum BusSlotConfig {
+pub enum FxBusSlotConfig {
     Kind(String),
     Config {
-        #[serde(rename = "type", default = "default_bus_slot_type")]
+        #[serde(rename = "type", default = "default_fx_bus_slot_type")]
         kind: String,
         #[serde(default)]
         params: std::collections::BTreeMap<String, serde_json::Value>,
     },
 }
 
-fn default_bus_slot_type() -> String {
+fn default_fx_bus_slot_type() -> String {
     "none".to_string()
 }
 
-impl BusSlotConfig {
+impl FxBusSlotConfig {
     pub(super) fn kind_str(&self) -> &str {
         match self {
-            BusSlotConfig::Kind(s) => s.as_str(),
-            BusSlotConfig::Config { kind, .. } => kind.as_str(),
+            FxBusSlotConfig::Kind(s) => s.as_str(),
+            FxBusSlotConfig::Config { kind, .. } => kind.as_str(),
         }
     }
 
     pub(super) fn params(&self) -> Option<&std::collections::BTreeMap<String, serde_json::Value>> {
         match self {
-            BusSlotConfig::Kind(_) => None,
-            BusSlotConfig::Config { params, .. } => Some(params),
+            FxBusSlotConfig::Kind(_) => None,
+            FxBusSlotConfig::Config { params, .. } => Some(params),
         }
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BusConfig {
+pub struct FxBusConfig {
     #[serde(default)]
-    pub slots: Vec<BusSlotConfig>,
+    pub slots: Vec<FxBusSlotConfig>,
     #[serde(rename = "panPos")]
     pub pan_pos: usize,
 }
@@ -183,7 +183,7 @@ pub struct BusConfig {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct MixerConfig {
     #[serde(default)]
-    pub buses: Vec<BusConfig>,
+    pub buses: Vec<FxBusConfig>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

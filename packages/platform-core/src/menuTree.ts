@@ -322,7 +322,7 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
                     kind: "group",
                     label: "Mixer",
                     children: [
-                      { kind: "enum", label: "Route", key: `${prefix}.mixer.route`, options: ["direct", ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, i) => `bus_${i + 1}`)] },
+                      { kind: "enum", label: "Route", key: `${prefix}.mixer.route`, options: ["direct", ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, i) => `fx_bus_${i + 1}`)] },
                       { kind: "number", label: "Pan Pos", key: `${prefix}.mixer.panPos`, min: 0, max: PLATFORM_CAPS.gridWidth - 1, step: 1 }
                     ]
                   }

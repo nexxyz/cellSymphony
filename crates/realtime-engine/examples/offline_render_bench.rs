@@ -1,6 +1,7 @@
 use realtime_engine::synth::{
-    default_synth_config, BusConfig, BusSlotConfig, InstrumentMixerConfig, InstrumentSlotConfig,
-    InstrumentsConfig, MixerConfig, SynthEngine, DEFAULT_PAN_POSITIONS, INSTRUMENT_SLOT_COUNT,
+    default_synth_config, FxBusConfig, FxBusSlotConfig, InstrumentMixerConfig,
+    InstrumentSlotConfig, InstrumentsConfig, MixerConfig, SynthEngine, DEFAULT_PAN_POSITIONS,
+    INSTRUMENT_SLOT_COUNT,
 };
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -44,7 +45,7 @@ fn bench_config() -> InstrumentsConfig {
             kind: "synth".to_string(),
             synth,
             mixer: Some(InstrumentMixerConfig {
-                route: format!("bus_{}", (idx % 4) + 1),
+                route: format!("fx_bus_{}", (idx % 4) + 1),
                 pan_pos: idx % DEFAULT_PAN_POSITIONS,
             }),
         })
@@ -70,9 +71,9 @@ fn bench_config() -> InstrumentsConfig {
     }
 }
 
-fn bus<const N: usize>(kind: &str, params: [(&str, serde_json::Value); N]) -> BusConfig {
-    BusConfig {
-        slots: vec![BusSlotConfig::Config {
+fn bus<const N: usize>(kind: &str, params: [(&str, serde_json::Value); N]) -> FxBusConfig {
+    FxBusConfig {
+        slots: vec![FxBusSlotConfig::Config {
             kind: kind.to_string(),
             params: params
                 .into_iter()

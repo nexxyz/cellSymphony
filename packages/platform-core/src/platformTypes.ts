@@ -72,7 +72,7 @@ export type InstrumentSlotConfig = {
   mixer?: { route: string; panPos: number };
 };
 
-export type BusEffectType =
+export type FxBusEffectType =
   | "none"
   | "reverb"
   | "delay"
@@ -87,16 +87,18 @@ export type BusEffectType =
   | "bitcrusher"
   | "saturator"
   | "distortion"
-  | "glitch";
+  | "glitch"
+  | "compressor"
+  | "eq";
 
-export type FxSlotConfig = {
-  type: BusEffectType;
+export type FxBusSlotConfig = {
+  type: FxBusEffectType;
   params: Record<string, unknown>;
 };
 
 export type FxBusConfig = {
-  slot1: FxSlotConfig;
-  slot2: FxSlotConfig;
+  slot1: FxBusSlotConfig;
+  slot2: FxBusSlotConfig;
   panPos: number;
 };
 

@@ -173,23 +173,23 @@ L3: Voice
     │       ├── Enabled: [on | off]       default off
     │       └── Channel: [1..16]
     │   └── Mixer (group)
-    │       ├── Route: [direct | bus_1..bus_N] default direct (N from platform capabilities)
+    │       ├── Route: [direct | fx_bus_1..fx_bus_N] default direct (N from platform capabilities)
     │       └── Pan Pos: [0..gridWidth-1] quantized
     └── FX Buses (group)
-        ├── Bus 1..4 (group)
+        ├── FX Bus 1..4 (group)
         │   ├── Slot 1 (group)
-        │   │   ├── Type: [none | reverb | delay | tremolo | vibrato | auto_pan | chorus | flanger | wah | filter_lfo | duck | bitcrusher | saturator | distortion | glitch] default none
-        │   │   └── (effect params, visible per Type: timing/mod/filter/duck/drive/glitch controls)
+        │   │   ├── Type: [none | reverb | delay | tremolo | vibrato | auto_pan | chorus | flanger | wah | filter_lfo | duck | bitcrusher | saturator | distortion | glitch | compressor | eq] default none
+        │   │   └── (effect params, visible per Type: timing/mod/filter/duck/drive/glitch/compressor/EQ controls)
         │   ├── Slot 2 (group)
         │   │   ├── Type: [same options] default none
-        │   │   └── (effect params, visible per Type: timing/mod/filter/duck/drive/glitch controls)
+        │   │   └── (effect params, visible per Type: timing/mod/filter/duck/drive/glitch/compressor/EQ controls)
         │   └── Pan Pos: [0..gridWidth-1] quantized
 ```
 
 Routing semantics:
 
 - Instrument `Route=direct` sends post-fader output to main mix using instrument `Pan Pos`.
-- Instrument `Route=bus_n` sends post-fader output to the selected bus (exclusive send).
+- Instrument `Route=fx_bus_n` sends post-fader output to the selected FX bus (exclusive send).
 - Internal synth and sample instruments use the same route/pan/bus-FX mixer path; MIDI instruments emit external MIDI and are not processed by audio FX.
 - Each bus runs `Slot 1` then `Slot 2` in order; with `None` selected this is passthrough.
 - Selecting a slot `Type` initializes that effect's editable parameter defaults immediately; loaded presets/defaults with missing or invalid effect params are repaired to those defaults.

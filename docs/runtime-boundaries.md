@@ -28,7 +28,7 @@ Authoritative menu/control behavior spec: `docs/menu-and-controls-spec.md`.
   - MIDI output via `tauriMidi.ts` (Tauri→midir)
 
 - Realtime audio engine (`crates/realtime-engine`, `crates/rodio-engine-source`)
-  - owns all internal musical audio rendering, instrument route/pan, bus sends, bus FX, sidechain ducking, and final stereo mix
+  - owns all internal musical audio rendering, instrument route/pan, FX bus sends, FX bus processing, sidechain ducking, and final stereo mix
   - receives platform-decoded sample buffers and control events; it does not perform file I/O or sample decoding in the audio callback
   - is the only path for synth/sample instrument audio before device output
 
@@ -51,8 +51,8 @@ Authoritative menu/control behavior spec: `docs/menu-and-controls-spec.md`.
 ## Audio Routing Contract
 
 - Internal synth and sample instruments must enter the realtime engine before audio output.
-- Instrument `Route=direct` bypasses bus FX and pans directly into the main mix.
-- Instrument `Route=bus_n` enters the selected bus, runs bus slot FX in order, then pans into the main mix.
+- Instrument `Route=direct` bypasses FX bus processing and pans directly into the main mix.
+- Instrument `Route=fx_bus_n` enters the selected FX bus, runs its slot FX in order, then pans into the main mix.
 - MIDI instruments emit external MIDI/control data and are not an internal audio source unless a future audio return path is added.
 - Sample browser preview is an audition path only and may bypass the mixer; grid/musical sample playback must not.
 

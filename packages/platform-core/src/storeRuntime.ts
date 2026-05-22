@@ -191,11 +191,11 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
           route: (() => {
             const raw = String((s as any).mixer?.route ?? (f as any).mixer?.route ?? "direct");
             if (raw === "direct") return "direct";
-            const m = /^bus_(\d+)$/.exec(raw);
+            const m = /^(?:fx_)?bus_(\d+)$/.exec(raw);
             if (!m) return "direct";
             const idx = Number(m[1]);
             if (!Number.isFinite(idx) || idx < 1 || idx > PLATFORM_CAPS.busCount) return "direct";
-            return `bus_${idx}`;
+            return `fx_bus_${idx}`;
           })(),
           panPos: Math.max(0, Math.min(PLATFORM_CAPS.gridWidth - 1, Number((s as any).mixer?.panPos ?? (f as any).mixer?.panPos ?? Math.floor(PLATFORM_CAPS.gridWidth / 2))))
         }
@@ -224,7 +224,9 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
         "bitcrusher",
         "saturator",
         "distortion",
-        "glitch"
+        "glitch",
+        "compressor",
+        "eq"
       ]);
       if (typeof raw === "string") {
         const type = allowed.has(raw) ? raw : "none";

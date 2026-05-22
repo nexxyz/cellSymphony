@@ -1,9 +1,9 @@
-use super::fx_params::{BusFxParams, DuckSource, FilterLfoKind};
+use super::fx_params::{DuckSource, FilterLfoKind, FxBusParams};
 use super::types::*;
 use std::f32::consts::PI;
 
 #[derive(Clone, Debug)]
-pub(super) enum BusFxState {
+pub(super) enum FxBusState {
     None,
     Tremolo {
         phase: f32,
@@ -45,18 +45,26 @@ pub(super) enum BusFxState {
         phase: f32,
         pos: f32,
     },
+    Compressor {
+        env: f32,
+    },
+    Eq {
+        low: BiquadState,
+        mid: BiquadState,
+        high: BiquadState,
+    },
 }
 
-pub(super) fn bus_fx_state_from_params(params: &BusFxParams, sample_rate: u32) -> BusFxState {
+pub(super) fn fx_bus_state_from_params(params: &FxBusParams, sample_rate: u32) -> FxBusState {
     match params {
-        BusFxParams::Delay { time_ms, .. } => BusFxState::Delay {
+        FxBusParams::Delay { time_ms, .. } => FxBusState::Delay {
             buf: vec![0.0; ((*time_ms / 1000.0) * sample_rate as f32).round().max(1.0) as usize],
             idx: 0,
         },
-        BusFxParams::Tremolo { .. } => BusFxState::Tremolo { phase: 0.0 },
-        BusFxParams::ModDelay {
+        FxBusParams::Tremolo { .. } => FxBusState::Tremolo { phase: 0.0 },
+        FxBusParams::ModDelay {
             depth_ms, base_ms, ..
-        } => BusFxState::ModDelay {
+        } => FxBusState::ModDelay {
             buf: vec![
                 0.0;
                 (((*base_ms + *depth_ms + 5.0) / 1000.0) * sample_rate as f32)
@@ -66,62 +74,68 @@ pub(super) fn bus_fx_state_from_params(params: &BusFxParams, sample_rate: u32) -
             idx: 0,
             phase: 0.0,
         },
-        BusFxParams::FilterLfo { .. } => BusFxState::FilterLfo {
+        FxBusParams::FilterLfo { .. } => FxBusState::FilterLfo {
             filt: BiquadState::new(),
             phase: 0.0,
         },
-        BusFxParams::Duck { .. } => BusFxState::Duck { env: 0.0 },
-        BusFxParams::Bitcrusher { .. } => BusFxState::Bitcrusher {
+        FxBusParams::Duck { .. } => FxBusState::Duck { env: 0.0 },
+        FxBusParams::Bitcrusher { .. } => FxBusState::Bitcrusher {
             hold: 1,
             count: 0,
             last: 0.0,
         },
-        BusFxParams::Reverb { .. } => BusFxState::Reverb {
+        FxBusParams::Reverb { .. } => FxBusState::Reverb {
             bufs: [1557, 1617, 1491, 1422]
                 .map(|n| vec![0.0; (n * sample_rate as usize / 44_100).max(1)]),
             idxs: [0; 4],
             lp: [0.0; 4],
         },
-        BusFxParams::Glitch { .. } => BusFxState::Glitch {
+        FxBusParams::Glitch { .. } => FxBusState::Glitch {
             buf: vec![0.0; ((sample_rate as f32) * 0.25) as usize],
             idx: 0,
             read: 0,
             remain: 0,
             rng: 0x1234_abcd,
         },
-        BusFxParams::AutoPan { .. } => BusFxState::AutoPan {
+        FxBusParams::AutoPan { .. } => FxBusState::AutoPan {
             phase: 0.0,
             pos: 0.5,
         },
-        _ => BusFxState::None,
+        FxBusParams::Compressor { .. } => FxBusState::Compressor { env: 0.0 },
+        FxBusParams::Eq { .. } => FxBusState::Eq {
+            low: BiquadState::new(),
+            mid: BiquadState::new(),
+            high: BiquadState::new(),
+        },
+        _ => FxBusState::None,
     }
 }
 
-pub(super) fn process_bus_slot(
-    params: &BusFxParams,
-    state: &mut BusFxState,
+pub(super) fn process_fx_bus_slot(
+    params: &FxBusParams,
+    state: &mut FxBusState,
     input: f32,
     slot_out: &[f32; INSTRUMENT_SLOT_COUNT],
     bus_in: &[f32],
     sample_rate: u32,
 ) -> f32 {
     match *params {
-        BusFxParams::None => input,
-        BusFxParams::Tremolo { rate_hz, depth } => {
-            let BusFxState::Tremolo { phase } = state else {
-                *state = BusFxState::Tremolo { phase: 0.0 };
+        FxBusParams::None => input,
+        FxBusParams::Tremolo { rate_hz, depth } => {
+            let FxBusState::Tremolo { phase } = state else {
+                *state = FxBusState::Tremolo { phase: 0.0 };
                 return input;
             };
             let gain = (1.0 - depth) + depth * ((phase.sin() + 1.0) * 0.5);
             *phase = wrap_phase(*phase + 2.0 * PI * rate_hz / sample_rate as f32);
             input * gain
         }
-        BusFxParams::Delay {
+        FxBusParams::Delay {
             time_ms,
             feedback,
             mix,
         } => process_delay(state, input, time_ms, feedback, mix, sample_rate),
-        BusFxParams::ModDelay {
+        FxBusParams::ModDelay {
             rate_hz,
             depth_ms,
             base_ms,
@@ -139,7 +153,7 @@ pub(super) fn process_bus_slot(
             },
             sample_rate,
         ),
-        BusFxParams::FilterLfo {
+        FxBusParams::FilterLfo {
             kind,
             rate_hz,
             depth,
@@ -157,9 +171,9 @@ pub(super) fn process_bus_slot(
             },
             sample_rate,
         ),
-        BusFxParams::Reverb { mix, decay, damp } => {
-            let BusFxState::Reverb { bufs, idxs, lp } = state else {
-                *state = bus_fx_state_from_params(params, sample_rate);
+        FxBusParams::Reverb { mix, decay, damp } => {
+            let FxBusState::Reverb { bufs, idxs, lp } = state else {
+                *state = fx_bus_state_from_params(params, sample_rate);
                 return input;
             };
             let mut wet = 0.0;
@@ -172,14 +186,14 @@ pub(super) fn process_bus_slot(
             }
             (input * (1.0 - mix) + wet * 0.25 * mix).clamp(-1.5, 1.5)
         }
-        BusFxParams::Glitch {
+        FxBusParams::Glitch {
             chance,
             slice_ms,
             mix,
         } => process_glitch(state, input, chance, slice_ms, mix, sample_rate),
-        BusFxParams::AutoPan { rate_hz, depth } => {
-            let BusFxState::AutoPan { phase, pos } = state else {
-                *state = BusFxState::AutoPan {
+        FxBusParams::AutoPan { rate_hz, depth } => {
+            let FxBusState::AutoPan { phase, pos } = state else {
+                *state = FxBusState::AutoPan {
                     phase: 0.0,
                     pos: 0.5,
                 };
@@ -189,7 +203,7 @@ pub(super) fn process_bus_slot(
             *phase = wrap_phase(*phase + 2.0 * PI * rate_hz / sample_rate as f32);
             input
         }
-        BusFxParams::Duck {
+        FxBusParams::Duck {
             source,
             threshold,
             amount,
@@ -209,24 +223,64 @@ pub(super) fn process_bus_slot(
             bus_in,
             sample_rate,
         ),
-        BusFxParams::Saturator { drive, mix } => {
+        FxBusParams::Saturator { drive, mix } => {
             let y = (input * drive).tanh();
             input * (1.0 - mix) + y * mix
         }
-        BusFxParams::Distortion { drive, clip, mix } => {
+        FxBusParams::Distortion { drive, clip, mix } => {
             let y = (input * drive).clamp(-clip, clip) / clip;
             input * (1.0 - mix) + y * mix
         }
-        BusFxParams::Bitcrusher {
+        FxBusParams::Bitcrusher {
             rate_div,
             bits,
             mix,
         } => process_bitcrusher(state, input, rate_div, bits, mix),
+        FxBusParams::Compressor {
+            threshold_db,
+            ratio,
+            attack_ms,
+            release_ms,
+            makeup_db,
+            mix,
+        } => process_compressor(
+            state,
+            input,
+            CompressorParams {
+                threshold_db,
+                ratio,
+                attack_ms,
+                release_ms,
+                makeup_db,
+                mix,
+            },
+            sample_rate,
+        ),
+        FxBusParams::Eq {
+            low_gain_db,
+            mid_gain_db,
+            mid_freq_hz,
+            mid_q,
+            high_gain_db,
+            mix,
+        } => process_eq(
+            state,
+            input,
+            EqParams {
+                low_gain_db,
+                mid_gain_db,
+                mid_freq_hz,
+                mid_q,
+                high_gain_db,
+                mix,
+            },
+            sample_rate,
+        ),
     }
 }
 
 fn process_delay(
-    state: &mut BusFxState,
+    state: &mut FxBusState,
     input: f32,
     time_ms: f32,
     feedback: f32,
@@ -234,8 +288,8 @@ fn process_delay(
     sample_rate: u32,
 ) -> f32 {
     let desired_len = ((time_ms / 1000.0) * sample_rate as f32).round() as usize;
-    let BusFxState::Delay { buf, idx } = state else {
-        *state = BusFxState::Delay {
+    let FxBusState::Delay { buf, idx } = state else {
+        *state = FxBusState::Delay {
             buf: vec![0.0; desired_len.max(1)],
             idx: 0,
         };
@@ -275,14 +329,32 @@ struct DuckParams {
     release_ms: f32,
 }
 
+struct CompressorParams {
+    threshold_db: f32,
+    ratio: f32,
+    attack_ms: f32,
+    release_ms: f32,
+    makeup_db: f32,
+    mix: f32,
+}
+
+struct EqParams {
+    low_gain_db: f32,
+    mid_gain_db: f32,
+    mid_freq_hz: f32,
+    mid_q: f32,
+    high_gain_db: f32,
+    mix: f32,
+}
+
 fn process_mod_delay(
-    state: &mut BusFxState,
+    state: &mut FxBusState,
     input: f32,
     params: ModDelayParams,
     sample_rate: u32,
 ) -> f32 {
-    let BusFxState::ModDelay { buf, idx, phase } = state else {
-        *state = BusFxState::ModDelay {
+    let FxBusState::ModDelay { buf, idx, phase } = state else {
+        *state = FxBusState::ModDelay {
             buf: vec![0.0; ((sample_rate as f32) * 0.08) as usize],
             idx: 0,
             phase: 0.0,
@@ -305,13 +377,13 @@ fn process_mod_delay(
 }
 
 fn process_filter_lfo(
-    state: &mut BusFxState,
+    state: &mut FxBusState,
     input: f32,
     params: FilterLfoParams,
     sample_rate: u32,
 ) -> f32 {
-    let BusFxState::FilterLfo { filt, phase } = state else {
-        *state = BusFxState::FilterLfo {
+    let FxBusState::FilterLfo { filt, phase } = state else {
+        *state = FxBusState::FilterLfo {
             filt: BiquadState::new(),
             phase: 0.0,
         };
@@ -330,14 +402,14 @@ fn process_filter_lfo(
 }
 
 fn process_glitch(
-    state: &mut BusFxState,
+    state: &mut FxBusState,
     input: f32,
     chance: f32,
     slice_ms: f32,
     mix: f32,
     sample_rate: u32,
 ) -> f32 {
-    let BusFxState::Glitch {
+    let FxBusState::Glitch {
         buf,
         idx,
         read,
@@ -345,7 +417,7 @@ fn process_glitch(
         rng,
     } = state
     else {
-        *state = BusFxState::Glitch {
+        *state = FxBusState::Glitch {
             buf: vec![0.0; ((sample_rate as f32) * 0.25) as usize],
             idx: 0,
             read: 0,
@@ -377,7 +449,7 @@ fn process_glitch(
 }
 
 fn process_duck(
-    state: &mut BusFxState,
+    state: &mut FxBusState,
     input: f32,
     params: DuckParams,
     slot_out: &[f32; INSTRUMENT_SLOT_COUNT],
@@ -388,8 +460,8 @@ fn process_duck(
         DuckSource::Instrument(idx) => slot_out.get(idx).copied().unwrap_or(0.0),
         DuckSource::Bus(idx) => bus_in.get(idx).copied().unwrap_or(0.0),
     };
-    let BusFxState::Duck { env } = state else {
-        *state = BusFxState::Duck { env: 0.0 };
+    let FxBusState::Duck { env } = state else {
+        *state = FxBusState::Duck { env: 0.0 };
         return input;
     };
     let x = sc.abs().min(1.0);
@@ -402,14 +474,14 @@ fn process_duck(
 }
 
 fn process_bitcrusher(
-    state: &mut BusFxState,
+    state: &mut FxBusState,
     input: f32,
     rate_div: u32,
     bits: u32,
     mix: f32,
 ) -> f32 {
-    let BusFxState::Bitcrusher { hold, count, last } = state else {
-        *state = BusFxState::Bitcrusher {
+    let FxBusState::Bitcrusher { hold, count, last } = state else {
+        *state = FxBusState::Bitcrusher {
             hold: rate_div,
             count: 0,
             last: input,
@@ -425,6 +497,130 @@ fn process_bitcrusher(
     let q = ((*last + 1.0) * 0.5 * (levels - 1.0)).round();
     let crushed = (q / (levels - 1.0)) * 2.0 - 1.0;
     input * (1.0 - mix) + crushed * mix
+}
+
+fn process_compressor(
+    state: &mut FxBusState,
+    input: f32,
+    params: CompressorParams,
+    sample_rate: u32,
+) -> f32 {
+    let FxBusState::Compressor { env } = state else {
+        *state = FxBusState::Compressor { env: 0.0 };
+        return input;
+    };
+    let abs_in = input.abs().min(1.0);
+    let atk = (params.attack_ms / 1000.0 * sample_rate as f32).max(1.0);
+    let rel = (params.release_ms / 1000.0 * sample_rate as f32).max(1.0);
+    let coef = if abs_in > *env { 1.0 / atk } else { 1.0 / rel };
+    *env += (abs_in - *env) * coef;
+
+    let env_db = 20.0 * (*env).max(1.0e-10).log10();
+    let reduction = if env_db > params.threshold_db {
+        (env_db - params.threshold_db) * (1.0 - 1.0 / params.ratio.max(1.0))
+    } else {
+        0.0
+    };
+    let gain_linear = 10.0_f32.powf((-reduction + params.makeup_db) / 20.0);
+    let y = input * gain_linear;
+    input * (1.0 - params.mix) + y * params.mix
+}
+
+fn process_eq(state: &mut FxBusState, input: f32, params: EqParams, sample_rate: u32) -> f32 {
+    let FxBusState::Eq { low, mid, high } = state else {
+        *state = FxBusState::Eq {
+            low: BiquadState::new(),
+            mid: BiquadState::new(),
+            high: BiquadState::new(),
+        };
+        return input;
+    };
+    let fs = sample_rate as f32;
+
+    let y = input;
+    let y = biquad_shelf(y, low, params.low_gain_db, 250.0, 0.707, fs);
+    let y = biquad_peak(
+        y,
+        mid,
+        params.mid_gain_db,
+        params.mid_freq_hz,
+        params.mid_q,
+        fs,
+    );
+    let y = biquad_shelf(y, high, params.high_gain_db, 4000.0, 0.707, fs);
+
+    input * (1.0 - params.mix) + y * params.mix
+}
+
+fn biquad_shelf(x: f32, state: &mut BiquadState, gain_db: f32, fc: f32, q: f32, fs: f32) -> f32 {
+    if gain_db.abs() < 0.05 {
+        return x;
+    }
+    let a = 10.0_f32.powf(gain_db / 40.0);
+    let sqrt_a = a.sqrt();
+    let w0 = 2.0 * PI * fc / fs;
+    let cos_w0 = w0.cos();
+    let sin_w0 = w0.sin();
+    let alpha = sin_w0 / (2.0 * q.max(0.001));
+    let is_low = gain_db > 0.0;
+    let (b0, b1, b2, a0, a1, a2) = if is_low {
+        (
+            a * ((a + 1.0) - (a - 1.0) * cos_w0 + 2.0 * sqrt_a * alpha),
+            2.0 * a * ((a - 1.0) - (a + 1.0) * cos_w0),
+            a * ((a + 1.0) - (a - 1.0) * cos_w0 - 2.0 * sqrt_a * alpha),
+            (a + 1.0) + (a - 1.0) * cos_w0 + 2.0 * sqrt_a * alpha,
+            -2.0 * ((a - 1.0) + (a + 1.0) * cos_w0),
+            (a + 1.0) + (a - 1.0) * cos_w0 - 2.0 * sqrt_a * alpha,
+        )
+    } else {
+        (
+            a * ((a + 1.0) + (a - 1.0) * cos_w0 + 2.0 * sqrt_a * alpha),
+            -2.0 * a * ((a - 1.0) + (a + 1.0) * cos_w0),
+            a * ((a + 1.0) + (a - 1.0) * cos_w0 - 2.0 * sqrt_a * alpha),
+            (a + 1.0) - (a - 1.0) * cos_w0 + 2.0 * sqrt_a * alpha,
+            2.0 * ((a - 1.0) - (a + 1.0) * cos_w0),
+            (a + 1.0) - (a - 1.0) * cos_w0 - 2.0 * sqrt_a * alpha,
+        )
+    };
+    let nb0 = b0 / a0;
+    let nb1 = b1 / a0;
+    let nb2 = b2 / a0;
+    let na1 = a1 / a0;
+    let na2 = a2 / a0;
+    let y = nb0 * x + nb1 * state.x1 + nb2 * state.x2 - na1 * state.y1 - na2 * state.y2;
+    state.x2 = state.x1;
+    state.x1 = x;
+    state.y2 = state.y1;
+    state.y1 = y;
+    y
+}
+
+fn biquad_peak(x: f32, state: &mut BiquadState, gain_db: f32, fc: f32, q: f32, fs: f32) -> f32 {
+    if gain_db.abs() < 0.05 {
+        return x;
+    }
+    let a = 10.0_f32.powf(gain_db / 40.0);
+    let w0 = 2.0 * PI * fc / fs;
+    let cos_w0 = w0.cos();
+    let sin_w0 = w0.sin();
+    let alpha = sin_w0 / (2.0 * q.max(0.001));
+    let b0 = 1.0 + alpha * a;
+    let b1 = -2.0 * cos_w0;
+    let b2 = 1.0 - alpha * a;
+    let a0 = 1.0 + alpha / a;
+    let a1 = -2.0 * cos_w0;
+    let a2 = 1.0 - alpha / a;
+    let nb0 = b0 / a0;
+    let nb1 = b1 / a0;
+    let nb2 = b2 / a0;
+    let na1 = a1 / a0;
+    let na2 = a2 / a0;
+    let y = nb0 * x + nb1 * state.x1 + nb2 * state.x2 - na1 * state.y1 - na2 * state.y2;
+    state.x2 = state.x1;
+    state.x1 = x;
+    state.y2 = state.y1;
+    state.y1 = y;
+    y
 }
 
 fn wrap_phase(mut phase: f32) -> f32 {
