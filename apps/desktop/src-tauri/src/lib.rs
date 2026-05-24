@@ -3,8 +3,8 @@ mod midi;
 mod samples;
 
 use audio_config::{
-    build_audio_slot_configs, decode_sample_file, parse_voice_stealing_mode, sample_banks,
-    synth_payload, AudioInstrumentsConfig, AudioRuntimePolicyConfig,
+    build_audio_slot_configs, decode_sample_file, parse_voice_stealing_mode, sample_bank_signature,
+    sample_banks, synth_payload, AudioInstrumentsConfig, AudioRuntimePolicyConfig,
 };
 use midi::{midi_list_inputs, midi_list_outputs, midi_select_input, midi_select_output, midi_send};
 use rodio_engine_source::{EngineEvent, EngineSource};
@@ -101,6 +101,7 @@ pub(crate) struct AppState {
     pub(crate) trigger_tx: Sender<QueuedAudioEvent>,
     synth_slots: Mutex<[bool; INSTRUMENT_SLOT_COUNT]>,
     sample_cache: Mutex<HashMap<String, realtime_engine::synth::SampleBuffer>>,
+    sample_bank_signature: Mutex<String>,
     pub(crate) midi_out: Mutex<Option<midir::MidiOutputConnection>>,
     pub(crate) midi_in: Mutex<Option<MidiInputConnection<()>>>,
 }
@@ -192,19 +193,34 @@ fn audio_set_instruments(
     state: tauri::State<AppState>,
 ) -> Result<(), String> {
     let (next_slots, _) = build_audio_slot_configs(&config.instruments);
-    let next_sample_banks = {
+    let next_sample_signature = sample_bank_signature(&config);
+    let should_update_sample_banks = {
+        let mut current = state
+            .sample_bank_signature
+            .lock()
+            .map_err(|_| "sample bank signature lock failed".to_string())?;
+        if *current == next_sample_signature {
+            false
+        } else {
+            *current = next_sample_signature;
+            true
+        }
+    };
+    let next_sample_banks = if should_update_sample_banks {
         let mut cache = state
             .sample_cache
             .lock()
             .map_err(|_| "sample cache lock failed".to_string())?;
-        sample_banks(&config, resolve_sample_file, |path| {
+        Some(sample_banks(&config, resolve_sample_file, |path| {
             if let Some(buffer) = cache.get(path) {
                 return Some(buffer.clone());
             }
             let buffer = decode_sample_file(path)?;
             cache.insert(path.to_string(), buffer.clone());
             Some(buffer)
-        })
+        }))
+    } else {
+        None
     };
     if let Ok(mut slots) = state.synth_slots.lock() {
         *slots = next_slots;
@@ -214,10 +230,13 @@ fn audio_set_instruments(
         .trigger_tx
         .send(QueuedAudioEvent::SetInstruments(synth_payload))
         .map_err(|e| format!("audio queue send failed: {e}"))?;
-    state
-        .trigger_tx
-        .send(QueuedAudioEvent::SetSampleBanks(next_sample_banks))
-        .map_err(|e| format!("audio queue send failed: {e}"))
+    if let Some(next_sample_banks) = next_sample_banks {
+        state
+            .trigger_tx
+            .send(QueuedAudioEvent::SetSampleBanks(next_sample_banks))
+            .map_err(|e| format!("audio queue send failed: {e}"))?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -311,6 +330,7 @@ pub fn run() {
             trigger_tx,
             synth_slots: Mutex::new([true; INSTRUMENT_SLOT_COUNT]),
             sample_cache: Mutex::new(HashMap::new()),
+            sample_bank_signature: Mutex::new(String::new()),
             midi_out: Mutex::new(None),
             midi_in: Mutex::new(None),
         })

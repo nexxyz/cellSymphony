@@ -2,6 +2,7 @@ import { clamp } from "./coreUtils";
 import { locate } from "./menuView";
 import type { MenuNode, PlatformEffect, PlatformState } from "./index";
 import { clampInstrumentIndex } from "./platformCaps";
+import { makeToast } from "./toast";
 
 type PressDeps<TState> = {
   menuTree: (state: PlatformState<TState>) => MenuNode;
@@ -44,7 +45,7 @@ export function pressMenuInput<TState>(state: PlatformState<TState>, effects: Pl
           system: {
             ...nextState.system,
             sampleBrowser: { instrumentSlot, sampleSlot, dir, entries: [] },
-            toast: { message: "Loading samples...", untilMs: Date.now() + 1000 }
+            toast: makeToast("Loading samples...")
           }
         };
       }
@@ -73,7 +74,7 @@ export function pressMenuInput<TState>(state: PlatformState<TState>, effects: Pl
   }
 
   if (state.menu.editing && selected.kind === "bool" && selected.key === "autoSaveDefault" && state.runtimeConfig.autoSaveDefault) {
-    effects.push({ type: "store_save_default", payload: deps.extractConfigPayload(state) });
+    effects.push({ type: "store_save_default", payload: deps.extractConfigPayload(state), mode: "immediate" });
   }
   return { ...state, menu: { ...state.menu, editing: !state.menu.editing } };
 }

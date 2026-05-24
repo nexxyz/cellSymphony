@@ -49,6 +49,7 @@ import { applyExternalClockPulses, tickTransport } from "./transportRuntime";
 import { buildMenuTree } from "./menuTree";
 import { routeInputWithDeps } from "./inputRouter";
 import { createInitialPlatformState } from "./initialState";
+import { makeToast } from "./toast";
 import {
   applyConfigPayload as applyConfigPayloadRuntime,
   applyStoreResult as applyStoreResultRuntime,
@@ -81,22 +82,19 @@ function resolveBehavior(activeId: string): BehaviorEngine<any, any> {
 }
 import { buildSimulatorFrame } from "./simulatorFrameBuilder";
 import { emergencyBrakeState } from "./transportSafety";
-
 import {
   OLED_HEIGHT,
   OLED_TEXT_COLUMNS,
   OLED_TEXT_LINES,
   OLED_WIDTH,
   type ActionSpec,
-  type AuxBinding,
+  type BarValue,
   type ConfigPayload,
-  type ConfirmKind,
-  type ConfirmState,
-  type Direction,
   type MenuNode,
   type MenuState,
   type MidiPortInfo,
   type NoteUnit,
+  type NumericDisplayMode,
   type PendingAction,
   type PlatformEffect,
   type PlatformState,
@@ -113,8 +111,10 @@ export {
 } from "./platformTypes";
 export type {
   ActionSpec,
+  BarValue,
   ConfigPayload,
   MenuNode,
+  NumericDisplayMode,
   PlatformEffect,
   PlatformState,
   RuntimeConfig,
@@ -177,7 +177,7 @@ function executeConfirmed<TState>(
     return state;
   }
   if (action.kind === "default_save") {
-    effects.push({ type: "store_save_default", payload: extractConfigPayload(state) });
+    effects.push({ type: "store_save_default", payload: extractConfigPayload(state), mode: "immediate" });
     return state;
   }
   if (action.kind === "preset_load") {
@@ -211,10 +211,10 @@ function executeConfirmed<TState>(
     const next = {
       ...state,
       runtimeConfig: { ...state.runtimeConfig, instruments },
-      system: { ...state.system, toast: { message: `Loaded synth: ${preset.label}`, untilMs: Date.now() + 2000 } }
+      system: { ...state.system, toast: makeToast(`Loaded synth: ${preset.label}`) }
     };
     if (next.runtimeConfig.autoSaveDefault) {
-      effects.push({ type: "store_save_default", payload: extractConfigPayload(next) });
+      effects.push({ type: "store_save_default", payload: extractConfigPayload(next), mode: "deferred" });
     }
     return next;
   }
@@ -276,7 +276,7 @@ export function tick<TState>(
         oledMode: nextMode,
         toast:
           nextMode === "normal"
-            ? { message: "Help=Sh+Fn+Enter", untilMs: nowMs + 2500 }
+            ? makeToast("Help=Sh+Fn+Enter", { nowMs, durationMs: 2500 })
             : next.system.toast
       };
     }
@@ -350,7 +350,7 @@ function menuTree<TState>(state: PlatformState<TState>): MenuNode {
   });
 }
 
-function currentMenuView<TState>(state: PlatformState<TState>): { path: string; lines: string[]; colors: number[] } {
+function currentMenuView<TState>(state: PlatformState<TState>): { path: string; lines: string[]; colors: number[]; barValues: (BarValue | null)[] } {
   return renderCurrentMenuView({
     state,
     menuTree,
@@ -421,7 +421,7 @@ function handleAction<TState>(state: PlatformState<TState>, action: ActionSpec, 
 
 function autoSaveEffect<TState>(state: PlatformState<TState>, effects: PlatformEffect[]): void {
   if (state.runtimeConfig.autoSaveDefault) {
-    effects.push({ type: "store_save_default", payload: extractConfigPayload(state) });
+    effects.push({ type: "store_save_default", payload: extractConfigPayload(state), mode: "deferred" });
   }
 }
 

@@ -1,7 +1,7 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { TransportFrame } from "@cellsymphony/device-contracts";
-import { clamp, mod, readNestedValue, readValue, writeNestedValue, writeValue } from "./coreUtils";
+import { clamp, mod, readNestedValue, readValue, writeNestedValue, writeValue, deriveBusAutoName, derivePartAutoName, deriveInstAutoName } from "./coreUtils";
 import { defaultFxParam, defaultFxParams, isBusEffectType } from "./fxDefaults";
 import type { ConfigPayload, MenuNode, PlatformState, SystemState } from "./platformTypes";
 import { clampPartIndex } from "./platformCaps";
@@ -128,12 +128,96 @@ export function readAnyValue<TState>(state: PlatformState<TState>, key: string):
   return readValue(state.runtimeConfig, key);
 }
 
+function applyAutoName<TState>(state: PlatformState<TState>, rc: any, key: string, setVal: unknown): PlatformState<TState> {
+  const instrMatch = /^instruments\.(\d+)\.type$/.exec(key);
+  if (instrMatch) {
+    const idx = Number(instrMatch[1]);
+    const inst = rc.instruments?.[idx];
+    if (inst && inst.autoName === true) {
+      rc = writeValue(rc, `instruments.${idx}.name`, deriveInstAutoName(inst));
+    }
+    return { ...state, runtimeConfig: rc };
+  }
+  const instrNameMatch = /^instruments\.(\d+)\.name$/.exec(key);
+  if (instrNameMatch) {
+    const idx = Number(instrNameMatch[1]);
+    rc = writeValue(rc, `instruments.${idx}.autoName`, false);
+    return { ...state, runtimeConfig: rc };
+  }
+  const instrAutoMatch = /^instruments\.(\d+)\.autoName$/.exec(key);
+  if (instrAutoMatch) {
+    const idx = Number(instrAutoMatch[1]);
+    if (setVal === true) {
+      const inst = rc.instruments?.[idx];
+      if (inst) {
+        rc = writeValue(rc, `instruments.${idx}.name`, deriveInstAutoName(inst));
+      }
+    }
+    return { ...state, runtimeConfig: rc };
+  }
+  const partBehMatch = /^parts\.(\d+)\.l1\.behaviorId$/.exec(key);
+  if (partBehMatch) {
+    const idx = Number(partBehMatch[1]);
+    const part = rc.parts?.[idx];
+    if (part && part.autoName === true) {
+      rc = writeValue(rc, `parts.${idx}.name`, derivePartAutoName(part));
+    }
+    return { ...state, runtimeConfig: rc };
+  }
+  const partNameMatch = /^parts\.(\d+)\.name$/.exec(key);
+  if (partNameMatch) {
+    const idx = Number(partNameMatch[1]);
+    rc = writeValue(rc, `parts.${idx}.autoName`, false);
+    return { ...state, runtimeConfig: rc };
+  }
+  const partAutoMatch = /^parts\.(\d+)\.autoName$/.exec(key);
+  if (partAutoMatch) {
+    const idx = Number(partAutoMatch[1]);
+    if (setVal === true) {
+      const part = rc.parts?.[idx];
+      if (part) {
+        rc = writeValue(rc, `parts.${idx}.name`, derivePartAutoName(part));
+      }
+    }
+    return { ...state, runtimeConfig: rc };
+  }
+  const busSlotMatch = /^mixer\.buses\.(\d+)\.(slot[12])\.type$/.exec(key);
+  if (busSlotMatch) {
+    const idx = Number(busSlotMatch[1]);
+    const bus = rc.mixer?.buses?.[idx];
+    if (bus && bus.autoName === true) {
+      rc = writeValue(rc, `mixer.buses.${idx}.name`, deriveBusAutoName(bus));
+    }
+    return { ...state, runtimeConfig: rc };
+  }
+  const busNameMatch = /^mixer\.buses\.(\d+)\.name$/.exec(key);
+  if (busNameMatch) {
+    const idx = Number(busNameMatch[1]);
+    rc = writeValue(rc, `mixer.buses.${idx}.autoName`, false);
+    return { ...state, runtimeConfig: rc };
+  }
+  const busAutoMatch = /^mixer\.buses\.(\d+)\.autoName$/.exec(key);
+  if (busAutoMatch) {
+    const idx = Number(busAutoMatch[1]);
+    if (setVal === true) {
+      const bus = rc.mixer?.buses?.[idx];
+      if (bus) {
+        rc = writeValue(rc, `mixer.buses.${idx}.name`, deriveBusAutoName(bus));
+      }
+    }
+    return { ...state, runtimeConfig: rc };
+  }
+  return { ...state, runtimeConfig: rc };
+}
+
 export function writeAnyValue<TState>(state: PlatformState<TState>, key: string, value: unknown): PlatformState<TState> {
   const fxTypeMatch = /^mixer\.buses\.(\d+)\.(slot[12])\.type$/.exec(key);
   if (fxTypeMatch) {
     const type = isBusEffectType(value) ? value : "none";
-    const nextState = { ...state, runtimeConfig: writeValue(state.runtimeConfig, `mixer.buses.${fxTypeMatch[1]}.${fxTypeMatch[2]}`, { type, params: defaultFxParams(type) }) };
-    return syncActivePartFromLegacy(nextState);
+    const busIdx = Number(fxTypeMatch[1]);
+    let nextState = { ...state, runtimeConfig: writeValue(state.runtimeConfig, `mixer.buses.${busIdx}.${fxTypeMatch[2]}`, { type, params: defaultFxParams(type) }) };
+    nextState = syncActivePartFromLegacy(nextState);
+    return applyAutoName(nextState, nextState.runtimeConfig as any, key, value);
   }
   if (key.startsWith("transport.")) {
     const transport = writeNestedValue(state.transport, key.slice("transport.".length), value) as TransportFrame;
@@ -148,20 +232,33 @@ export function writeAnyValue<TState>(state: PlatformState<TState>, key: string,
     return { ...state, system };
   }
   if (key.startsWith("parts.")) {
-    const normalized = key.endsWith(".slot") ? Number(value) : value;
-    const nextState = { ...state, runtimeConfig: writeValue(state.runtimeConfig, key, normalized) };
-    if (key.endsWith(".l1.behaviorId")) {
-      return nextState;
-    }
+    const normalized = key.endsWith(".slot") || key.endsWith(".sample.selectedSlot") ? Number(value) : value;
+    let nextState = { ...state, runtimeConfig: writeValue(state.runtimeConfig, key, normalized) };
+    const behMatch = key.endsWith(".l1.behaviorId");
     const active = clampPartIndex((nextState.runtimeConfig as any).activePartIndex ?? 0);
-    if (key.startsWith(`parts.${active}.`)) {
-      return syncLegacyFromActivePart(nextState);
+    if (behMatch || key.startsWith(`parts.${active}.`)) {
+      if (behMatch) {
+        nextState = applyAutoName(nextState, nextState.runtimeConfig as any, key, value);
+      }
+      if (key.startsWith(`parts.${active}.`)) {
+        nextState = syncLegacyFromActivePart(nextState);
+      }
     }
     return nextState;
   }
-  const normalized = key.endsWith(".customName")
-    ? (String(value ?? "").trim().length === 0 ? null : String(value))
-    : (key === "activePartIndex" || key.endsWith(".sample.selectedSlot") ? Number(value) : value);
+  if (/^instruments\.\d+\.(name|autoName|type)$/.test(key)) {
+    const normalized = key.endsWith(".sample.selectedSlot") ? Number(value) : value;
+    let nextState = { ...state, runtimeConfig: writeValue(state.runtimeConfig, key, normalized) };
+    nextState = applyAutoName(nextState, nextState.runtimeConfig as any, key, value);
+    return syncActivePartFromLegacy(nextState);
+  }
+  if (/^mixer\.buses\.\d+\.(name|autoName)$/.test(key)) {
+    const normalized = key.endsWith(".sample.selectedSlot") ? Number(value) : value;
+    let nextState = { ...state, runtimeConfig: writeValue(state.runtimeConfig, key, normalized) };
+    nextState = applyAutoName(nextState, nextState.runtimeConfig as any, key, value);
+    return syncActivePartFromLegacy(nextState);
+  }
+  const normalized = key === "activePartIndex" || key.endsWith(".sample.selectedSlot") ? Number(value) : value;
   const nextState = { ...state, runtimeConfig: writeValue(state.runtimeConfig, key, normalized) };
   if (key === "activePartIndex") {
     return syncLegacyFromActivePart(nextState);

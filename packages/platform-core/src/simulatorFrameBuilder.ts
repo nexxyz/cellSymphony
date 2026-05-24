@@ -1,6 +1,7 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import { GRID_HEIGHT, GRID_WIDTH, type DisplayFrame, type SimulatorFrame } from "@cellsymphony/device-contracts";
-import type { PlatformState } from "./platformTypes";
+import type { BarValue, PlatformState } from "./platformTypes";
+import { OLED_TEXT_LINES } from "./platformTypes";
 import { cellsToLeds, sampleAssignmentToLeds } from "./runtimeHelpers";
 import { renderOledFrame } from "./oledRender";
 import { logoSepia128Rgb565be } from "./oledAssets/logoSepia128_rgb565be";
@@ -13,7 +14,7 @@ type Args<TState> = {
   activePart: number;
   engine: BehaviorEngine<any, unknown>;
   model: { name: string; cells: boolean[]; triggerTypes?: import("@cellsymphony/behavior-api").CellTriggerType[] };
-  menuView: { path: string; lines: string[]; colors: number[] };
+  menuView: { path: string; lines: string[]; colors: number[]; barValues: (BarValue | null)[] };
   scanCursor: { axis: "rows" | "columns"; index: number } | null;
   toOledLines: (display: DisplayFrame) => OledLines;
 };
@@ -28,11 +29,18 @@ export function buildSimulatorFrame<TState>(args: Args<TState>): SimulatorFrame 
     colors: menuView.colors
   };
   const oledLines = toOledLines(baseDisplay);
+  const maxBodyLines = OLED_TEXT_LINES - 1;
+  const alignedBarValues: (BarValue | null)[] = [
+    null,
+    ...menuView.barValues.slice(0, maxBodyLines)
+  ].slice(0, OLED_TEXT_LINES);
   const now = Date.now();
   const toast = state.system.toast && state.system.toast.untilMs > now ? state.system.toast.message : null;
+  const toastStartedAtMs = state.system.toast && state.system.toast.untilMs > now ? state.system.toast.startedAtMs : undefined;
   const transportIcon: "play" | "pause" | "stop" = state.transport.playing ? "play" : state.system.stopLatched ? "stop" : "pause";
   const oled = renderOledFrame({
     lines: oledLines.lines,
+    barValues: alignedBarValues,
     off: state.system.oledMode === "off",
     splash:
       state.system.oledMode === "splash"
@@ -44,6 +52,8 @@ export function buildSimulatorFrame<TState>(args: Args<TState>): SimulatorFrame 
     transportFlash: state.system.transportFlash,
     eventDotOn: state.system.eventBlipUntilMs > now,
     toast,
+    toastStartedAtMs,
+    renderNowMs: now,
     lineColors: oledLines.colors
   });
   const sampleAssign = state.system.sampleAssign;

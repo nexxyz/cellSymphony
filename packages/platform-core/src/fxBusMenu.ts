@@ -161,17 +161,32 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
 }
 
 export function fxBusesMenuNode(): MenuNode {
+  const busGroupLabel = (busIdx: number): string => `Bus ${busIdx + 1}`;
   return {
     kind: "group",
     label: "FX Buses",
-    children: Array.from({ length: PLATFORM_CAPS.busCount }, (_, busIdx) => ({
-      kind: "group",
-      label: `FX Bus ${busIdx + 1}`,
-      children: [
-        fxSlotNode(busIdx, 1),
-        fxSlotNode(busIdx, 2),
-        { kind: "number", label: "Pan Pos", key: `mixer.buses.${busIdx}.panPos`, min: 0, max: PLATFORM_CAPS.gridWidth - 1, step: 1 }
-      ]
-    }))
+    children: [
+      {
+        kind: "group",
+        label: "Names",
+        children: Array.from({ length: PLATFORM_CAPS.busCount }, (_, busIdx): MenuNode => ({
+          kind: "group",
+          label: busGroupLabel(busIdx),
+          children: [
+            { kind: "bool", label: "Auto Name", key: `mixer.buses.${busIdx}.autoName` },
+            { kind: "text", label: "Name", key: `mixer.buses.${busIdx}.name`, maxLen: 32 }
+          ]
+        }))
+      },
+      ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, busIdx): MenuNode => ({
+        kind: "group",
+        label: busGroupLabel(busIdx),
+        children: [
+          fxSlotNode(busIdx, 1),
+          fxSlotNode(busIdx, 2),
+          { kind: "number", label: "Pan Pos", key: `mixer.buses.${busIdx}.panPos`, min: 0, max: PLATFORM_CAPS.gridWidth - 1, step: 1 }
+        ]
+      }))
+    ]
   };
 }

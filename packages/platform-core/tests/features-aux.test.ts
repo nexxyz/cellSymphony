@@ -211,7 +211,7 @@ test("shared spawn route shows N/A toast in sequencer", () => {
   };
 
   state = routeInput(state, { type: "encoder_press", id: "aux1" } as DeviceInput, mockBehavior).state;
-  assert.equal(state.system.toast?.message, "S1: N/A (Spawn Now)");
+  assert.equal(state.system.toast?.message, "S1: P1 Spawn Now not active");
 });
 
 test("aux encoder turn bool binding clamps in both directions", () => {
@@ -341,6 +341,106 @@ test("aux unbind confirm cancel keeps binding", () => {
   state = routeInput(state, { type: "encoder_turn", id: "main", delta: 1 } as DeviceInput, mockBehavior).state;
   state = routeInput(state, { type: "encoder_press", id: "main" } as DeviceInput, mockBehavior).state;
   assert.ok(state.system.auxBindings["aux1"]);
+});
+
+// ─── Stale Aux Binding Detection ──────────────────────────────────
+
+test("stale FX param turn shows not active toast", () => {
+  let state = makeState();
+  // Set slot1 to delay with params
+  state.runtimeConfig.mixer = {
+    buses: [{ slot1: { type: "delay", params: { timeMs: 200 } as any }, slot2: { type: "none", params: {} as any } }]
+  } as any;
+  state.system.auxBindings["aux1"] = {
+    turn: { key: "mixer.buses.0.slot1.params.timeMs", label: "Time ms", kind: "number", min: 1, max: 2000, step: 1 },
+    press: null
+  };
+
+  // Change slot type to reverb — timeMs no longer valid
+  state.runtimeConfig.mixer.buses[0].slot1.type = "reverb";
+
+  const r = routeInput(state, { type: "encoder_turn", id: "aux1", delta: 1 } as DeviceInput, mockBehavior);
+  state = r.state;
+
+  assert.equal(state.system.toast?.message, "T1: B1 Time ms not active");
+});
+
+test("stale instrument type turn shows not active toast", () => {
+  let state = makeState();
+  state.runtimeConfig.instruments = [
+    { type: "synth", autoName: true, name: "synth", synth: { filterCutoff: 0.5 } as any }
+  ] as any;
+  state.system.auxBindings["aux1"] = {
+    turn: { key: "instruments.0.synth.filterCutoff", label: "Filter cutoff", kind: "number", min: 0, max: 1, step: 0.01 },
+    press: null
+  };
+
+  // Change instrument type to sample — synth subtree inactive
+  state.runtimeConfig.instruments[0].type = "sample";
+
+  const r = routeInput(state, { type: "encoder_turn", id: "aux1", delta: 1 } as DeviceInput, mockBehavior);
+  state = r.state;
+
+  assert.equal(state.system.toast?.message, "T1: I1 Filter cutoff not active");
+});
+
+test("stale part scan turn shows not active toast", () => {
+  let state = makeState();
+  state.runtimeConfig.parts = [
+    { l1: { behaviorId: "life", autoName: true, name: "life", behaviorConfig: {} }, l2: { scanMode: "scanning", scanAxis: "rows", scanUnit: 1, scanDirection: "forward" } as any }
+  ] as any;
+  state.system.auxBindings["aux1"] = {
+    turn: { key: "parts.0.l2.scanDirection", label: "Scan Direction", kind: "enum", options: ["forward", "reverse"] },
+    press: null
+  };
+
+  // Change scan mode to immediate — scan direction inactive
+  state.runtimeConfig.parts[0].l2.scanMode = "immediate";
+
+  const r = routeInput(state, { type: "encoder_turn", id: "aux1", delta: 1 } as DeviceInput, mockBehavior);
+  state = r.state;
+
+  assert.equal(state.system.toast?.message, "T1: P1 Scan Direction not active");
+});
+
+test("stale concrete behavior action press shows not active toast", () => {
+  let state = createInitialState(lifeBehavior);
+  state.system.oledMode = "normal";
+  state.runtimeConfig.activeBehavior = "life";
+  state.activeBehavior = "life";
+  state.system.auxBindings["aux1"] = {
+    turn: null,
+    press: { actionType: "spawnRandom", label: "Spawn Random" }
+  };
+
+  // Switch active behavior to brain — spawnRandom not in brain's config menu
+  state.runtimeConfig.activeBehavior = "brain";
+  state.activeBehavior = "brain";
+
+  const r = routeInput(state, { type: "encoder_press", id: "aux1" } as DeviceInput, lifeBehavior);
+  state = r.state;
+
+  assert.equal(state.system.toast?.message, "S1: P1 Spawn Random not active");
+});
+
+test("stale spawn route press shows not active toast", () => {
+  let state = createInitialState(lifeBehavior);
+  state.system.oledMode = "normal";
+  state.runtimeConfig.activeBehavior = "life";
+  state.activeBehavior = "life";
+  state.system.auxBindings["aux1"] = {
+    turn: null,
+    press: { actionType: "spawnRandom", routeKey: "trigger.life.spawn_now", label: "Spawn Now" }
+  };
+
+  // Switch to sequencer — no spawn action
+  state.runtimeConfig.activeBehavior = "sequencer";
+  state.activeBehavior = "sequencer";
+
+  const r = routeInput(state, { type: "encoder_press", id: "aux1" } as DeviceInput, lifeBehavior);
+  state = r.state;
+
+  assert.equal(state.system.toast?.message, "S1: P1 Spawn Now not active");
 });
 
 // ─── Shift+Back Grid Clear ────────────────────────────────────────

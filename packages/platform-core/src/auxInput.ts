@@ -1,7 +1,10 @@
 import type { MusicalEvent } from "@cellsymphony/musical-events";
+import type { BehaviorConfigItem } from "@cellsymphony/behavior-api";
 import type { PlatformEffect, PlatformState } from "./index";
-import { clamp } from "./coreUtils";
+import { clamp, readValue } from "./coreUtils";
 import { locate } from "./menuView";
+import { defaultFxParam } from "./fxDefaults";
+import { makeToast } from "./toast";
 
 type AuxSharedDeps<TState> = {
   menuTree: (state: PlatformState<TState>) => any;
@@ -10,7 +13,7 @@ type AuxSharedDeps<TState> = {
   writeAnyValue: (state: PlatformState<TState>, key: string, value: unknown) => PlatformState<TState>;
   reinitBehaviorState: (state: PlatformState<TState>, key: string) => PlatformState<TState>;
   autoSaveEffect: (state: PlatformState<TState>, effects: PlatformEffect[]) => void;
-  formatDisplayValue: (key: string, value: unknown) => string;
+  formatDisplayValue: (key: string, value: unknown, runtimeConfig?: any) => string;
   isSpawnActionType: (actionType: string) => boolean;
   spawnActionTypeForBehavior: (behaviorId: string) => string | null;
 };
@@ -109,6 +112,8 @@ export function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId
 export function pressAuxEncoder<TState>(state: PlatformState<TState>, encoderId: string, _effects: PlatformEffect[], emit: (event: MusicalEvent) => void, deps: AuxSharedDeps<TState>): PlatformState<TState> {
   const binding = state.system.auxBindings[encoderId];
   if (!binding?.press) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} No binding`);
+  const inactiveMsg = inactivePressMessage(state, binding.press, deps);
+  if (inactiveMsg) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} ${inactiveMsg}`);
   let actionType = binding.press.actionType;
   let label = binding.press.label ?? binding.press.actionType;
   if (binding.press.routeKey === "trigger.life.spawn_now") {
@@ -128,6 +133,8 @@ export function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: 
   if (!binding?.turn) return setAuxToast(state, `${auxInputPrefix("turn", encoderId)} No binding`);
   const t = binding.turn;
   const label = t.label ?? t.key;
+  const inactiveMsg = inactiveTurnMessage(state, t.key, label, deps);
+  if (inactiveMsg) return setAuxToast(state, `${auxInputPrefix("turn", encoderId)} ${inactiveMsg}`);
   if (t.kind === "number") {
     const current = deps.readAnyValue(state, t.key);
     const nextValue = clamp(Number(current) + delta * (t.step ?? 1), t.min ?? 0, t.max ?? 127);
@@ -135,11 +142,11 @@ export function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: 
     if (t.key.startsWith("behaviorConfig.")) {
       const finalState = deps.reinitBehaviorState(nextState, t.key);
       deps.autoSaveEffect(finalState, effects);
-      const v = deps.formatDisplayValue(t.key, deps.readAnyValue(finalState, t.key));
+      const v = deps.formatDisplayValue(t.key, deps.readAnyValue(finalState, t.key), finalState.runtimeConfig as any);
       return setAuxToast(finalState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
     }
     deps.autoSaveEffect(nextState, effects);
-    const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key));
+    const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
     return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
   }
   if (t.kind === "enum" && t.options) {
@@ -149,19 +156,19 @@ export function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: 
     const raw = t.options[nextIdx];
     if (t.key === "transport.playing") {
       const nextState = { ...state, transport: { ...state.transport, playing: raw === "true" } };
-      const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key));
+      const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
       return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
     }
     if (t.key === "activeBehavior" || t.key.startsWith("behaviorConfig.")) {
       const nextState = deps.writeAnyValue(state, t.key, raw);
       const finalState = deps.reinitBehaviorState(nextState, t.key);
       deps.autoSaveEffect(finalState, effects);
-      const v = deps.formatDisplayValue(t.key, deps.readAnyValue(finalState, t.key));
+      const v = deps.formatDisplayValue(t.key, deps.readAnyValue(finalState, t.key), finalState.runtimeConfig as any);
       return setAuxToast(finalState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
     }
     const nextState = deps.writeAnyValue(state, t.key, raw);
     deps.autoSaveEffect(nextState, effects);
-    const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key));
+    const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
     return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
   }
   if (t.kind === "bool") {
@@ -169,25 +176,18 @@ export function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: 
     const clamped = current === true ? (delta > 0 ? true : false) : (delta < 0 ? false : true);
     const nextState = deps.writeAnyValue(state, t.key, clamped);
     deps.autoSaveEffect(nextState, effects);
-    const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key));
+    const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
     return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
   }
   return state;
 }
 
 function setAuxToast<TState>(state: PlatformState<TState>, message: string): PlatformState<TState> {
-  const now = Date.now();
-  const baseMs = 1400;
-  const extendMs = 600;
-  const maxMs = 3000;
-  const current = state.system.toast;
-  const active = current && current.untilMs > now;
-  const untilMs = active ? Math.min(now + maxMs, Math.max(now + baseMs, current.untilMs + extendMs)) : now + baseMs;
   return {
     ...state,
     system: {
       ...state.system,
-      toast: { message, untilMs }
+      toast: makeToast(message, { current: state.system.toast, extend: true })
     }
   };
 }
@@ -196,4 +196,97 @@ function auxInputPrefix(kind: "press" | "turn", encoderId: string): string {
   const index = encoderId.startsWith("aux") ? encoderId.slice(3) : encoderId;
   const lead = kind === "press" ? "S" : "T";
   return `${lead}${index}:`;
+}
+
+function bindingScope(key: string, activePart: number): string {
+  const busMatch = /^mixer\.buses\.(\d+)/.exec(key);
+  if (busMatch) return `B${Number(busMatch[1]) + 1}`;
+  const instMatch = /^instruments\.(\d+)/.exec(key);
+  if (instMatch) return `I${Number(instMatch[1]) + 1}`;
+  const partMatch = /^parts\.(\d+)/.exec(key);
+  if (partMatch) return `P${Number(partMatch[1]) + 1}`;
+  return `P${activePart + 1}`;
+}
+
+function inactiveTurnMessage<TState>(state: PlatformState<TState>, key: string, label: string, deps: AuxSharedDeps<TState>): string | null {
+  const activePart = state.runtimeConfig.activePartIndex ?? 0;
+  const scope = bindingScope(key, activePart);
+
+  const fxMatch = /^mixer\.buses\.(\d+)\.(slot[12])\.params\.([^.]+)$/.exec(key);
+  if (fxMatch) {
+    const type = readValue(state.runtimeConfig, `mixer.buses.${fxMatch[1]}.${fxMatch[2]}.type`);
+    if (defaultFxParam(type, fxMatch[3]) === undefined) {
+      return `${scope} ${label} not active`;
+    }
+    return null;
+  }
+
+  const instMatch = /^instruments\.(\d+)\.(synth|sample|midiEngine)\./.exec(key);
+  if (instMatch) {
+    const instType = readValue(state.runtimeConfig, `instruments.${instMatch[1]}.type`);
+    const typeMap: Record<string, string> = { synth: "synth", sample: "sample", midiEngine: "midi" };
+    if (instType !== typeMap[instMatch[2]]) {
+      return `${scope} ${label} not active`;
+    }
+    return null;
+  }
+
+  const scanMatch = /^parts\.(\d+)\.l2\.(scanAxis|scanUnit|scanDirection)$/.exec(key);
+  if (scanMatch) {
+    const scanMode = readValue(state.runtimeConfig, `parts.${scanMatch[1]}.l2.scanMode`);
+    if (scanMode !== "scanning") {
+      return `${scope} ${label} not active`;
+    }
+    return null;
+  }
+
+  const partBehMatch = /^parts\.(\d+)\.l1\.behaviorConfig\.(.+)$/.exec(key);
+  if (partBehMatch) {
+    const behaviorId = readValue(state.runtimeConfig, `parts.${partBehMatch[1]}.l1.behaviorId`);
+    const behavior = deps.resolveBehavior(String(behaviorId));
+    if (!behavior.configMenu) return null;
+    const configItems: BehaviorConfigItem[] = behavior.configMenu(behavior.init({}));
+    if (!configItems.some((item: BehaviorConfigItem) => item.key === partBehMatch[2])) {
+      return `${scope} ${label} not active`;
+    }
+    return null;
+  }
+
+  const globalBehMatch = /^behaviorConfig\.(\w+)\.(.+)$/.exec(key);
+  if (globalBehMatch) {
+    const behaviorId = String(state.runtimeConfig.activeBehavior ?? "");
+    const itemKey = globalBehMatch[2];
+    const behavior = deps.resolveBehavior(behaviorId);
+    if (!behavior.configMenu) return null;
+    const configItems: BehaviorConfigItem[] = behavior.configMenu(behavior.init({}));
+    if (!configItems.some((item: BehaviorConfigItem) => item.key === itemKey)) {
+      return `${scope} ${label} not active`;
+    }
+    return null;
+  }
+
+  return null;
+}
+
+function inactivePressMessage<TState>(state: PlatformState<TState>, bindingPress: { actionType: string; routeKey?: string; label?: string }, deps: AuxSharedDeps<TState>): string | null {
+  const activePart = state.runtimeConfig.activePartIndex ?? 0;
+  const behaviorId = String(state.runtimeConfig.activeBehavior ?? "");
+  const behavior = deps.resolveBehavior(behaviorId);
+  const scope = `P${activePart + 1}`;
+
+  if (bindingPress.routeKey === "trigger.life.spawn_now") {
+    const resolvedAction = deps.spawnActionTypeForBehavior(behaviorId);
+    if (!resolvedAction) {
+      return `${scope} ${bindingPress.label ?? "Spawn Now"} not active`;
+    }
+    return null;
+  }
+
+  if (behavior.configMenu) {
+    const configItems: BehaviorConfigItem[] = behavior.configMenu(behavior.init({}));
+    if (!configItems.some((item: BehaviorConfigItem) => item.type === "action" && item.key === bindingPress.actionType)) {
+      return `${scope} ${bindingPress.label ?? bindingPress.actionType} not active`;
+    }
+  }
+  return null;
 }

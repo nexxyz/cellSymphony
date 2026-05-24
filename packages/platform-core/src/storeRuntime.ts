@@ -4,6 +4,7 @@ import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { ConfigPayload, PlatformEffect, PlatformState, RuntimeConfig, StoreResult } from "./index";
 import { isBusEffectType, sanitizeFxParams } from "./fxDefaults";
 import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
+import { makeToast } from "./toast";
 
 type StoreDeps<TState> = {
   resolveBehavior: (id: string) => BehaviorEngine<any, any>;
@@ -145,16 +146,16 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     for (let i = 0; i < PLATFORM_CAPS.instrumentCount; i += 1) {
       const f = baseSlots[i] ?? baseSlots[0] ?? { type: "synth", midi: { enabled: false, channel: i }, synth: {}, sample: { baseVelocity: 100, velocityLevelsEnabled: false, velocityLevels: { high: 120, medium: 85, low: 45 }, selectedSlot: 0, slots: Array.from({ length: PLATFORM_CAPS.sampleSlotCount }, () => ({ path: null })), tuneSemis: 0, amp: {}, ampEnv: {}, filter: {}, filterEnv: {}, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } };
       const s = src[i] ?? {};
+      const incomingAutoName = typeof (s as any).autoName === "boolean" ? (s as any).autoName : true;
+      const incomingName = typeof (s as any).name === "string" && (s as any).name.trim().length > 0 ? (s as any).name.trim() : "";
+      const fallbackAutoName = typeof (f as any).autoName === "boolean" ? (f as any).autoName : true;
+      const fallbackName = typeof (f as any).name === "string" && (f as any).name.trim().length > 0 ? (f as any).name.trim() : "";
       out.push({
         ...(f as any),
         ...(s as any),
         type: (s as any).type === "sample" || (s as any).type === "midi" || (s as any).type === "synth" ? (s as any).type : (f as any).type,
-        nameMode: (s as any).nameMode === "auto" || (s as any).nameMode === "drums" || (s as any).nameMode === "pad" || (s as any).nameMode === "lead" || (s as any).nameMode === "bass" || (s as any).nameMode === "fx" || (s as any).nameMode === "custom"
-          ? (s as any).nameMode
-          : ((f as any).nameMode ?? "auto"),
-        customName: typeof (s as any).customName === "string" && (s as any).customName.trim().length > 0
-          ? (s as any).customName
-          : ((typeof (f as any).customName === "string" && (f as any).customName.trim().length > 0) ? (f as any).customName : null),
+        autoName: incomingAutoName,
+        name: incomingName || fallbackName || (f as any).name || "synth",
         midi: { ...(f as any).midi, ...((s as any).midi ?? {}) },
         synth: {
           ...(f as any).synth,
@@ -239,10 +240,14 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     };
     for (let i = 0; i < PLATFORM_CAPS.busCount; i += 1) {
       const src = sourceBuses[i] ?? {};
+      const autoName = typeof src.autoName === "boolean" ? src.autoName : true;
+      const srcName = typeof src.name === "string" && src.name.trim().length > 0 ? src.name.trim() : "(none)";
       buses.push({
         slot1: normalizeSlot(src.slot1),
         slot2: normalizeSlot(src.slot2),
-        panPos: Math.max(0, Math.min(PLATFORM_CAPS.gridWidth - 1, Number(src.panPos ?? Math.floor(PLATFORM_CAPS.gridWidth / 2))))
+        panPos: Math.max(0, Math.min(PLATFORM_CAPS.gridWidth - 1, Number(src.panPos ?? Math.floor(PLATFORM_CAPS.gridWidth / 2)))),
+        autoName,
+        name: srcName
       });
     }
     return { buses };
@@ -270,6 +275,11 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
       filterCutoff: { ...(factory.runtimeConfig.y.filterCutoff as any), ...(rt.y?.filterCutoff ?? {}) },
       filterResonance: { ...(factory.runtimeConfig.y.filterResonance as any), ...(rt.y?.filterResonance ?? {}) }
     },
+    numericDisplayMode: rt.numericDisplayMode === "bar" || rt.numericDisplayMode === "numbers" || rt.numericDisplayMode === "bar+numbers"
+      ? rt.numericDisplayMode
+      : typeof rt.showNumericValueWithBars === "boolean"
+        ? rt.showNumericValueWithBars ? "bar+numbers" : "bar"
+        : "bar+numbers",
     activePartIndex: clampPartIndex(rt.activePartIndex ?? (factory.runtimeConfig as any).activePartIndex ?? 0),
     parts: Array.isArray(rt.parts) ? rt.parts : Array.isArray((factory.runtimeConfig as any).parts) ? (factory.runtimeConfig as any).parts : [],
     instruments: sanitizeInstruments(rt.instruments),
@@ -328,7 +338,9 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
       l1: {
         ...part.l1,
         saveGridState: part.l1.saveGridState !== false
-      }
+      },
+      autoName: typeof (part as any).autoName === "boolean" ? (part as any).autoName : true,
+      name: typeof (part as any).name === "string" && (part as any).name.trim().length > 0 ? (part as any).name.trim() : (part as any).l1?.behaviorId ?? "life"
     };
   }
   (mergedRuntime as any).parts = parts;
@@ -362,7 +374,7 @@ export function applyStoreResult<TState>(
   const effects: PlatformEffect[] = [];
   const setToast = (s: PlatformState<TState>, message: string): PlatformState<TState> => ({
     ...s,
-    system: { ...s.system, toast: { message, untilMs: Date.now() + 3000 } }
+    system: { ...s.system, toast: makeToast(message, { durationMs: 3000 }) }
   });
 
   if (result.type === "midi_list_outputs_result") return { state: { ...state, system: { ...state.system, midiOutputs: result.outputs } }, effects };

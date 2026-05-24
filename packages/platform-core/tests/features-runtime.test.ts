@@ -305,12 +305,50 @@ test("switching parts restores stored part state immediately", () => {
   assert.equal(state.behaviorState.tickCount, 22);
 });
 
+test("switching active part does not overwrite playback timing accumulators", () => {
+  let state = createInitialState(lifeBehavior) as any;
+  state.system.oledMode = "normal";
+  state.transport.playing = true;
+  state.partScanPulseAccumulator = [1, 2, 3, 4, 5, 6, 7, 8];
+  state.partAlgorithmPulseAccumulator = [2, 3, 4, 5, 6, 7, 8, 9];
+  state.partScanIndex = [0, 1, 2, 3, 4, 5, 6, 7];
+  state.scanPulseAccumulator = 99;
+  state.algorithmPulseAccumulator = 88;
+  state.scanIndex = 6;
+
+  state.system.fnHeld = true;
+  state = routeInput(state, { type: "grid_press", x: 0, y: 1 } as DeviceInput, lifeBehavior).state as any;
+
+  assert.deepEqual(state.partScanPulseAccumulator, [1, 2, 3, 4, 5, 6, 7, 8]);
+  assert.deepEqual(state.partAlgorithmPulseAccumulator, [2, 3, 4, 5, 6, 7, 8, 9]);
+  assert.deepEqual(state.partScanIndex, [0, 1, 2, 3, 4, 5, 6, 7]);
+
+  state = tick(state, lifeBehavior, 0.01).state as any;
+  const expectedPulseDelta = 0.48;
+  assert.equal(state.partScanPulseAccumulator[0], 1 + expectedPulseDelta);
+  assert.equal(state.partScanPulseAccumulator[1], 2 + expectedPulseDelta);
+  assert.equal(state.partAlgorithmPulseAccumulator[0], 2 + expectedPulseDelta);
+  assert.equal(state.partAlgorithmPulseAccumulator[1], 3 + expectedPulseDelta);
+});
+
 test("L2 Sense includes Part selector", () => {
   let state = makeState();
   state = selectLabel(state, "L2: Sense");
   state = press(state).state;
   const frame = toSimulatorFrame(state, mockBehavior);
   assert.ok(frame.display.lines.some((line) => line.includes("Part")));
+});
+
+test("L1 Life always exposes part Auto Name before behavior-specific config", () => {
+  for (const behaviorId of ["life", "none", "sequencer", "keys"]) {
+    let state = makeState() as any;
+    state.runtimeConfig.parts[0].l1.behaviorId = behaviorId;
+    state.runtimeConfig.activeBehavior = behaviorId;
+    state = selectLabel(state, "L1: Life");
+    state = press(state).state;
+    const frame = toSimulatorFrame(state, mockBehavior);
+    assert.ok(frame.display.lines.some((line) => line.includes("Auto Name")), `${behaviorId} should show Auto Name`);
+  }
 });
 
 test("instrument list shows compact name labels", () => {
@@ -323,10 +361,29 @@ test("instrument list shows compact name labels", () => {
   assert.ok(frame.display.lines.some((line) => line.includes("I1: synth")));
 });
 
-test("instrument auto name follows type and custom/preset modes override", () => {
+test("MIDI instruments do not expose the audio Mixer group", () => {
+  let state = makeState() as any;
+  state.runtimeConfig.instruments[0].type = "midi";
+  state = selectLabel(state, "L3: Voice");
+  state = press(state).state;
+  state = selectLabel(state, "Instruments");
+  state = press(state).state;
+  state = press(state).state;
+  const seen = new Set<string>();
+  for (let i = 0; i < 20; i += 1) {
+    const frame = toSimulatorFrame(state, mockBehavior);
+    const selected = frame.display.lines.find((line) => line.startsWith("@@")) ?? "";
+    seen.add(selected);
+    state = turn(state, 1).state;
+  }
+  assert.ok(![...seen].some((line) => line.includes("Mixer")));
+});
+
+test("instrument auto name follows type, manual name sets autoName false", () => {
   let state = makeState() as any;
   state.runtimeConfig.instruments[0].type = "sample";
-  state.runtimeConfig.instruments[0].nameMode = "auto";
+  state.runtimeConfig.instruments[0].autoName = true;
+  state.runtimeConfig.instruments[0].name = "sample";
   state = selectLabel(state, "L3: Voice");
   state = press(state).state;
   state = selectLabel(state, "Instruments");
@@ -334,12 +391,12 @@ test("instrument auto name follows type and custom/preset modes override", () =>
   let frame = toSimulatorFrame(state, mockBehavior);
   assert.ok(frame.display.lines.some((line) => line.includes("I1: sample")));
 
-  state.runtimeConfig.instruments[0].nameMode = "drums";
+  state.runtimeConfig.instruments[0].autoName = false;
+  state.runtimeConfig.instruments[0].name = "Drums";
   frame = toSimulatorFrame(state, mockBehavior);
   assert.ok(frame.display.lines.some((line) => line.includes("I1: Drums")));
 
-  state.runtimeConfig.instruments[0].nameMode = "custom";
-  state.runtimeConfig.instruments[0].customName = "MyKick";
+  state.runtimeConfig.instruments[0].name = "MyKick";
   frame = toSimulatorFrame(state, mockBehavior);
   assert.ok(frame.display.lines.some((line) => line.includes("I1: MyKick")));
 });

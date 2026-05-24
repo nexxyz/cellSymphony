@@ -7,6 +7,8 @@ export type Direction = "forward" | "reverse";
 export type NoteUnit = "1/16" | "1/8" | "1/4" | "1/2" | "1/1";
 export type Curve = "linear" | "curve";
 export type VoiceStealingMode = "off" | "lenient" | "balanced" | "aggressive";
+export type NumericDisplayMode = "bar" | "numbers" | "bar+numbers";
+export type BarValue = { frac: number; numChars: number };
 export type ScaleId = "chromatic" | "major" | "natural_minor" | "dorian" | "mixolydian" | "major_pentatonic" | "minor_pentatonic" | "harmonic_minor";
 export type RootName = "C" | "C#" | "D" | "D#" | "E" | "F" | "F#" | "G" | "G#" | "A" | "A#" | "B";
 type OutOfRangeMode = "clamp" | "wrap";
@@ -47,8 +49,8 @@ export type SynthConfig = {
 
 export type InstrumentSlotConfig = {
   type: "synth" | "sample" | "midi";
-  nameMode: "auto" | "drums" | "pad" | "lead" | "bass" | "fx" | "custom";
-  customName: string | null;
+  autoName: boolean;
+  name: string;
   noteBehavior: "oneshot" | "hold";
   midi: { enabled: boolean; channel: number };
   synth: SynthConfig;
@@ -100,6 +102,8 @@ export type FxBusConfig = {
   slot1: FxBusSlotConfig;
   slot2: FxBusSlotConfig;
   panPos: number;
+  autoName: boolean;
+  name: string;
 };
 
 export type PartSenseConfig = {
@@ -130,6 +134,8 @@ export type PartConfig = {
     savedState?: unknown;
   };
   l2: PartSenseConfig;
+  autoName: boolean;
+  name: string;
 };
 
 export type RuntimeConfig = {
@@ -139,7 +145,7 @@ export type RuntimeConfig = {
   scanMode: ScanMode; scanAxis: ScanAxis; scanUnit: NoteUnit; scanDirection: Direction; algorithmStepUnit: NoteUnit;
   activeBehavior: string; autoSaveDefault: boolean; behaviorConfig: Record<string, unknown>; eventEnabled: boolean; stateEnabled: boolean;
   pitch: PitchSettings; x: AxisModConfig; y: AxisModConfig;
-  activePartIndex: number; parts: PartConfig[];
+  activePartIndex: number; parts: PartConfig[]; numericDisplayMode: NumericDisplayMode;
   instruments: InstrumentSlotConfig[];
   mixer?: { buses: FxBusConfig[] };
 };
@@ -171,7 +177,7 @@ export type PendingAction =
   | { kind: "text_dirty_exit"; key: string; original: string; saveAction?: ActionSpec; backAfter: boolean; mode: TextConfirmMode };
 export type ConfirmState = { kind: ConfirmKind; action: PendingAction; cursor: number; options: string[]; scroll: number };
 export type TextEditSession = { key: string; original: string; saveAction?: ActionSpec };
-type ToastState = { message: string; untilMs: number };
+export type ToastState = { message: string; startedAtMs: number; untilMs: number };
 export type MidiPortInfo = { id: string; name: string };
 export type AuxTurnBinding = { key: string; label?: string; kind: "number" | "enum" | "bool"; min?: number; max?: number; step?: number; options?: string[] };
 export type AuxPressBinding = { actionType: string; routeKey?: string; label?: string };
@@ -195,7 +201,7 @@ export type SystemState = {
 
 export type PlatformEffectBase =
   | { type: "store_list_presets" } | { type: "store_load_preset"; name: string } | { type: "store_save_preset"; name: string; payload: ConfigPayload }
-  | { type: "store_delete_preset"; name: string } | { type: "store_load_default" } | { type: "store_save_default"; payload: ConfigPayload };
+  | { type: "store_delete_preset"; name: string } | { type: "store_load_default" } | { type: "store_save_default"; payload: ConfigPayload; mode?: "immediate" | "deferred" };
 export type MidiEffect =
   | { type: "midi_list_outputs_request" } | { type: "midi_list_inputs_request" }
   | { type: "midi_select_output"; id: string | null } | { type: "midi_select_input"; id: string | null } | { type: "midi_panic" };
@@ -226,7 +232,7 @@ export type PlatformState<TState> = {
 export type MenuNode =
   | { kind: "group"; label: string; children: MenuNode[] | ((state: PlatformState<any>) => MenuNode[]); visible?: (c: RuntimeConfig) => boolean }
   | { kind: "enum"; label: string; key: string; options: string[]; visible?: (c: RuntimeConfig) => boolean }
-  | { kind: "number"; label: string; key: string; min: number; max: number; step: number; visible?: (c: RuntimeConfig) => boolean }
+  | { kind: "number"; label: string; key: string; min: number; max: number; step: number; displayStyle?: "number" | "bar"; visible?: (c: RuntimeConfig) => boolean }
   | { kind: "bool"; label: string; key: string; visible?: (c: RuntimeConfig) => boolean }
   | { kind: "action"; label: string; action: ActionSpec }
   | { kind: "text"; label: string; key: string; maxLen: number; onExitSaveAction?: ActionSpec }

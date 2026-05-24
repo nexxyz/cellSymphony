@@ -53,10 +53,12 @@ type RuntimeDeps = {
   store?: RuntimeStore;
   midiService?: RuntimeMidiService;
   invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
+  autoSaveCooldownMs?: number;
 };
 
 const LOOKAHEAD_MS = 20;
 const MAX_CATCHUP_MS = 250;
+const DEFAULT_AUTO_SAVE_COOLDOWN_MS = 2000;
 
 type ScheduledEvents = {
   dueMs: number;
@@ -81,6 +83,39 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
   const midiQueue: ScheduledMidi[] = [];
   const listeners = new Set<RuntimeListener>();
   const eventListeners = new Set<EventsListener>();
+  const autoSaveCooldownMs = deps.autoSaveCooldownMs ?? DEFAULT_AUTO_SAVE_COOLDOWN_MS;
+  let pendingDefaultSave: ConfigPayload | null = null;
+  let pendingDefaultSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function flushPendingDefaultSave() {
+    if (pendingDefaultSaveTimer !== null) {
+      clearTimeout(pendingDefaultSaveTimer);
+      pendingDefaultSaveTimer = null;
+    }
+    if (!pendingDefaultSave) return;
+    store.saveDefault(pendingDefaultSave);
+    pendingDefaultSave = null;
+    const applied = applyStoreResult(state, { type: "save_default_result", ok: true } as any, activeBehavior());
+    state = applied.state;
+  }
+
+  function cancelPendingDefaultSave() {
+    if (pendingDefaultSaveTimer !== null) {
+      clearTimeout(pendingDefaultSaveTimer);
+      pendingDefaultSaveTimer = null;
+    }
+    pendingDefaultSave = null;
+  }
+
+  function scheduleDefaultSave(payload: ConfigPayload) {
+    pendingDefaultSave = payload;
+    if (pendingDefaultSaveTimer !== null) clearTimeout(pendingDefaultSaveTimer);
+    pendingDefaultSaveTimer = setTimeout(() => {
+      pendingDefaultSaveTimer = null;
+      flushPendingDefaultSave();
+      publishSnapshot();
+    }, autoSaveCooldownMs);
+  }
 
   function snapshotFromState(next: typeof state): SimulatorSnapshot {
     const frame = toSimulatorFrame(next, activeBehavior());
@@ -321,12 +356,13 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
 
 
 
-  function execEffect(effect: PlatformEffect): StoreResult {
+  function execEffect(effect: PlatformEffect): StoreResult | null {
     try {
       if (effect.type === "store_list_presets") {
         return { type: "list_presets_result", names: store.listPresets() };
       }
       if (effect.type === "store_load_preset") {
+        cancelPendingDefaultSave();
         return { type: "load_preset_result", name: effect.name, payload: store.loadPreset(effect.name) };
       }
       if (effect.type === "store_save_preset") {
@@ -338,9 +374,15 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
         return { type: "delete_preset_result", name: effect.name, ok };
       }
       if (effect.type === "store_load_default") {
+        cancelPendingDefaultSave();
         return { type: "load_default_result", payload: store.loadDefault() };
       }
       if (effect.type === "store_save_default") {
+        if (effect.mode === "deferred") {
+          scheduleDefaultSave(effect.payload);
+          return null;
+        }
+        cancelPendingDefaultSave();
         store.saveDefault(effect.payload);
         return { type: "save_default_result", ok: true };
       }
@@ -462,6 +504,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       const effect = queue.shift();
       if (!effect) break;
       const result = execEffect(effect);
+      if (!result) continue;
       const applied = applyStoreResult(state, result, activeBehavior());
       state = applied.state;
       queue.push(...applied.effects);
@@ -542,6 +585,8 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       publishSnapshot();
     },
     stop() {
+      flushPendingDefaultSave();
+      publishSnapshot();
       scheduler.stop();
     },
     subscribe(listener) {

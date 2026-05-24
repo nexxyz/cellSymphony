@@ -111,6 +111,32 @@ pub(super) fn fx_bus_state_from_params(params: &FxBusParams, sample_rate: u32) -
     }
 }
 
+pub(super) fn fx_bus_state_matches_params(state: &FxBusState, params: &FxBusParams) -> bool {
+    matches!(
+        (state, params),
+        (FxBusState::None, FxBusParams::None)
+            | (FxBusState::None, FxBusParams::Saturator { .. })
+            | (FxBusState::None, FxBusParams::Distortion { .. })
+            | (FxBusState::Tremolo { .. }, FxBusParams::Tremolo { .. })
+            | (FxBusState::Delay { .. }, FxBusParams::Delay { .. })
+            | (FxBusState::ModDelay { .. }, FxBusParams::ModDelay { .. })
+            | (FxBusState::FilterLfo { .. }, FxBusParams::FilterLfo { .. })
+            | (FxBusState::Duck { .. }, FxBusParams::Duck { .. })
+            | (
+                FxBusState::Bitcrusher { .. },
+                FxBusParams::Bitcrusher { .. }
+            )
+            | (FxBusState::Reverb { .. }, FxBusParams::Reverb { .. })
+            | (FxBusState::Glitch { .. }, FxBusParams::Glitch { .. })
+            | (FxBusState::AutoPan { .. }, FxBusParams::AutoPan { .. })
+            | (
+                FxBusState::Compressor { .. },
+                FxBusParams::Compressor { .. }
+            )
+            | (FxBusState::Eq { .. }, FxBusParams::Eq { .. })
+    )
+}
+
 pub(super) fn process_fx_bus_slot(
     params: &FxBusParams,
     state: &mut FxBusState,
@@ -287,19 +313,19 @@ fn process_delay(
     mix: f32,
     sample_rate: u32,
 ) -> f32 {
-    let desired_len = ((time_ms / 1000.0) * sample_rate as f32).round() as usize;
+    let delay_samples = (time_ms / 1000.0) * sample_rate as f32;
+    let desired_len = delay_samples.ceil() as usize + 1;
     let FxBusState::Delay { buf, idx } = state else {
         *state = FxBusState::Delay {
-            buf: vec![0.0; desired_len.max(1)],
+            buf: vec![0.0; desired_len.max(2)],
             idx: 0,
         };
         return input;
     };
-    if buf.len() != desired_len.max(1) {
-        *buf = vec![0.0; desired_len.max(1)];
-        *idx = 0;
+    if buf.len() < desired_len.max(2) {
+        buf.resize(desired_len.max(2), 0.0);
     }
-    let delayed = buf[*idx];
+    let delayed = read_delay(buf, *idx, delay_samples);
     buf[*idx] = input + delayed * feedback;
     *idx = (*idx + 1) % buf.len();
     (input * (1.0 - mix) + delayed * mix).clamp(-1.5, 1.5)
@@ -363,9 +389,8 @@ fn process_mod_delay(
     };
     let need =
         (((params.base_ms + params.depth_ms + 5.0) / 1000.0) * sample_rate as f32).ceil() as usize;
-    if buf.len() != need.max(2) {
-        *buf = vec![0.0; need.max(2)];
-        *idx = 0;
+    if buf.len() < need.max(2) {
+        buf.resize(need.max(2), 0.0);
     }
     let delay_ms =
         (params.base_ms + params.depth_ms * ((*phase).sin() + 1.0) * 0.5).clamp(0.1, 100.0);

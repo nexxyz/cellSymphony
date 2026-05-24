@@ -1,4 +1,6 @@
-use super::fx::{fx_bus_state_from_params, process_fx_bus_slot, FxBusState};
+use super::fx::{
+    fx_bus_state_from_params, fx_bus_state_matches_params, process_fx_bus_slot, FxBusState,
+};
 use super::fx_params::{compile_fx_bus_params, FxBusParams};
 use super::types::*;
 use std::f32::consts::PI;
@@ -104,14 +106,12 @@ impl SynthEngine {
                 self.slot_pan_pos[idx] = m.pan_pos.min(self.pan_positions - 1);
             }
         }
-        self.bus_pan_pos.clear();
-        self.bus_mono_scratch.clear();
-        self.bus_slot_params.clear();
-        self.bus_slot_state.clear();
+        let mut next_bus_pan_pos = Vec::new();
+        let mut next_bus_slot_params = Vec::new();
+        let mut next_bus_slot_state = Vec::new();
         if let Some(mixer) = cfg.mixer {
-            for bus in mixer.buses.into_iter() {
-                self.bus_pan_pos
-                    .push(bus.pan_pos.min(self.pan_positions - 1));
+            for (bus_idx, bus) in mixer.buses.into_iter().enumerate() {
+                next_bus_pan_pos.push(bus.pan_pos.min(self.pan_positions - 1));
                 let mut cfgs: [FxBusSlotConfig; BUS_SLOTS_PER_BUS] =
                     std::array::from_fn(|_| FxBusSlotConfig::Kind("none".to_string()));
                 for (j, slot) in bus.slots.into_iter().enumerate().take(BUS_SLOTS_PER_BUS) {
@@ -119,12 +119,21 @@ impl SynthEngine {
                 }
                 let params: [FxBusParams; BUS_SLOTS_PER_BUS] =
                     std::array::from_fn(|j| compile_fx_bus_params(&cfgs[j]));
-                let states: [FxBusState; BUS_SLOTS_PER_BUS] =
-                    std::array::from_fn(|j| fx_bus_state_from_params(&params[j], self.sample_rate));
-                self.bus_slot_params.push(params);
-                self.bus_slot_state.push(states);
+                let states: [FxBusState; BUS_SLOTS_PER_BUS] = std::array::from_fn(|j| {
+                    self.bus_slot_state
+                        .get(bus_idx)
+                        .and_then(|states| states.get(j))
+                        .filter(|state| fx_bus_state_matches_params(state, &params[j]))
+                        .cloned()
+                        .unwrap_or_else(|| fx_bus_state_from_params(&params[j], self.sample_rate))
+                });
+                next_bus_slot_params.push(params);
+                next_bus_slot_state.push(states);
             }
         }
+        self.bus_pan_pos = next_bus_pan_pos;
+        self.bus_slot_params = next_bus_slot_params;
+        self.bus_slot_state = next_bus_slot_state;
         self.bus_mono_scratch.resize(self.bus_pan_pos.len(), 0.0);
     }
 
@@ -513,6 +522,14 @@ impl SynthEngine {
     pub(super) fn mod_values_for_slot(&self, slot: usize) -> (f32, f32) {
         let s = slot.min(INSTRUMENT_SLOT_COUNT - 1);
         (self.mods[s].cutoff_cc, self.mods[s].resonance_cc)
+    }
+
+    #[cfg(test)]
+    pub(super) fn delay_state_probe(&self, bus: usize, slot: usize) -> Option<(usize, f32)> {
+        match self.bus_slot_state.get(bus)?.get(slot)? {
+            FxBusState::Delay { buf, idx } => Some((*idx, buf.iter().map(|v| v.abs()).sum())),
+            _ => None,
+        }
     }
 }
 

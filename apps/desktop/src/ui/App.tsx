@@ -5,6 +5,7 @@ import { mapKeyboardEventToInputAction, mapKeyboardKeyupToInputAction, shouldPre
 import { sendEventsToAudio } from "../runtime/outputAdapters/audioSink";
 import { createSimulatorRuntime } from "../runtime/simulatorRuntime";
 import { nativeAudioBridge } from "../audio/nativeAudioBridge";
+import { createCoalescedAudioConfigSender } from "../audio/coalescedAudioConfig";
 
 const runtime = createSimulatorRuntime();
 type EncoderId = "main" | "aux1" | "aux2" | "aux3" | "aux4";
@@ -33,8 +34,11 @@ export function App() {
   const lastPressedCell = useRef<{ x: number; y: number } | null>(null);
   const frame = snapshot.frame;
   const oledCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const lastInstrumentsJson = useRef<string>("");
   const lastVoiceStealingMode = useRef<string>("");
+  const audioConfigSender = useRef<ReturnType<typeof createCoalescedAudioConfigSender> | null>(null);
+  if (audioConfigSender.current === null) {
+    audioConfigSender.current = createCoalescedAudioConfigSender((config) => nativeAudioBridge.setInstruments(config));
+  }
 
   const oledFrame = frame.oled;
   const oledImage = useMemo(() => toOledImage(oledFrame), [oledFrame]);
@@ -61,12 +65,16 @@ export function App() {
     return c.g > 100;
   }
 
+  function logicalCellFromDisplay(x: number, y: number) {
+    return GRID_DOMAIN.toLogicalCell({ x, y });
+  }
+
   function applyPaint(x: number, y: number, desired: boolean) {
     const key = `${x}-${y}`;
     if (painted.has(key)) return;
     const index = GRID_DOMAIN.toDisplayIndex(GRID_DOMAIN.toLogicalCell({ x, y }));
     if (cellAlive(index) !== desired) {
-      const world = GRID_DOMAIN.toLogicalCell({ x, y });
+      const world = logicalCellFromDisplay(x, y);
       dispatch({ type: "grid_press", x: world.x, y: world.y });
     }
     setPainted((prev) => new Set(prev).add(key));
@@ -90,15 +98,18 @@ export function App() {
   useOledCanvas(oledCanvasRef, oledImage);
   useDialDragBindings(dialDrag, setDialDrag, turnWithAcceleration);
 
-  useEffect(() => {
+  const audioConfig = useMemo(() => {
     const instruments = (snapshot as any).instruments ?? [];
     const mixer = (snapshot as any).mixer ?? { buses: [] };
     const panPositions = PLATFORM_CAPS.gridWidth;
-    const json = JSON.stringify({ instruments, mixer, panPositions });
-    if (json === lastInstrumentsJson.current) return;
-    lastInstrumentsJson.current = json;
-    void nativeAudioBridge.setInstruments({ instruments, mixer, panPositions });
-  }, [snapshot]);
+    return { instruments, mixer, panPositions };
+  }, [snapshot.instruments, snapshot.mixer]);
+
+  useEffect(() => {
+    audioConfigSender.current?.schedule(audioConfig);
+  }, [audioConfig]);
+
+  useEffect(() => () => audioConfigSender.current?.flush(), []);
 
   useEffect(() => {
     const mode = snapshot.voiceStealingMode ?? "balanced";
@@ -108,7 +119,7 @@ export function App() {
   }, [snapshot.voiceStealingMode]);
 
   return (
-    <main className="app-shell" onMouseUp={handleMouseUp} onMouseLeave={endPaint}>
+    <main className="app-shell" onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
       <header className="bar">Cell Symphony Hardware Simulator</header>
       <section className="panel-layout">
         <section className="control-grid">
@@ -198,7 +209,7 @@ export function App() {
                     const desired = !cellAlive(index);
                     setPaintMode(desired);
                     setPainted(new Set());
-                    lastPressedCell.current = { x, y };
+                    lastPressedCell.current = logicalCellFromDisplay(x, y);
                     applyPaint(x, y, desired);
                   }}
                   onMouseEnter={(event) => {

@@ -15,16 +15,6 @@ const PPQN = 24;
 export function tickTransport<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>, elapsedSeconds: number): { state: PlatformState<TState>; events: MusicalEvent[] } {
   const events: MusicalEvent[] = [];
   let next = { ...state };
-  const activePart = clampPartIndex((next.runtimeConfig as any).activePartIndex ?? 0);
-  if (Array.isArray((next as any).partScanIndex) && (next as any).partScanIndex.length > activePart) {
-    (next as any).partScanIndex[activePart] = next.scanIndex;
-  }
-  if (Array.isArray((next as any).partScanPulseAccumulator) && (next as any).partScanPulseAccumulator.length > activePart) {
-    (next as any).partScanPulseAccumulator[activePart] = next.scanPulseAccumulator;
-  }
-  if (Array.isArray((next as any).partAlgorithmPulseAccumulator) && (next as any).partAlgorithmPulseAccumulator.length > activePart) {
-    (next as any).partAlgorithmPulseAccumulator[activePart] = next.algorithmPulseAccumulator;
-  }
   const prevPulse = next.transport.ppqnPulse;
   if (next.runtimeConfig.midi.syncMode === "external") return { state: next, events };
   if (!next.transport.playing) return { state: next, events };
@@ -85,9 +75,6 @@ function advanceEngineByPulses<TState>(state: PlatformState<TState>, behavior: B
   let partScanIndex = Array.isArray((next as any).partScanIndex) ? ([...(next as any).partScanIndex] as number[]) : Array.from({ length: PLATFORM_CAPS.partCount }, () => 0);
   let partScanPulseAccumulator = Array.isArray((next as any).partScanPulseAccumulator) ? ([...(next as any).partScanPulseAccumulator] as number[]) : Array.from({ length: PLATFORM_CAPS.partCount }, () => 0);
   let partAlgorithmPulseAccumulator = Array.isArray((next as any).partAlgorithmPulseAccumulator) ? ([...(next as any).partAlgorithmPulseAccumulator] as number[]) : Array.from({ length: PLATFORM_CAPS.partCount }, () => 0);
-  partScanIndex[activePart] = next.scanIndex;
-  partScanPulseAccumulator[activePart] = next.scanPulseAccumulator;
-  partAlgorithmPulseAccumulator[activePart] = next.algorithmPulseAccumulator;
   if (pulses > 0) {
     partScanPulseAccumulator = partScanPulseAccumulator.map((v) => v + pulses);
     partAlgorithmPulseAccumulator = partAlgorithmPulseAccumulator.map((v) => v + pulses);

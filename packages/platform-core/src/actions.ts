@@ -1,5 +1,6 @@
 import type { DeviceInput } from "@cellsymphony/device-contracts";
 import type { PlatformEffect, PlatformState } from "./index";
+import { makeToast } from "./toast";
 
 type ActionDeps<TState> = {
   writeValue: <TConfig extends object>(cfg: TConfig, key: string, value: unknown) => TConfig;
@@ -14,7 +15,7 @@ export function handleMenuAction<TState>(state: PlatformState<TState>, action: a
   });
   const toast = (message: string): PlatformState<TState> => ({
     ...state,
-    system: { ...state.system, toast: { message, untilMs: Date.now() + 3000 } }
+    system: { ...state.system, toast: makeToast(message) }
   });
 
   if (action.type === "refresh_presets") {
@@ -61,7 +62,7 @@ export function handleMenuAction<TState>(state: PlatformState<TState>, action: a
         ...state.system,
         sampleAssign: { instrumentSlot: action.instrumentSlot, sampleSlot: action.sampleSlot },
         sampleAssignLastPress: null,
-        toast: { message: `Assign: Inst ${action.instrumentSlot + 1} / Slot ${action.sampleSlot + 1}`, untilMs: Date.now() + 1600 }
+        toast: makeToast(`Assign: Inst ${action.instrumentSlot + 1} / Slot ${action.sampleSlot + 1}`)
       }
     };
   }
@@ -79,7 +80,7 @@ export function handleMenuAction<TState>(state: PlatformState<TState>, action: a
       system: {
         ...state.system,
         sampleBrowser: { instrumentSlot: action.instrumentSlot, sampleSlot: action.sampleSlot, dir, entries: [] },
-        toast: { message: "Loading samples...", untilMs: Date.now() + 1000 }
+        toast: makeToast("Loading samples...")
       }
     };
   }
@@ -107,11 +108,11 @@ export function handleMenuAction<TState>(state: PlatformState<TState>, action: a
       runtimeConfig: nextCfg,
       system: {
         ...state.system,
-        toast: { message: `Sample set: ${action.path.split("/").pop() ?? action.path}`, untilMs: Date.now() + 1800 }
+        toast: makeToast(`Sample set: ${action.path.split("/").pop() ?? action.path}`)
       }
     };
     if (next.runtimeConfig.autoSaveDefault) {
-      effects.push({ type: "store_save_default", payload: deps.extractConfigPayload(next) });
+      effects.push({ type: "store_save_default", payload: deps.extractConfigPayload(next), mode: "deferred" });
     }
     return next;
   }

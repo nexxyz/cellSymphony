@@ -1,4 +1,6 @@
 import { PLATFORM_CAPS } from "./platformCaps";
+import type { FxBusConfig, FxBusEffectType, PartConfig } from "./platformTypes";
+import type { RuntimeConfig } from "./platformTypes";
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -92,9 +94,43 @@ export function writeValue<TConfig extends object>(cfg: TConfig, key: string, va
   return clone;
 }
 
-export function formatDisplayValue(key: string, value: unknown): string {
+export function deriveBusAutoName(bus: FxBusConfig): string {
+  const parts: string[] = [];
+  if (bus.slot1.type !== "none") parts.push(bus.slot1.type);
+  if (bus.slot2.type !== "none") parts.push(bus.slot2.type);
+  if (parts.length === 0) return "(none)";
+  return parts.join("+");
+}
+
+export function derivePartAutoName(part: PartConfig): string {
+  return part.l1.behaviorId;
+}
+
+export function deriveInstAutoName(instrument: { type: string }): string {
+  if (instrument.type === "midi") return "MIDI";
+  if (instrument.type === "sample") return "sample";
+  return "synth";
+}
+
+export function fxBusLabel(busIdx: number, bus: FxBusConfig): string {
+  return `B${busIdx + 1}: ${bus.name}`;
+}
+
+export function partLabel(partIdx: number, part: PartConfig): string {
+  return `P${partIdx + 1}: ${part.name}`;
+}
+
+export function instrumentLabel(state: { runtimeConfig: { instruments: Array<{ name: string }> } }, idx: number): string {
+  const inst: any = (state.runtimeConfig as any).instruments?.[idx] ?? {};
+  return `I${idx + 1}: ${inst.name ?? "synth"}`;
+}
+
+export function formatDisplayValue(key: string, value: unknown, runtimeConfig?: RuntimeConfig): string {
   if (key === "mapping.activate.channel" || key === "mapping.stable.channel" || key === "mapping.deactivate.channel" || key === "mapping.scanned.channel" || key === "mapping.scanned_empty.channel" || /\.l2\.mapping\.(activate|stable|deactivate|scanned|scanned_empty)\.slot$/.test(key)) {
     const n = clamp(Math.floor(Number(value)), 0, 15);
+    const parts = runtimeConfig?.parts ?? [];
+    const inst = runtimeConfig?.instruments?.[n];
+    if (inst) return `${n + 1}: ${instrumentLabel({ runtimeConfig: runtimeConfig as any }, n)}`;
     return String(n + 1);
   }
   if (/^instruments\.\d+\.midi\.channel$/.test(key)) {
@@ -114,6 +150,8 @@ export function formatDisplayValue(key: string, value: unknown): string {
   if (key === "activeBehavior") return String(value);
   if (key === "activePartIndex") {
     const n = clamp(Math.floor(Number(value)), 0, PLATFORM_CAPS.partCount - 1);
+    const parts = runtimeConfig?.parts ?? [];
+    if (parts[n]) return partLabel(n, parts[n]);
     return `Part ${n + 1}`;
   }
   if (/^instruments\.\d+\.sample\.selectedSlot$/.test(key)) {
@@ -129,6 +167,17 @@ export function formatDisplayValue(key: string, value: unknown): string {
   if (key === "pitch.outOfRange" || key.endsWith(".l2.pitch.outOfRange")) return value === "wrap" ? "wrap" : "clamp";
   if (key === "pitch.scale" || key.endsWith(".l2.pitch.scale")) return formatScaleName(String(value));
   if (key === "pitch.root" || key.endsWith(".l2.pitch.root")) return String(value);
+  if (/^instruments\.\d+\.mixer\.route$/.test(key)) {
+    const raw = String(value);
+    if (raw === "direct") return "direct";
+    const m = /^fx_bus_(\d+)$/.exec(raw);
+    if (m && runtimeConfig?.mixer?.buses) {
+      const busIdx = Number(m[1]) - 1;
+      const bus = runtimeConfig.mixer.buses[busIdx];
+      if (bus) return fxBusLabel(busIdx, bus);
+    }
+    return raw;
+  }
   if (key === "transport.playing") return value === true || value === "true" ? "Play" : "Stop";
   if (typeof value === "boolean") return value ? "On" : "Off";
   return String(value);

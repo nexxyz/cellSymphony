@@ -6,6 +6,7 @@ use realtime_engine::synth::{
 };
 use rodio::Source;
 use serde::Deserialize;
+use std::fmt::Write;
 use std::fs::File;
 use std::io::BufReader;
 
@@ -192,6 +193,41 @@ pub fn sample_banks(
         .collect()
 }
 
+pub fn sample_bank_signature(config: &AudioInstrumentsConfig) -> String {
+    let mut out = String::new();
+    for slot in config.instruments.iter().take(INSTRUMENT_SLOT_COUNT) {
+        if slot.kind != "sample" {
+            out.push_str("-|;");
+            continue;
+        }
+        let Some(sample) = &slot.sample else {
+            out.push_str("sample:none;");
+            continue;
+        };
+        let _ = write!(
+            out,
+            "sample:t{}:g{}:v{}:",
+            sample.tune_semis.unwrap_or(0.0),
+            sample
+                .amp
+                .as_ref()
+                .and_then(|amp| amp.gain_pct)
+                .unwrap_or(100.0),
+            sample
+                .amp
+                .as_ref()
+                .and_then(|amp| amp.velocity_sensitivity_pct)
+                .unwrap_or(100.0)
+        );
+        for entry in sample.slots.iter().take(SAMPLE_SLOTS_PER_INSTRUMENT) {
+            out.push_str(entry.path.as_deref().unwrap_or(""));
+            out.push('|');
+        }
+        out.push(';');
+    }
+    out
+}
+
 fn mixer_buses(config: &AudioInstrumentsConfig) -> Vec<FxBusConfig> {
     config
         .mixer
@@ -328,5 +364,68 @@ mod tests {
         assert_eq!(banks[0].gain_pct, 70.0);
         assert_eq!(banks[0].velocity_sensitivity_pct, 40.0);
         assert!(banks[0].slots[0].buffer.is_none());
+    }
+
+    #[test]
+    fn sample_bank_signature_ignores_synth_only_changes() {
+        let mut synth = realtime_engine::synth::default_synth_config();
+        let config = AudioInstrumentsConfig {
+            instruments: vec![
+                AudioInstrumentSlotConfig {
+                    kind: "synth".to_string(),
+                    synth: Some(synth),
+                    sample: None,
+                    mixer: None,
+                },
+                AudioInstrumentSlotConfig {
+                    kind: "sample".to_string(),
+                    synth: None,
+                    sample: Some(AudioSampleConfig {
+                        slots: vec![AudioSampleSlotEntry {
+                            path: Some("kick.wav".to_string()),
+                        }],
+                        tune_semis: Some(0.0),
+                        amp: Some(AudioAmpConfig {
+                            gain_pct: Some(100.0),
+                            velocity_sensitivity_pct: Some(100.0),
+                        }),
+                    }),
+                    mixer: None,
+                },
+            ],
+            mixer: None,
+            pan_positions: None,
+        };
+        let before = sample_bank_signature(&config);
+        synth.filter.cutoff_hz = 120.0;
+        let changed_synth = AudioInstrumentsConfig {
+            instruments: vec![
+                AudioInstrumentSlotConfig {
+                    kind: "synth".to_string(),
+                    synth: Some(synth),
+                    sample: None,
+                    mixer: None,
+                },
+                AudioInstrumentSlotConfig {
+                    kind: "sample".to_string(),
+                    synth: None,
+                    sample: Some(AudioSampleConfig {
+                        slots: vec![AudioSampleSlotEntry {
+                            path: Some("kick.wav".to_string()),
+                        }],
+                        tune_semis: Some(0.0),
+                        amp: Some(AudioAmpConfig {
+                            gain_pct: Some(100.0),
+                            velocity_sensitivity_pct: Some(100.0),
+                        }),
+                    }),
+                    mixer: None,
+                },
+            ],
+            mixer: None,
+            pan_positions: None,
+        };
+
+        assert_eq!(before, sample_bank_signature(&changed_synth));
     }
 }

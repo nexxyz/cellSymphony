@@ -70,7 +70,7 @@ Root
 
 ## Key Features
 
-- **Auto-save**: Toggle in System > Presets > Default > Auto Save. When on, every config change automatically emits `store_save_default` effect.
+- **Auto-save**: Toggle in System > Presets > Default > Auto Save. When on, config changes schedule a deferred `store_save_default`; storage writes the latest settled config after a short cooldown.
 - **Aux encoder binding**: Each aux encoder has independent turn/press slots. Shift+aux press binds current item (turn while editing value, press while selecting action). Unbind now requires confirmation (`Both`/`Click`/`Turn`/`Cancel`).
 - **Shared spawn route**: Spawn actions are marked `!...[S]` and bind to `trigger.life.spawn_now`, resolving per active behavior. Unsupported contexts show `S#: N/A (Spawn Now)`.
 - **Shift+Backspace (button_a + shiftHeld)**: Clears the grid by re-initializing the current behavior.

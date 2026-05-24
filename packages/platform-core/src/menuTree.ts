@@ -1,5 +1,6 @@
 import { listBehaviorIds, type BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { MenuNode, PlatformState } from "./index";
+import { instrumentLabel } from "./coreUtils";
 import { SYNTH_PRESETS } from "./synthPresets";
 import { clampSampleSlotIndex, instrumentIndexOptions, partIndexOptions, PLATFORM_CAPS, sampleSlotOptions } from "./platformCaps";
 import { fxBusesMenuNode } from "./fxBusMenu";
@@ -14,6 +15,17 @@ type MenuTreeDeps<TState> = {
   sampleBrowserNodes: (state: PlatformState<TState>, instrumentSlot: number, sampleSlot: number) => MenuNode[];
 };
 
+function l1PartNodes(partPrefix: string, partOptions: string[]): MenuNode[] {
+  return [
+    { kind: "enum", label: "Part", key: "activePartIndex", options: partOptions },
+    { kind: "bool", label: "Auto Name", key: `${partPrefix}.autoName` },
+    { kind: "text", label: "Part Name", key: `${partPrefix}.name`, maxLen: 32 },
+    { kind: "bool", label: "Save Grid State", key: `${partPrefix}.l1.saveGridState` },
+    { kind: "enum", label: "Step Rate", key: `${partPrefix}.l1.stepRate`, options: ["1/16", "1/8", "1/4", "1/2", "1/1"] },
+    { kind: "enum", label: "Behavior", key: `${partPrefix}.l1.behaviorId`, options: listBehaviorIds() }
+  ];
+}
+
 export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTreeDeps<TState>): MenuNode {
   const partOptions = partIndexOptions();
   const activePartIndex = Math.max(0, Math.min(partOptions.length - 1, Number((state.runtimeConfig as any).activePartIndex ?? 0)));
@@ -24,19 +36,7 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
   const instrumentSlotOptions = instrumentIndexOptions();
   const sampleSlots = sampleSlotOptions();
 
-  const instrumentLabel = (idx: number): string => {
-    const inst: any = (state.runtimeConfig as any).instruments?.[idx] ?? {};
-    const typeLabel = inst.type === "midi" ? "MIDI" : inst.type === "sample" ? "sample" : "synth";
-    const mode = String(inst.nameMode ?? "auto");
-    const custom = typeof inst.customName === "string" ? inst.customName.trim() : "";
-    if (mode === "drums") return `I${idx + 1}: Drums`;
-    if (mode === "pad") return `I${idx + 1}: Pad`;
-    if (mode === "lead") return `I${idx + 1}: Lead`;
-    if (mode === "bass") return `I${idx + 1}: Bass`;
-    if (mode === "fx") return `I${idx + 1}: FX`;
-    if (mode === "custom" && custom.length > 0) return `I${idx + 1}: ${custom}`;
-    return `I${idx + 1}: ${typeLabel}`;
-  };
+  const instLabel = (idx: number): string => instrumentLabel(state, idx);
   const behaviorConfigNodes: MenuNode[] = [];
   if (activeEngine.configMenu) {
     const items = activeEngine.configMenu(state.behaviorState as any);
@@ -57,7 +57,7 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
     kind: "group",
     label: "Root",
     children: [
-      { kind: "group", label: "L1: Life", children: [{ kind: "enum", label: "Part", key: "activePartIndex", options: partOptions }, { kind: "bool", label: "Save Grid State", key: `${partPrefix}.l1.saveGridState` }, { kind: "enum", label: "Step Rate", key: `${partPrefix}.l1.stepRate`, options: ["1/16", "1/8", "1/4", "1/2", "1/1"] }, { kind: "enum", label: "Behavior", key: `${partPrefix}.l1.behaviorId`, options: listBehaviorIds() }, ...behaviorConfigNodes] },
+      { kind: "group", label: "L1: Life", children: [...l1PartNodes(partPrefix, partOptions), ...behaviorConfigNodes] },
       {
         kind: "group",
         label: "L2: Sense",
@@ -112,11 +112,11 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
               const prefix = `instruments.${idx}`;
               return {
                 kind: "group",
-                label: instrumentLabel(idx),
+                label: instLabel(idx),
                 children: [
                   { kind: "enum", label: "Type", key: `${prefix}.type`, options: ["synth", "sample", "midi"] },
-                  { kind: "enum", label: "Name", key: `${prefix}.nameMode`, options: ["auto", "drums", "pad", "lead", "bass", "fx", "custom"] },
-                  { kind: "text", label: "Custom Name", key: `${prefix}.customName`, maxLen: 32 },
+                  { kind: "bool", label: "Auto Name", key: `${prefix}.autoName` },
+                  { kind: "text", label: "Name", key: `${prefix}.name`, maxLen: 32 },
                   { kind: "enum", label: "Note Behavior", key: `${prefix}.noteBehavior`, options: ["oneshot", "hold"] },
                   {
                     kind: "group",
@@ -321,6 +321,7 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
                   {
                     kind: "group",
                     label: "Mixer",
+                    visible: (c: any) => c.instruments?.[idx]?.type !== "midi",
                     children: [
                       { kind: "enum", label: "Route", key: `${prefix}.mixer.route`, options: ["direct", ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, i) => `fx_bus_${i + 1}`)] },
                       { kind: "number", label: "Pan Pos", key: `${prefix}.mixer.panPos`, min: 0, max: PLATFORM_CAPS.gridWidth - 1, step: 1 }
@@ -379,7 +380,7 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
             ]
           },
           { kind: "group", label: "Sound", children: [{ kind: "number", label: "Note Length", key: "sound.noteLengthMs", min: 30, max: 2000, step: 10 }, { kind: "number", label: "Velocity Scale", key: "sound.velocityScalePct", min: 0, max: 200, step: 5 }, { kind: "enum", label: "Velocity Curve", key: "sound.velocityCurve", options: ["linear", "soft", "hard"] }] },
-          { kind: "group", label: "UI Settings", children: [{ kind: "number", label: "Screen Sleep", key: "screenSleepSeconds", min: 0, max: 600, step: 10 }, { kind: "number", label: "Display Brightness", key: "displayBrightness", min: 10, max: 100, step: 5 }, { kind: "number", label: "Grid Brightness", key: "gridBrightness", min: 10, max: 100, step: 5 }, { kind: "number", label: "Button Brightness", key: "buttonBrightness", min: 10, max: 100, step: 5 }] }
+          { kind: "group", label: "UI Settings", children: [{ kind: "enum", label: "Numeric Display", key: "numericDisplayMode", options: ["bar", "numbers", "bar+numbers"] }, { kind: "number", label: "Screen Sleep", key: "screenSleepSeconds", min: 0, max: 600, step: 10 }, { kind: "number", label: "Display Brightness", key: "displayBrightness", min: 10, max: 100, step: 5, displayStyle: "bar" }, { kind: "number", label: "Grid Brightness", key: "gridBrightness", min: 10, max: 100, step: 5, displayStyle: "bar" }, { kind: "number", label: "Button Brightness", key: "buttonBrightness", min: 10, max: 100, step: 5, displayStyle: "bar" }] }
         ]
       }
     ]

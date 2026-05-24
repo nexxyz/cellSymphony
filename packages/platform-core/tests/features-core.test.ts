@@ -181,6 +181,7 @@ test("FX compressor type selection seeds editable default parameters", () => {
   state = press(state).state;
   state = selectLabel(state, "FX Buses");
   state = press(state).state;
+  state = selectLabel(state, "Bus 1");
   state = press(state).state; // enter FX Bus 1
   state = press(state).state; // enter Slot 1
   state = selectLabel(state, "Type");
@@ -208,6 +209,7 @@ test("FX eq type selection seeds editable default parameters", () => {
   state = press(state).state;
   state = selectLabel(state, "FX Buses");
   state = press(state).state;
+  state = selectLabel(state, "Bus 1");
   state = press(state).state; // enter FX Bus 1
   state = press(state).state; // enter Slot 1
   state = selectLabel(state, "Type");
@@ -314,6 +316,7 @@ test("autoSaveDefault on emits store_save_default on value edit", () => {
     const saveEffect = r.effects.find((e) => e.type === "store_save_default")!;
     if (saveEffect.type === "store_save_default") {
       assert.equal(saveEffect.payload.runtimeConfig.masterVolume, 72);
+      assert.equal(saveEffect.mode, "deferred");
     }
   }
 });
@@ -354,6 +357,8 @@ test("enabling autoSaveDefault emits immediate save when exiting edit", () => {
   const hasAutoSave = exit.effects.some((e) => e.type === "store_save_default");
   assert.equal(state.runtimeConfig.autoSaveDefault, true);
   assert.equal(hasAutoSave, true, "should emit store_save_default when exiting auto-save edit in ON state");
+  const saveEffect = exit.effects.find((e) => e.type === "store_save_default");
+  assert.equal(saveEffect?.type === "store_save_default" ? saveEffect.mode : undefined, "immediate");
 });
 
 test("auto-save payload contains post-edit state", () => {
@@ -373,6 +378,7 @@ test("auto-save payload contains post-edit state", () => {
   assert.ok(saveEffect, "should have store_save_default effect");
   if (saveEffect && saveEffect.type === "store_save_default") {
     assert.equal(saveEffect.payload.runtimeConfig.masterVolume, 74, "payload should reflect post-edit value");
+    assert.equal(saveEffect.mode, "deferred");
   }
 });
 
@@ -392,6 +398,7 @@ test("activeBehavior change with autoSaveDefault on emits store_save_default", (
 
   const saveEffect = r.effects.find((e) => e.type === "store_save_default");
   assert.ok(saveEffect, "behavior switch with autoSave should emit store_save_default");
+  assert.equal(saveEffect?.type === "store_save_default" ? saveEffect.mode : undefined, "deferred");
 });
 
 test("save current preset triggers overwrite flow for loaded preset", () => {

@@ -8,6 +8,7 @@ import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
 import type { PlatformEffect, PlatformState, RuntimeConfig } from "./index";
 import { toGridSnapshot } from "./runtimeHelpers";
 import { applyModulation } from "./musicTransforms";
+import { makeToast } from "./toast";
 
 type Deps<TState> = {
   isMainEncoderInput: (id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined) => boolean;
@@ -27,7 +28,7 @@ type Deps<TState> = {
   turnAuxEncoder: any;
   reinitBehaviorState: (state: PlatformState<TState>, key: string) => PlatformState<TState>;
   autoSaveEffect: (state: PlatformState<TState>, effects: PlatformEffect[]) => void;
-  formatDisplayValue: (key: string, value: unknown) => string;
+  formatDisplayValue: (key: string, value: unknown, runtimeConfig?: any) => string;
   isSpawnActionType: (actionType: string) => boolean;
   spawnActionTypeForBehavior: (behaviorId: string) => string | null;
   executeConfirmed: (state: PlatformState<TState>, action: any, effects: PlatformEffect[], behavior: BehaviorEngine<TState, unknown>) => PlatformState<TState>;
@@ -88,7 +89,7 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
 
   if (nextState.system.sampleAssign) {
     if (input.type === "button_a" && pressed(input)) {
-      nextState.system = { ...nextState.system, sampleAssign: null, sampleAssignLastPress: null, toast: { message: "Assign mode off", untilMs: Date.now() + 1200 } };
+      nextState.system = { ...nextState.system, sampleAssign: null, sampleAssignLastPress: null, toast: makeToast("Assign mode off") };
       return { state: nextState, events, effects };
     }
     if (input.type === "grid_press") {
@@ -146,7 +147,7 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     const idx = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.partCount, GRID_HEIGHT) - 1);
     nextState = deps.writeAnyValue(nextState, "activePartIndex", idx);
     nextState = deps.reinitBehaviorState(nextState, "activePartIndex");
-    nextState.system = { ...nextState.system, toast: { message: `Part ${idx + 1}`, untilMs: Date.now() + 1000 } };
+    nextState.system = { ...nextState.system, toast: makeToast(`Part ${idx + 1}`) };
     return { state: nextState, events, effects };
   }
 
@@ -212,7 +213,7 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       if (Array.isArray((nextState as any).partStates) && (nextState as any).partStates.length > activePart) {
         (nextState as any).partStates[activePart] = nextState.behaviorState;
       }
-      nextState.system = { ...nextState.system, toast: { message: "Grid cleared", untilMs: Date.now() + 1500 } };
+      nextState.system = { ...nextState.system, toast: makeToast("Grid cleared") };
     } else {
       if (nextState.menu.editing && selected && selected.kind === "text") {
         const current = String(deps.readAnyValue(nextState, selected.key) ?? "");

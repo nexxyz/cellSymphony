@@ -1,4 +1,4 @@
-import type { ActionSpec, MenuNode, PlatformState } from "./index";
+import type { ActionSpec, MenuNode, NumericDisplayMode, PlatformState } from "./index";
 
 export const COLOR_LIFE = 0x8ED1;
 export const COLOR_SENSE = 0x8D5C;
@@ -86,7 +86,7 @@ export function formatMenuItemLines<TState>(
   editing: boolean,
   fitText: (text: string) => string,
   readAnyValue: (state: PlatformState<TState>, key: string) => unknown,
-  formatDisplayValue: (key: string, value: unknown) => string
+  formatDisplayValue: (key: string, value: unknown, runtimeConfig?: any) => string
 ): string[] {
   if (item.kind === "spacer") return [""];
   const mark = selected ? "@@" : "";
@@ -104,7 +104,17 @@ export function formatMenuItemLines<TState>(
     if (selected) return [`${mark} ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitText(display)}`];
     return [`  ${item.label}`];
   }
-  const value = formatDisplayValue(item.key, readAnyValue(state, item.key));
+  if (item.kind === "number" && (item.displayStyle === "bar" || /\.params\./.test(item.key))) {
+    const mode = (state.runtimeConfig as any).numericDisplayMode as NumericDisplayMode;
+    if (mode !== "numbers") {
+      const val = Number(readAnyValue(state, item.key));
+      const showNumeric = mode === "bar+numbers";
+      const valueText = showNumeric ? String(Math.round(val)) : "";
+      if (selected) return [`${mark} ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitText(valueText)}`];
+      return [`  ${item.label}`];
+    }
+  }
+  const value = formatDisplayValue(item.key, readAnyValue(state, item.key), state.runtimeConfig as any);
   if (selected) return [`${mark} ${item.label}:`, `${mark}${editing ? " *" : "  "}${fitText(value)}`];
   return [`  ${item.label}`];
 }

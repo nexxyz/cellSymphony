@@ -196,7 +196,9 @@ test("config save default requires confirmation before emitting effect", () => {
   // Choose Yes and confirm.
   turn(1);
   const confirmed = press();
-  assert.ok(confirmed.effects.some((e) => e.type === "store_save_default"));
+  const saveEffect = confirmed.effects.find((e) => e.type === "store_save_default");
+  assert.ok(saveEffect);
+  assert.equal(saveEffect?.type === "store_save_default" ? saveEffect.mode : undefined, "immediate");
 });
 
 test("entering MIDI Out/In menu requests port lists", () => {

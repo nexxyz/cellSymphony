@@ -28,6 +28,7 @@ Cell Symphony is a monorepo (pnpm workspaces) combining a TypeScript core engine
 - Prefer `type` over `interface` for plain data shapes
 - Use `export type` and `export function` pattern
 - Arrow functions for closures, `function` keyword for top-level exports
+- Avoid duplicating operational logic across call sites. If behavior needs shared defaults, timing, validation, state transitions, or formatting, centralize it behind a small helper or existing abstraction. Prefer repeated data over repeated behavior. Example: toast creation should use a shared helper rather than each call site manually constructing `{ message, startedAtMs, untilMs }` or calling `Date.now()`.
 
 ### Architecture
 

@@ -10,8 +10,8 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
   const defaultMapping = loadDefaultMappingConfig();
   const instruments = Array.from({ length: PLATFORM_CAPS.instrumentCount }, (_, idx) => ({
     type: "synth" as const,
-    nameMode: "auto" as const,
-    customName: null as string | null,
+    autoName: true,
+    name: "synth",
     noteBehavior: "oneshot" as const,
     midi: { enabled: false, channel: idx },
     synth: structuredClone(SYNTH_PRESETS[idx % 8]!.synth as RuntimeConfig["instruments"][number]["synth"]),
@@ -58,6 +58,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
     })),
     eventEnabled: true,
     stateEnabled: true,
+    numericDisplayMode: "bar+numbers",
     pitch: { startingNote: 60, lowestNote: 36, highestNote: 74, outOfRange: "clamp", scale: "major_pentatonic", root: "D" },
     x: {
       pitch: { enabled: true, steps: 0 },
@@ -78,7 +79,9 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       buses: Array.from({ length: PLATFORM_CAPS.busCount }, () => ({
         slot1: { type: "none" as const, params: {} },
         slot2: { type: "none" as const, params: {} },
-        panPos: DEFAULT_PAN_POS
+        panPos: DEFAULT_PAN_POS,
+        autoName: true,
+        name: "(none)"
       }))
     }
   };
@@ -106,7 +109,9 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
         scanned: { action: defaultMapping.scanned.action, slot: defaultMapping.scanned.channel },
         scanned_empty: { action: defaultMapping.scanned_empty.action, slot: defaultMapping.scanned_empty.channel }
       }
-    }
+    },
+    autoName: true,
+    name: idx === 0 ? "mock" : "life"
   });
   runtimeConfig.parts = Array.from({ length: PLATFORM_CAPS.partCount }, (_, idx) => makePart(idx));
   const behaviorCfg = runtimeConfig.behaviorConfig as Record<string, Record<string, unknown> | undefined>;

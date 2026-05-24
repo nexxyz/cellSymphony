@@ -1,14 +1,18 @@
 import type { OledFrame } from "@cellsymphony/device-contracts";
+import type { BarValue } from "./platformTypes";
 
 export type OledRenderState = {
   lines: string[]; // already clamped to OLED_TEXT_LINES
   lineColors?: number[]; // RGB565 color per line (non-selected items)
+  barValues?: (BarValue | null)[]; // bar metadata per line, null = no bar
   splash?: { pixelsRgb565be: Uint8Array; topText: string; bottomText: string | null };
   off?: boolean;
   transportIcon?: "play" | "pause" | "stop";
   transportFlash?: "none" | "beat" | "measure";
   eventDotOn?: boolean;
   toast?: string | null;
+  toastStartedAtMs?: number;
+  renderNowMs?: number;
 };
 
 const OLED_W = 128;
@@ -218,6 +222,19 @@ function drawTransport(
   fillRect(buf, { x: dotX - 1, y: dotY - 1, w: 3, h: 3 }, eventDotOn ? dotOn : dotOff);
 }
 
+function toastWindow(message: string, now: number, startedAtMs: number, maxChars: number): string {
+  if (message.length <= maxChars) return message;
+  const holdMs = 700;
+  const scrollStepMs = 120;
+  const totalScroll = message.length - maxChars;
+  const totalScrollMs = totalScroll * scrollStepMs;
+  const elapsed = now - startedAtMs;
+  if (elapsed < holdMs) return message.slice(0, maxChars);
+  if (elapsed >= holdMs + totalScrollMs) return message.slice(totalScroll);
+  const offset = Math.min(Math.floor((elapsed - holdMs) / scrollStepMs), totalScroll);
+  return message.slice(offset, offset + maxChars);
+}
+
 export function renderOledFrame(state: OledRenderState): OledFrame {
   const buf = new Uint8Array(OLED_W * OLED_H * 2);
 
@@ -244,6 +261,9 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
 
   const lineHeight = Math.floor(OLED_H / OLED_TEXT_LINES); // 16
   const xStart = 4;
+  const barDim = 0x39c7; // mid gray for bar fill
+  const prefixChars = 3; // " *" or "  "
+  const barCharWidth = 12; // 12 character widths for the bar area
   for (let i = 0; i < OLED_TEXT_LINES; i += 1) {
     const line = state.lines[i] ?? "";
     const { selected, text } = decodeSelected(line);
@@ -253,6 +273,17 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
     if (selected) {
       const bgColor = state.lineColors?.[i] ?? invBg; // Use section color as bg
       fillRect(buf, { x: 0, y: i * lineHeight, w: OLED_W, h: lineHeight }, bgColor);
+      // Draw bar geometry before text so text renders on top
+      if (state.barValues?.[i] != null) {
+        const bar = state.barValues[i]!;
+        const frac = Math.max(0, Math.min(1, bar.frac));
+        const numChars = Math.max(0, Math.min(OLED_TEXT_COLUMNS - prefixChars, bar.numChars));
+        const barX = xStart + (prefixChars + numChars) * 6;
+        const barW = Math.min(barCharWidth, OLED_TEXT_COLUMNS - prefixChars - numChars) * 6;
+        const fillW = Math.round(frac * barW);
+        if (fillW > 0) fillRect(buf, { x: barX, y, w: fillW, h: 7 }, barDim);
+        if (fillW < barW) fillRect(buf, { x: barX + fillW, y: y + 6, w: barW - fillW, h: 1 }, barDim);
+      }
       drawText(buf, { pos: { x: xStart, y }, text: clipped, style: selectedStyle }); // Black text
     } else {
       const lineColor = state.lineColors?.[i] ?? fg;
@@ -271,8 +302,10 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
   if (state.toast) {
     // Reserve the rightmost area for transport indicator.
     const maxChars = 17; // 17*6 + xStart(4) ~= 106px
-    const msg = state.toast.slice(0, maxChars);
-    drawText(buf, { pos: { x: 4, y: OLED_H - 10 }, text: msg.slice(0, maxChars), style: normalStyleBase });
+    const now = state.renderNowMs ?? Date.now();
+    const startedAt = state.toastStartedAtMs ?? now;
+    const msg = toastWindow(state.toast, now, startedAt, maxChars);
+    drawText(buf, { pos: { x: 4, y: OLED_H - 10 }, text: msg, style: normalStyleBase });
   }
 
   return { width: 128, height: 128, format: "rgb565be", pixels: buf };

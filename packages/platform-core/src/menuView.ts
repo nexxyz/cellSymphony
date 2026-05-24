@@ -1,6 +1,6 @@
 import { abbreviatePath, formatMenuItemLines, getSectionColor, getSectionColorFromPath } from "./menuPresentation";
 import { clamp } from "./coreUtils";
-import type { ConfirmState, MenuNode, MenuState, PlatformState } from "./platformTypes";
+import type { BarValue, ConfirmState, MenuNode, MenuState, NumericDisplayMode, PlatformState } from "./platformTypes";
 
 export function visibleChildren<TState>(node: MenuNode, state: PlatformState<TState>): MenuNode[] {
   if (node.kind !== "group") return [];
@@ -26,20 +26,32 @@ type CurrentMenuViewDeps<TState> = {
   menuTree: (state: PlatformState<TState>) => MenuNode;
   fitOledText: (text: string) => string;
   readAnyValue: (state: PlatformState<TState>, key: string) => unknown;
-  formatDisplayValue: (key: string, value: unknown) => string;
+  formatDisplayValue: (key: string, value: unknown, runtimeConfig?: any) => string;
   oledTextLines: number;
 };
 
-export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { path: string; lines: string[]; colors: number[] } {
+function barFraction(val: number, min: number, max: number): number {
+  const range = max - min || 1;
+  return Math.max(0, Math.min(1, (val - min) / range));
+}
+
+function barNumChars(min: number, max: number): number {
+  const mn = Math.round(min);
+  const mx = Math.round(max);
+  const digits = Math.max(String(mn).length, String(mx).length);
+  return (mn < 0 || mx < 0) ? digits + 1 : digits;
+}
+
+export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { path: string; lines: string[]; colors: number[]; barValues: (BarValue | null)[] } {
   const { state, menuTree, fitOledText, readAnyValue, formatDisplayValue, oledTextLines } = deps;
   if (state.system.confirm) {
     const view = confirmView(state.system.confirm, fitOledText, oledTextLines);
-    return { ...view, colors: Array(view.lines.length).fill(0xffff) };
+    return { ...view, colors: Array(view.lines.length).fill(0xffff), barValues: Array(view.lines.length).fill(null) };
   }
   const { menu } = state;
   const { siblings, path } = locate(menuTree(state), state, menu);
   const shortPath = abbreviatePath(path);
-  if (!siblings.length) return { path: shortPath, lines: [], colors: [] };
+  if (!siblings.length) return { path: shortPath, lines: [], colors: [], barValues: [] };
 
   const cursor = clamp(menu.cursor, 0, siblings.length - 1);
   const bodyBudget = Math.max(1, oledTextLines - 1);
@@ -71,6 +83,7 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
 
   const lines: string[] = [];
   const colors: number[] = [];
+  const barValues: (BarValue | null)[] = [];
   const sectionColor = getSectionColorFromPath(path);
 
   for (let i = start; i < end; i += 1) {
@@ -80,6 +93,7 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
     if (item.kind === "spacer") {
       lines.push(...itemLines);
       colors.push(...Array(itemLines.length).fill(0x0000));
+      barValues.push(...Array(itemLines.length).fill(null));
       continue;
     }
     lines.push(...itemLines);
@@ -88,8 +102,25 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
       itemColor = getSectionColor(item.label);
     }
     colors.push(...Array(itemLines.length).fill(itemColor));
+
+    if (item.kind === "number" && (item.displayStyle === "bar" || /\.params\./.test(item.key))) {
+      const mode = (state.runtimeConfig as any).numericDisplayMode as NumericDisplayMode;
+      if (mode !== "numbers") {
+        const val = Number(readAnyValue(state, item.key));
+        const frac = barFraction(val, item.min, item.max);
+        const numChars = mode === "bar+numbers" ? barNumChars(item.min, item.max) : 0;
+        if (itemLines.length > 1) {
+          barValues.push(null); // label line
+          barValues.push({ frac, numChars }); // value line
+        } else {
+          barValues.push(null);
+        }
+        continue;
+      }
+    }
+    barValues.push(...Array(itemLines.length).fill(null));
   }
-  return { path: shortPath, lines: lines.slice(0, bodyBudget), colors: colors.slice(0, bodyBudget) };
+  return { path: shortPath, lines: lines.slice(0, bodyBudget), colors: colors.slice(0, bodyBudget), barValues: barValues.slice(0, bodyBudget) };
 }
 
 function confirmView(confirm: ConfirmState, fitOledText: (text: string) => string, oledTextLines: number): { path: string; lines: string[] } {

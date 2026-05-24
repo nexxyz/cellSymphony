@@ -149,7 +149,7 @@ voice_stealing_mode	*	key:sound.voiceStealingMode	enum	Voice Stealing	Controls g
 presets_group	Menu > System > Presets		group	Presets	Save, load, and manage configuration snapshots.	Use defaults for boot state and library for named variants.
 default_save	System > Presets > Default > Save Default	action:default_save	action	Save Default	Stores current state as startup default payload.	Use with Auto Save when you want edits to persist automatically.
 default_load	System > Presets > Default > Load Default	action:default_load	action	Load Default	Loads the saved default payload into current state.	Replaces current runtime settings immediately.
-autosave_default	*	key:autoSaveDefault	bool	Auto Save Default	When enabled, config edits also update default storage.	Turning this on and exiting the row saves the current config immediately.
+autosave_default	*	key:autoSaveDefault	bool	Auto Save Default	When enabled, config edits update default storage after a short cooldown so sweeps save only the latest settled value.	Turning this on and exiting the row saves the current config immediately.
 sound_group	Menu > System > Sound		group	Sound	Global note shaping applied to generated note_on events.	Useful when you want broad behavior without touching each instrument.
 note_length	*	key:sound.noteLengthMs	number	Note Length	Default note duration when note_on has no explicit length.	Hold-mode notes may bypass duration and wait for note_off.
 velocity_scale	*	key:sound.velocityScalePct	number	Velocity Scale	Scales velocity values globally after mapping.	Use to tame or boost overall dynamic output.
@@ -159,6 +159,7 @@ screen_sleep	*	key:screenSleepSeconds	number	Screen Sleep	Sets idle timeout befo
 display_bright	*	key:displayBrightness	number	Display Brightness	Sets OLED brightness level.	Higher values improve visibility at cost of brightness.
 grid_bright	*	key:gridBrightness	number	Grid Brightness	Sets grid LED brightness scaling.	Lower values are useful for dark environments.
 button_bright	*	key:buttonBrightness	number	Button Brightness	Sets NeoKey/button LED brightness scaling.	Helps match hardware feel to ambient light.
+numeric_display	*	key:numericDisplayMode	enum	Numeric Display	Controls how bar-style numeric parameters are displayed.	bar shows a visual bar only; numbers shows plain numbers; bar+numbers shows both bar and numeric label.
 sense_x_axis_group	Menu > L2: Sense > X Axis		group	X Axis Modulation	Maps X position into pitch/velocity/filter modulation lanes.	Use offsets and ranges to reshape horizontal influence.
 sense_x_pitch_group	Menu > L2: Sense > X Axis > Pitch Steps		group	X Pitch Steps	Controls pitch stepping derived from X position.	Disable to remove X-axis pitch influence.
 sense_x_velocity_group	Menu > L2: Sense > X Axis > Velocity		group	X Velocity Lane	Maps X position to velocity output range.	Use this for left-right dynamic shaping.
@@ -213,22 +214,24 @@ inst_mixer_group	Menu > L3: Voice > Instruments > Instrument * > Mixer		group	In
 inst_mixer_route	Menu > L3: Voice > Instruments > Instrument * > Mixer > Route	key:instruments.*.mixer.route	enum	Route	Options: direct, fx_bus_1, fx_bus_2, fx_bus_3, fx_bus_4.	Synth and sample audio follow this route; MIDI emits external events and is not processed by audio FX.
 inst_mixer_pan	Menu > L3: Voice > Instruments > Instrument * > Mixer > Pan Pos	key:instruments.*.mixer.panPos	number	Pan Position	Sets quantized pan position for direct output sends.	0 is left, max is right, midpoint is centered.
 fx_buses_group	Menu > L3: Voice > FX Buses		group	FX Buses	Configures four shared buses used by instrument bus routing.	Each bus has two effect slots and output pan.
-fx_bus_1	Menu > L3: Voice > FX Buses > FX Bus 1		group	FX Bus	Settings for this FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
-fx_bus_2	Menu > L3: Voice > FX Buses > FX Bus 2		group	FX Bus	Settings for this FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
-fx_bus_3	Menu > L3: Voice > FX Buses > FX Bus 3		group	FX Bus	Settings for this FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
-fx_bus_4	Menu > L3: Voice > FX Buses > FX Bus 4		group	FX Bus	Settings for this FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
-fx_bus_slot1	Menu > L3: Voice > FX Buses > FX Bus * > Slot 1	key:mixer.buses.*.slot1	enum	FX Slot 1	First effect slot in the bus chain.	Default None means passthrough.
-fx_bus_slot2	Menu > L3: Voice > FX Buses > FX Bus * > Slot 2	key:mixer.buses.*.slot2	enum	FX Slot 2	Second effect slot in the bus chain.	Default None means passthrough.
-fx_bus_pan	Menu > L3: Voice > FX Buses > FX Bus * > Pan Pos	key:mixer.buses.*.panPos	number	FX Bus Pan Position	Sets quantized output pan position for this bus.	0 is left, max is right, midpoint is centered.
-fx_bus_slot1_group	Menu > L3: Voice > FX Buses > FX Bus * > Slot 1		group	FX Slot	Configures one effect slot in the bus chain.	Choose Type, then edit effect parameters below.
-fx_bus_slot2_group	Menu > L3: Voice > FX Buses > FX Bus * > Slot 2		group	FX Slot	Configures one effect slot in the bus chain.	Choose Type, then edit effect parameters below.
-fx_bus_slot1_type	Menu > L3: Voice > FX Buses > FX Bus * > Slot 1 > Type	key:mixer.buses.*.slot1.type	enum	Slot Type	Options: none, reverb, delay, tremolo, vibrato, auto_pan, chorus, flanger, wah, filter_lfo, duck, bitcrusher, saturator, distortion, glitch, compressor, eq.	Selecting an effect initializes its editable parameter defaults; none is passthrough.
-fx_bus_slot2_type	Menu > L3: Voice > FX Buses > FX Bus * > Slot 2 > Type	key:mixer.buses.*.slot2.type	enum	Slot Type	Options: none, reverb, delay, tremolo, vibrato, auto_pan, chorus, flanger, wah, filter_lfo, duck, bitcrusher, saturator, distortion, glitch, compressor, eq.	Selecting an effect initializes its editable parameter defaults; none is passthrough.
+fx_bus_names_group	Menu > L3: Voice > FX Buses > Names		group	Bus Names	Sets auto-naming and custom name for each bus.	Auto name is computed from the assigned FX slot types; turning off auto lets you edit the name freely.
+fx_bus_name_group	Menu > L3: Voice > FX Buses > Names > Bus *		group	Bus Name	Configures naming for this bus.	Auto Name on derives a label from FX slot types; Name lets you type any text when Auto is off.
+fx_bus_1	Menu > L3: Voice > FX Buses > Bus 1		group	FX Bus	Settings for this FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
+fx_bus_2	Menu > L3: Voice > FX Buses > Bus 2		group	FX Bus	Settings for this FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
+fx_bus_3	Menu > L3: Voice > FX Buses > Bus 3		group	FX Bus	Settings for this FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
+fx_bus_4	Menu > L3: Voice > FX Buses > Bus 4		group	FX Bus	Settings for this FX bus.	Use Slot 1 and Slot 2 to build a bus chain.
+fx_bus_slot1	Menu > L3: Voice > FX Buses > Bus * > Slot 1	key:mixer.buses.*.slot1	enum	FX Slot 1	First effect slot in the bus chain.	Default None means passthrough.
+fx_bus_slot2	Menu > L3: Voice > FX Buses > Bus * > Slot 2	key:mixer.buses.*.slot2	enum	FX Slot 2	Second effect slot in the bus chain.	Default None means passthrough.
+fx_bus_pan	Menu > L3: Voice > FX Buses > Bus * > Pan Pos	key:mixer.buses.*.panPos	number	FX Bus Pan Position	Sets quantized output pan position for this bus.	0 is left, max is right, midpoint is centered.
+fx_bus_slot1_group	Menu > L3: Voice > FX Buses > Bus * > Slot 1		group	FX Slot	Configures one effect slot in the bus chain.	Choose Type, then edit effect parameters below.
+fx_bus_slot2_group	Menu > L3: Voice > FX Buses > Bus * > Slot 2		group	FX Slot	Configures one effect slot in the bus chain.	Choose Type, then edit effect parameters below.
+fx_bus_slot1_type	Menu > L3: Voice > FX Buses > Bus * > Slot 1 > Type	key:mixer.buses.*.slot1.type	enum	Slot Type	Options: none, reverb, delay, tremolo, vibrato, auto_pan, chorus, flanger, wah, filter_lfo, duck, bitcrusher, saturator, distortion, glitch, compressor, eq.	Selecting an effect initializes its editable parameter defaults; none is passthrough.
+fx_bus_slot2_type	Menu > L3: Voice > FX Buses > Bus * > Slot 2 > Type	key:mixer.buses.*.slot2.type	enum	Slot Type	Options: none, reverb, delay, tremolo, vibrato, auto_pan, chorus, flanger, wah, filter_lfo, duck, bitcrusher, saturator, distortion, glitch, compressor, eq.	Selecting an effect initializes its editable parameter defaults; none is passthrough.
 fx_bus_slot1_duck_group	Menu > L3: Voice > FX Buses > Bus * > Slot 1 > duck		group	duck	Sidechain-style ducking effect.	Reduces this bus level when the selected source is loud.
 fx_bus_slot2_duck_group	Menu > L3: Voice > FX Buses > Bus * > Slot 2 > duck		group	duck	Sidechain-style ducking effect.	Reduces this bus level when the selected source is loud.
-fx_bus_slot1_duck_source	Menu > L3: Voice > FX Buses > FX Bus * > Slot 1 > duck > Source	key:mixer.buses.*.slot1.params.source	enum	duck Source	Selects which signal triggers ducking.	Options are I# (instrument) and B# (bus), capability-sized.
-fx_bus_slot2_duck_source	Menu > L3: Voice > FX Buses > FX Bus * > Slot 2 > duck > Source	key:mixer.buses.*.slot2.params.source	enum	duck Source	Selects which signal triggers ducking.	Options are I# (instrument) and B# (bus), capability-sized.
-fx_bus_slot1_compressor_group	Menu > L3: Voice > FX Buses > FX Bus * > Slot 1 > compressor		group	compressor	Dynamics processor that reduces gain when signal exceeds a threshold.	Adjust threshold, ratio, attack, release, makeup gain, and dry/wet mix.
-fx_bus_slot2_compressor_group	Menu > L3: Voice > FX Buses > FX Bus * > Slot 2 > compressor		group	compressor	Dynamics processor that reduces gain when signal exceeds a threshold.	Adjust threshold, ratio, attack, release, makeup gain, and dry/wet mix.
-fx_bus_slot1_eq_group	Menu > L3: Voice > FX Buses > FX Bus * > Slot 1 > eq		group	eq	Three-band equalizer with low shelf, peaking mid, and high shelf bands.	Boosts or cuts each band independently; gain range ±12 dB.
-fx_bus_slot2_eq_group	Menu > L3: Voice > FX Buses > FX Bus * > Slot 2 > eq		group	eq	Three-band equalizer with low shelf, peaking mid, and high shelf bands.	Boosts or cuts each band independently; gain range ±12 dB.
+fx_bus_slot1_duck_source	Menu > L3: Voice > FX Buses > Bus * > Slot 1 > duck > Source	key:mixer.buses.*.slot1.params.source	enum	duck Source	Selects which signal triggers ducking.	Options are I# (instrument) and B# (bus), capability-sized.
+fx_bus_slot2_duck_source	Menu > L3: Voice > FX Buses > Bus * > Slot 2 > duck > Source	key:mixer.buses.*.slot2.params.source	enum	duck Source	Selects which signal triggers ducking.	Options are I# (instrument) and B# (bus), capability-sized.
+fx_bus_slot1_compressor_group	Menu > L3: Voice > FX Buses > Bus * > Slot 1 > compressor		group	compressor	Dynamics processor that reduces gain when signal exceeds a threshold.	Adjust threshold, ratio, attack, release, makeup gain, and dry/wet mix.
+fx_bus_slot2_compressor_group	Menu > L3: Voice > FX Buses > Bus * > Slot 2 > compressor		group	compressor	Dynamics processor that reduces gain when signal exceeds a threshold.	Adjust threshold, ratio, attack, release, makeup gain, and dry/wet mix.
+fx_bus_slot1_eq_group	Menu > L3: Voice > FX Buses > Bus * > Slot 1 > eq		group	eq	Three-band equalizer with low shelf, peaking mid, and high shelf bands.	Boosts or cuts each band independently; gain range ±12 dB.
+fx_bus_slot2_eq_group	Menu > L3: Voice > FX Buses > Bus * > Slot 2 > eq		group	eq	Three-band equalizer with low shelf, peaking mid, and high shelf bands.	Boosts or cuts each band independently; gain range ±12 dB.

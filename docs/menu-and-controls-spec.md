@@ -66,11 +66,16 @@ Root (group)
 ```
 L1: Life
 ├── Part: [1..8]                                 ← selects active part for L1/L2 editing (mirrors Fn+left-column select)
+├── Auto Name: [on | off]                        ← on: name auto-derives from behavior ID; off: name is manual text
+├── Part Name: (text, max 32)                    ← display name; editing sets Auto Name off
 ├── Save Grid State: [on | off]                  ← controls whether this part's current grid/runtime state is stored in preset/default saves
 ├── Step Rate: [1/16, 1/8, 1/4, 1/2, 1/1]    ← controls how often onTick() is called
 ├── Behavior: [sequencer | life | brain | ant | bounce | shapes | raindrops | dla | glider | none | keys]
 └── ... per-behavior dynamic config from active engine's configMenu()
 ```
+
+When Auto Name is on, the part name is derived from the active behavior ID (e.g. `life`, `brain`). Editing the Part Name text field switches Auto Name off.
+Part selectors (Part menu option, Fn+column selection, L2 Sense Part selector) display the computed part label (e.g. `P1: life`, `P2: rain`).
 
 Behavior-specific config items (from `configMenu()`):
 
@@ -150,8 +155,10 @@ L2: Sense
 ```
 L3: Voice
 └── Instruments (group)
-    ├── Instrument 1..8 (group)
-    │   ├── Type: [synth | sample | MIDI only]
+    ├── Instrument 1..8 (group)                ← compact label e.g. `I1: synth`, `I2: drums` via instrumentLabel()
+    │   ├── Type: [synth | sample | midi]
+    │   ├── Auto Name: [on | off]              ← on: name auto-derives from Type; off: name is manual text
+    │   ├── Name: (text, max 32)               ← display name; editing sets Auto Name off
     │   ├── Note Behavior: [oneshot | hold] default oneshot
     │   ├── Synth (group, visible when type=synth)
     │   │   ├── Preset > Load (group)      ← per-slot synth preset load with confirm
@@ -178,7 +185,12 @@ L3: Voice
     │       ├── Route: [direct | fx_bus_1..fx_bus_N] default direct (N from platform capabilities)
     │       └── Pan Pos: [0..gridWidth-1] quantized
     └── FX Buses (group)
-        ├── FX Bus 1..4 (group)
+        ├── Names (group)
+        │   ├── Bus 1..4 (group)
+        │   │   ├── Auto Name: [on | off]            ← on: name auto-derives from FX slot types; off: name is manual text
+        │   │   └── Name: (text, max 32)             ← display name; editing sets Auto Name off
+        │   └── ... (per bus)
+        ├── Bus 1..4 (group)
         │   ├── Slot 1 (group)
         │   │   ├── Type: [none | reverb | delay | tremolo | vibrato | auto_pan | chorus | flanger | wah | filter_lfo | duck | bitcrusher | saturator | distortion | glitch | compressor | eq] default none
         │   │   └── (effect params, visible per Type: timing/mod/filter/duck/drive/glitch/compressor/EQ controls)
@@ -186,6 +198,7 @@ L3: Voice
         │   │   ├── Type: [same options] default none
         │   │   └── (effect params, visible per Type: timing/mod/filter/duck/drive/glitch/compressor/EQ controls)
         │   └── Pan Pos: [0..gridWidth-1] quantized
+        └── ... (per bus)
 ```
 
 Routing semantics:
@@ -198,6 +211,7 @@ Routing semantics:
 - Bus output is then panned by bus `Pan Pos` and summed to main mix.
 - `duck` source options are stable and capability-sized: `I1..I{instrumentCount}` and `B1..B{busCount}`.
 - `auto-pan` modulates the bus stereo output position after the slot chain.
+- FX bus naming mode: `auto` builds from assigned slot types (e.g. `delay+reverb`, or `fx` when all slots are empty); `custom` allows free text; other modes set a fixed name (`rhythm`, `melody`, `texture`, `fx`).
 
 Sample assignment mode semantics:
 
@@ -246,7 +260,7 @@ System
 │   ├── Default (group)
 │   │   ├── Save Default: (action)
 │   │   ├── Load Default: (action)
-│   │   └── Auto Save: [on | off]    ← auto-persists config on every change
+│   │   └── Auto Save: [on | off]    ← auto-persists settled config after cooldown
 │   └── Factory (group)
 │       └── Load Fact. Default: (action)
 ├── MIDI (group)
@@ -264,10 +278,11 @@ System
 │   ├── Velocity Scale: [0..200] step 5 %   default 100
 │   └── Velocity Curve: [linear | soft | hard]
 └── UI Settings (group)
+    ├── Numeric Display: [bar | numbers | bar+numbers]  ← controls rendering of bar-style numeric params, default bar+numbers
     ├── Screen Sleep: [0..600] step 10 s    default 60 (0=off)
-    ├── Display Brightness: [10..100] step 5  default 75
-    ├── Grid Brightness: [10..100] step 5     default 75
-    └── Button Brightness: [10..100] step 5   default 75
+    ├── Display Brightness: [10..100] step 5  default 75 (bar display when Numeric Display is bar or bar+numbers)
+    ├── Grid Brightness: [10..100] step 5     default 75 (bar display when Numeric Display is bar or bar+numbers)
+    └── Button Brightness: [10..100] step 5   default 75 (bar display when Numeric Display is bar or bar+numbers)
 ```
 
 ## OLED Display
@@ -285,6 +300,9 @@ Value editing semantics:
 
 - Number/enum/bool rows enter edit mode on main press
 - Bool behaves like a 2-option enum (`off`/`on`) and changes on encoder turn, not immediate row press
+- Named target selectors (instrument slot, part index, mixer route) display their computed names via `formatDisplayValue()` (e.g. `I1: synth`, `P3: rain`, `fx_bus_2`)
+- When `Numeric Display` is `bar` or `bar+numbers`, number items with `displayStyle: "bar"` or FX params render with a smooth geometric bar (filled rectangle) alongside the numeric value
+- Bar display applies to FX params automatically; other number items opt in via `displayStyle: "bar"` on the menu node
 
 Action row markers:
 
@@ -313,9 +331,10 @@ Overrides:
 ## Auto-Save
 
 - Location: System > Presets > Default > Auto Save
-- When enabled: every config change (via turnMenu, pressMenu, or turnAuxEncoder) emits a `store_save_default` effect, persisting the entire `ConfigPayload` (activeBehavior + runtimeConfig + mappingConfig)
+- When enabled: config changes (via turnMenu, pressMenu, or turnAuxEncoder) emit deferred `store_save_default` effects; storage writes the latest pending `ConfigPayload` after a short cooldown instead of saving every intermediate encoder step
 - Disabled by default
 - Toggling Auto Save on triggers an immediate save when you exit that menu row
+- Explicit Save Default is always immediate and cancels any pending deferred default save
 
 ## Aux Encoder Binding
 
@@ -330,13 +349,43 @@ Overrides:
 - Regular aux turn adjusts the turn slot value (if any)
 - If no slot is bound, toast shows `S#: No binding` or `T#: No binding`
 - Turn toasts show current value, e.g. `T1: Spawn Count: 3`
-- For unsupported shared mappings, toast shows `N/A`, e.g. `S1: N/A (Spawn Now)`
 - Shared route currently implemented:
   - `trigger.life.spawn_now` resolves per behavior (sequencer has no implementation)
 - Enum turning is clamped (no wrap)
 - Bool turning is clamped with directional behavior (`-1 => Off`, `+1 => On`)
 - `activeBehavior` and `behaviorConfig.*` updates re-initialize behavior state
-- All aux value changes trigger auto-save when enabled
+- All aux value changes schedule the deferred auto-save when enabled
+
+### Stale (Inactive) Binding Detection
+
+- Bindings are **not** automatically removed when the target context changes
+- If a bound target becomes inactive, the input is ignored and a scoped `not active` toast is shown
+- The binding remains intact so the user can re-activate the target later
+
+#### Turn (Stale Target)
+- **FX param**: param does not exist for the current slot type, e.g. `T1: B1 Time ms not active`
+- **Instrument subtree**: instrument type changed away from the bound subtree, e.g. `T1: I1 Filter cutoff not active`
+- **Part scan field**: `scanMode` is not `"scanning"`, e.g. `T1: P1 Scan Direction not active`
+- **Behavior config param**: param is not in the current behavior's `configMenu()`, e.g. `T1: P1 Spawn Count not active`
+
+#### Press (Stale Action)
+- **Spawn route**: current behavior has no spawn action, e.g. `S1: P1 Spawn Now not active`
+- **Concrete action**: action type is not in current behavior's `configMenu()`, e.g. `S1: P1 Spawn Random not active`
+
+#### Scope Prefixes
+- `B<N+1>` — bus number (1-indexed)
+- `I<N+1>` — instrument number (1-indexed)
+- `P<N+1>` — part number (1-indexed)
+- Global behavior config uses active part scope `P<active+1>`
+
+### Toast Scrolling
+
+- Toast messages are rendered on a single OLED bottom line (max 17 chars visible)
+- Messages longer than 17 chars scroll horizontally:
+  - Hold at start: 700ms
+  - Scroll at 120ms per character
+  - Hold at end once the final window is reached
+- `startedAtMs` tracks the original toast creation time; extending a visible toast preserves the scroll position
 
 ## Config Persistence (ConfigPayload)
 
