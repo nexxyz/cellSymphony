@@ -34,7 +34,6 @@ Implemented and functional:
 
 Planned/follow-up:
 
-- Realtime Rust DSP implementation for Touch momentary FX payloads.
 - Global/master FX workflow refinements.
 - Aux mapping enhancements for the Touch context.
 - Hardware prototype on Raspberry Pi Zero 2 W with NeoTrellis/NeoKeys/OLED/audio DAC.
@@ -82,7 +81,7 @@ The authoritative menu/control spec lives in `docs/menu-and-controls-spec.md`.
 - **pan**: rows are instruments, x=0 is hard left and x=7 is hard right.
 - **fx**: assigned cells trigger momentary effects while held.
 
-Touch FX currently emits platform effects for later DSP wiring:
+Touch FX maps cells to global-output momentary DSP in the Rust realtime engine:
 
 - `stutter`
 - `freeze`

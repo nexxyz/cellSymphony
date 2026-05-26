@@ -1,6 +1,8 @@
 use realtime_engine::synth::{
     AudioLoadStatus, InstrumentsConfig, SampleBankConfig, SynthEngine, VoiceStealingMode,
 };
+use serde_json::Value;
+use std::collections::BTreeMap;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 
@@ -39,6 +41,14 @@ pub enum EngineEvent {
     SetInstruments(InstrumentsConfig),
     SetSampleBanks(Vec<SampleBankConfig>),
     SetVoiceStealingMode(VoiceStealingMode),
+    MomentaryFxStart {
+        id: String,
+        fx_type: String,
+        params: BTreeMap<String, Value>,
+    },
+    MomentaryFxStop {
+        id: String,
+    },
 }
 
 impl EngineSource {
@@ -129,6 +139,12 @@ impl EngineSource {
                 EngineEvent::SetVoiceStealingMode(mode) => {
                     self.engine.set_voice_stealing_mode(mode)
                 }
+                EngineEvent::MomentaryFxStart {
+                    id,
+                    fx_type,
+                    params,
+                } => self.engine.momentary_fx_start(id, fx_type, params),
+                EngineEvent::MomentaryFxStop { id } => self.engine.momentary_fx_stop(&id),
             }
         }
     }

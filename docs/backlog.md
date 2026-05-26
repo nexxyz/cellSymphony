@@ -416,7 +416,7 @@ New L4 layer: "Touch" / "Performance". Contains grid-mode pages (switched via ri
 - FN+rightmost column jumps to Touch from any layer.
 - Aux encoder mappings work consistently across all Touch pages.
 
-**Implemented:** `L4: Touch` menu with Touch Page and BPM, Fn+rightmost jump, rightmost-column page selection, Mix volume/mute grid, Pan grid, FX placeholder grid, and Touch LED overlay rendering.
+**Implemented:** `L4: Touch` menu with Touch Page and BPM, Fn+rightmost jump, rightmost-column page selection, Mix volume/mute grid, Pan grid, FX grid rendering, and Touch LED overlay rendering.
 
 ---
 
@@ -450,7 +450,7 @@ Assign momentary effects to grid cells in the Touch FX page. All effects are mom
 - Filter-sweep fades in on press, fades out on release.
 - Reuse existing filter/FX code where overlapping.
 
-**Implemented:** `L4: Touch > FX Page` effect selection, per-effect parameter menu, Map to Grid assignment flow, persisted per-cell FX assignments, momentary activate/deactivate `PlatformEffect` payloads, max concurrent cap, same-type replacement, and FX page LED colours. Realtime Rust DSP remains follow-up work.
+**Implemented:** `L4: Touch > FX Page` effect selection, per-effect parameter menu, Map to Grid assignment flow, persisted per-cell FX assignments, resolved audio-command emission, max concurrent cap, same-type replacement, FX page LED colours, dumb desktop forwarding, and global-output Rust DSP for stutter, freeze, filter_sweep, and pitch_shift.
 
 ---
 
@@ -536,6 +536,38 @@ OLED graphical display of signal/routing paths: parts → instruments → FX bus
 ## Phase 5: Advanced / Hardware
 
 *Hardware-specific features and tooling.*
+
+---
+
+### REQ-16 — Rust-Owned Realtime Playback Runtime
+
+| Field | Value |
+|-------|-------|
+| **Status** | open |
+| **Phase** | 5 |
+| **Priority** | high |
+| **Scope** | large |
+| **Depends on** | REQ-06, REQ-05, stable platform-core engine-event boundary |
+| **Source** | architecture follow-up |
+
+Migrate realtime execution ownership from the desktop JavaScript runtime toward Rust. `platform-core` remains the canonical control/state machine for menu, grid semantics, behavior transitions, and mapping decisions, but Rust should own realtime playback timing and native scheduling.
+
+**Target ownership:**
+- Rust owns transport clock timing, BPM timing, PPQN/MIDI clock timing, audio callback timing, MIDI output scheduling, and block/sample-accurate engine event dispatch.
+- `platform-core` emits resolved engine/audio events and config updates, not backend-specific scheduling instructions.
+- Desktop remains a dumb host: render simulator frames, collect hardware-like input, and forward platform effects to storage/MIDI/audio backends.
+
+**Migration path:**
+- Establish generic engine/audio command boundary for resolved platform effects.
+- Move momentary FX DSP and command handling into Rust.
+- Move MIDI output scheduling from desktop JS into Rust.
+- Move transport clock / PPQN tick ownership into Rust while keeping platform-core deterministic and externally stepped.
+- Revisit behavior/scan tick scheduling once the Rust clock boundary is stable.
+
+**Acceptance:**
+- Desktop no longer owns realtime MIDI/audio scheduling semantics.
+- Rust runtime can run transport/MIDI/audio timing without browser timers.
+- Hardware host can reuse the same platform-core state machine and Rust realtime runtime without desktop-specific logic.
 
 ---
 

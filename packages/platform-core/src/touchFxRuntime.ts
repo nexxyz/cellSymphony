@@ -15,9 +15,12 @@ export function activateMomentaryFx<TState>(state: PlatformState<TState>, x: num
   const withoutSameType = activeFx.filter((fx) => fx.fxType !== config.fxType);
   const maxConcurrent = clamp(Math.floor(Number((state.runtimeConfig as any).touchFx?.maxConcurrent ?? 4)), 1, 8);
   if (!replaced && withoutSameType.length >= maxConcurrent) return state;
-  if (replaced) effects.push({ type: "fx_momentary_deactivate", cellX: replaced.cellX, cellY: replaced.cellY });
+  if (replaced) effects.push({ type: "audio_command", command: { type: "momentary_fx_stop", id: momentaryFxId(replaced.cellX, replaced.cellY) } });
   const next = { cellX, cellY, fxType: config.fxType, config: structuredClone(config), activatedAtMs: Date.now() };
-  effects.push({ type: "fx_momentary_activate", fxType: config.fxType, params: structuredClone(config.params ?? {}), cellX, cellY });
+  effects.push({
+    type: "audio_command",
+    command: { type: "momentary_fx_start", id: momentaryFxId(cellX, cellY), fxType: config.fxType, params: structuredClone(config.params ?? {}), target: { type: "global" } }
+  });
   return { ...state, system: { ...state.system, activeFx: [...withoutSameType, next] } };
 }
 
@@ -27,8 +30,12 @@ export function releaseMomentaryFx<TState>(state: PlatformState<TState>, x: numb
   const cellY = clamp(Math.floor(y), 0, GRID_HEIGHT - 1);
   const nextActive = state.system.activeFx.filter((fx) => fx.cellX !== cellX || fx.cellY !== cellY);
   if (nextActive.length === state.system.activeFx.length) return state;
-  effects.push({ type: "fx_momentary_deactivate", cellX, cellY });
+  effects.push({ type: "audio_command", command: { type: "momentary_fx_stop", id: momentaryFxId(cellX, cellY) } });
   return { ...state, system: { ...state.system, activeFx: nextActive } };
+}
+
+function momentaryFxId(cellX: number, cellY: number): string {
+  return `momentary-fx:${cellX}:${cellY}`;
 }
 
 export function applyFxAssignment<TState>(state: PlatformState<TState>, x: number, y: number): PlatformState<TState> {

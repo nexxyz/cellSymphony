@@ -215,12 +215,12 @@ test("Touch FX press and release emit momentary effects", () => {
   const press = routeInput(state, { type: "grid_press", x: 1, y: 2 }, mockBehavior);
   assert.equal(press.state.system.activeFx.length, 1);
   assert.deepEqual(press.effects, [
-    { type: "fx_momentary_activate", fxType: "stutter", params: { rateHz: 12, depthPct: 90 }, cellX: 1, cellY: 2 }
+    { type: "audio_command", command: { type: "momentary_fx_start", id: "momentary-fx:1:2", fxType: "stutter", params: { rateHz: 12, depthPct: 90 }, target: { type: "global" } } }
   ]);
 
   const release = routeInput(press.state, { type: "grid_release", x: 1, y: 2 }, mockBehavior);
   assert.equal(release.state.system.activeFx.length, 0);
-  assert.deepEqual(release.effects, [{ type: "fx_momentary_deactivate", cellX: 1, cellY: 2 }]);
+  assert.deepEqual(release.effects, [{ type: "audio_command", command: { type: "momentary_fx_stop", id: "momentary-fx:1:2" } }]);
 });
 
 test("Touch FX enforces concurrency limit and same-type replacement", () => {
@@ -243,8 +243,8 @@ test("Touch FX enforces concurrency limit and same-type replacement", () => {
   assert.equal(replaced.state.system.activeFx.length, 1);
   assert.equal(replaced.state.system.activeFx[0]?.cellX, 2);
   assert.deepEqual(replaced.effects, [
-    { type: "fx_momentary_deactivate", cellX: 0, cellY: 0 },
-    { type: "fx_momentary_activate", fxType: "stutter", params: { rateHz: 16 }, cellX: 2, cellY: 0 }
+    { type: "audio_command", command: { type: "momentary_fx_stop", id: "momentary-fx:0:0" } },
+    { type: "audio_command", command: { type: "momentary_fx_start", id: "momentary-fx:2:0", fxType: "stutter", params: { rateHz: 16 }, target: { type: "global" } } }
   ]);
 });
 

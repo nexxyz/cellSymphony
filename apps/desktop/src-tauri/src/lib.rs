@@ -17,7 +17,8 @@ use midir::MidiInputConnection;
 use realtime_engine::synth::INSTRUMENT_SLOT_COUNT;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use serde::Deserialize;
-use std::collections::HashMap;
+use serde_json::Value;
+use std::collections::{BTreeMap, HashMap};
 use tauri::Emitter;
 
 #[derive(Deserialize)]
@@ -41,6 +42,21 @@ enum MusicalEventPayload {
     },
     #[serde(other)]
     Unsupported,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type")]
+enum AudioCommandPayload {
+    #[serde(rename = "momentary_fx_start")]
+    MomentaryFxStart {
+        id: String,
+        #[serde(rename = "fxType")]
+        fx_type: String,
+        #[serde(default)]
+        params: BTreeMap<String, Value>,
+    },
+    #[serde(rename = "momentary_fx_stop")]
+    MomentaryFxStop { id: String },
 }
 
 struct AudioRuntime {
@@ -83,6 +99,14 @@ pub(crate) enum QueuedAudioEvent {
     SetInstruments(realtime_engine::synth::InstrumentsConfig),
     SetSampleBanks(Vec<realtime_engine::synth::SampleBankConfig>),
     SetVoiceStealingMode(realtime_engine::synth::VoiceStealingMode),
+    MomentaryFxStart {
+        id: String,
+        fx_type: String,
+        params: BTreeMap<String, Value>,
+    },
+    MomentaryFxStop {
+        id: String,
+    },
 }
 
 impl AudioRuntime {
@@ -263,6 +287,29 @@ fn audio_set_runtime_policy(
         .map_err(|e| format!("audio queue send failed: {e}"))
 }
 
+#[tauri::command]
+fn audio_command(
+    command: AudioCommandPayload,
+    state: tauri::State<AppState>,
+) -> Result<(), String> {
+    let event = match command {
+        AudioCommandPayload::MomentaryFxStart {
+            id,
+            fx_type,
+            params,
+        } => QueuedAudioEvent::MomentaryFxStart {
+            id,
+            fx_type,
+            params,
+        },
+        AudioCommandPayload::MomentaryFxStop { id } => QueuedAudioEvent::MomentaryFxStop { id },
+    };
+    state
+        .trigger_tx
+        .send(event)
+        .map_err(|e| format!("audio queue send failed: {e}"))
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let (trigger_tx, trigger_rx) = mpsc::channel::<QueuedAudioEvent>();
@@ -334,6 +381,20 @@ pub fn run() {
                 QueuedAudioEvent::SetVoiceStealingMode(mode) => {
                     let _ = engine_tx.send(EngineEvent::SetVoiceStealingMode(mode));
                 }
+                QueuedAudioEvent::MomentaryFxStart {
+                    id,
+                    fx_type,
+                    params,
+                } => {
+                    let _ = engine_tx.send(EngineEvent::MomentaryFxStart {
+                        id,
+                        fx_type,
+                        params,
+                    });
+                }
+                QueuedAudioEvent::MomentaryFxStop { id } => {
+                    let _ = engine_tx.send(EngineEvent::MomentaryFxStop { id });
+                }
             }
         }
     });
@@ -372,7 +433,8 @@ pub fn run() {
             midi_send,
             sample_list,
             sample_preview,
-            audio_set_runtime_policy
+            audio_set_runtime_policy,
+            audio_command
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

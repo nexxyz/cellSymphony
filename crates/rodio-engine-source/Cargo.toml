@@ -9,3 +9,4 @@ path = "src/lib.rs"
 [dependencies]
 realtime-engine = { path = "../realtime-engine" }
 rodio = "0.20"
+serde_json = "1"

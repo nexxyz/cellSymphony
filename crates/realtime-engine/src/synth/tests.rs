@@ -248,6 +248,100 @@ fn all_filter_types_generate_finite_non_silent_audio() {
 }
 
 #[test]
+fn momentary_stutter_reduces_output_energy_until_stopped() {
+    let mut dry = SynthEngine::new(48_000);
+    let mut wet = SynthEngine::new(48_000);
+    dry.note_on(0, 60, 120, 1_000);
+    wet.note_on(0, 60, 120, 1_000);
+    wet.momentary_fx_start(
+        "a".to_string(),
+        "stutter".to_string(),
+        BTreeMap::from([
+            ("rateHz".to_string(), json!(400.0)),
+            ("depthPct".to_string(), json!(100.0)),
+        ]),
+    );
+
+    let mut dry_sum = 0.0_f32;
+    let mut wet_sum = 0.0_f32;
+    for _ in 0..4096 {
+        dry_sum += dry.next_sample().abs();
+        wet_sum += wet.next_sample().abs();
+    }
+    assert!(
+        wet_sum < dry_sum * 0.75,
+        "stutter should gate output energy"
+    );
+
+    wet.momentary_fx_stop("a");
+    let mut released_sum = 0.0_f32;
+    for _ in 0..1024 {
+        released_sum += wet.next_sample().abs();
+    }
+    assert!(
+        released_sum > 0.1,
+        "stutter stop should restore audio output"
+    );
+}
+
+#[test]
+fn momentary_freeze_holds_a_stable_sample() {
+    let mut engine = SynthEngine::new(48_000);
+    engine.note_on(0, 60, 120, 1_000);
+    for _ in 0..128 {
+        let _ = engine.next_sample();
+    }
+    engine.momentary_fx_start(
+        "freeze".to_string(),
+        "freeze".to_string(),
+        BTreeMap::from([("mixPct".to_string(), json!(100.0))]),
+    );
+
+    let first = engine.next_sample();
+    for _ in 0..64 {
+        let next = engine.next_sample();
+        assert!(
+            (next - first).abs() < 1.0e-6,
+            "freeze should hold output stable"
+        );
+    }
+}
+
+#[test]
+fn momentary_filter_and_pitch_shift_stay_finite() {
+    for (fx_type, params) in [
+        (
+            "filter_sweep",
+            BTreeMap::from([
+                ("cutoffPct".to_string(), json!(20.0)),
+                ("resonancePct".to_string(), json!(80.0)),
+            ]),
+        ),
+        (
+            "pitch_shift",
+            BTreeMap::from([
+                ("semitones".to_string(), json!(7.0)),
+                ("mixPct".to_string(), json!(100.0)),
+            ]),
+        ),
+    ] {
+        let mut engine = SynthEngine::new(48_000);
+        engine.note_on(0, 60, 120, 1_000);
+        engine.momentary_fx_start("fx".to_string(), fx_type.to_string(), params);
+        let mut sum = 0.0_f32;
+        for _ in 0..2048 {
+            let sample = engine.next_sample();
+            assert!(sample.is_finite());
+            sum += sample.abs();
+        }
+        assert!(
+            sum > 0.0,
+            "{fx_type} should produce non-silent finite output"
+        );
+    }
+}
+
+#[test]
 fn maintains_eight_voices_per_instrument_slot() {
     let mut engine = SynthEngine::new(48_000);
     for i in 0..8 {

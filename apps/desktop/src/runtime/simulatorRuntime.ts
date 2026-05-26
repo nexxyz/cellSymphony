@@ -502,6 +502,10 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
         });
         return { type: "save_default_result", ok: true } as any;
       }
+      if (effect.type === "audio_command") {
+        void invokeBridge("audio_command", { command: effect.command }).catch(() => {});
+        return null;
+      }
       return { type: "store_error", message: "Unknown effect" };
     } catch (err) {
       return { type: "store_error", message: err instanceof Error ? err.message : "Store error" };

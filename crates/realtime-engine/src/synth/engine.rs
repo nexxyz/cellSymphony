@@ -3,7 +3,11 @@ use super::fx::{
 };
 use super::fx_params::{compile_fx_bus_params, FxBusParams};
 use super::types::*;
+use serde_json::Value;
+use std::collections::BTreeMap;
 use std::f32::consts::PI;
+
+const PITCH_BUFFER_LEN: usize = 4096;
 
 pub struct SynthEngine {
     sample_rate: u32,
@@ -24,6 +28,7 @@ pub struct SynthEngine {
     voice_stealing_mode: VoiceStealingMode,
     smoothed_load_ratio: f32,
     voice_steal_since_status: bool,
+    momentary_fx: Vec<MomentaryFxState>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -41,6 +46,51 @@ struct SampleVoice {
     pos: f32,
     step: f32,
     gain: f32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MomentaryFxKind {
+    Stutter,
+    Freeze,
+    FilterSweep,
+    PitchShift,
+}
+
+#[derive(Debug)]
+struct MomentaryFxState {
+    id: String,
+    kind: MomentaryFxKind,
+    params: BTreeMap<String, Value>,
+    phase: f32,
+    freeze_l: f32,
+    freeze_r: f32,
+    freeze_set: bool,
+    filt_l: BiquadState,
+    filt_r: BiquadState,
+    pitch_l: Vec<f32>,
+    pitch_r: Vec<f32>,
+    pitch_write: usize,
+    pitch_read: f32,
+}
+
+impl MomentaryFxState {
+    fn new(id: String, kind: MomentaryFxKind, params: BTreeMap<String, Value>) -> Self {
+        Self {
+            id,
+            kind,
+            params,
+            phase: 0.0,
+            freeze_l: 0.0,
+            freeze_r: 0.0,
+            freeze_set: false,
+            filt_l: BiquadState::new(),
+            filt_r: BiquadState::new(),
+            pitch_l: vec![0.0; PITCH_BUFFER_LEN],
+            pitch_r: vec![0.0; PITCH_BUFFER_LEN],
+            pitch_write: 0,
+            pitch_read: 0.0,
+        }
+    }
 }
 
 impl SampleVoice {
@@ -77,7 +127,26 @@ impl SynthEngine {
             voice_stealing_mode: VoiceStealingMode::Balanced,
             smoothed_load_ratio: 0.0,
             voice_steal_since_status: false,
+            momentary_fx: Vec::new(),
         }
+    }
+
+    pub fn momentary_fx_start(
+        &mut self,
+        id: String,
+        fx_type: String,
+        params: BTreeMap<String, Value>,
+    ) {
+        let Some(kind) = parse_momentary_fx_kind(&fx_type) else {
+            return;
+        };
+        self.momentary_fx.retain(|fx| fx.id != id);
+        self.momentary_fx
+            .push(MomentaryFxState::new(id, kind, params));
+    }
+
+    pub fn momentary_fx_stop(&mut self, id: &str) {
+        self.momentary_fx.retain(|fx| fx.id != id);
     }
 
     pub fn set_voice_stealing_mode(&mut self, mode: VoiceStealingMode) {
@@ -394,8 +463,65 @@ impl SynthEngine {
             right += processed * gr;
         }
 
+        let (left, right) = self.process_momentary_fx(left, right);
         self.sample_clock = self.sample_clock.saturating_add(1);
         (left.clamp(-1.0, 1.0), right.clamp(-1.0, 1.0))
+    }
+
+    fn process_momentary_fx(&mut self, left: f32, right: f32) -> (f32, f32) {
+        let mut l = left;
+        let mut r = right;
+        for fx in self.momentary_fx.iter_mut() {
+            match fx.kind {
+                MomentaryFxKind::Stutter => {
+                    let rate = param_f32(&fx.params, "rateHz", 8.0).clamp(1.0, 32.0);
+                    let depth = (param_f32(&fx.params, "depthPct", 100.0) / 100.0).clamp(0.0, 1.0);
+                    fx.phase = (fx.phase + rate / self.sample_rate as f32).fract();
+                    let gate = if fx.phase < 0.5 { 1.0 } else { 1.0 - depth };
+                    l *= gate;
+                    r *= gate;
+                }
+                MomentaryFxKind::Freeze => {
+                    if !fx.freeze_set {
+                        fx.freeze_l = l;
+                        fx.freeze_r = r;
+                        fx.freeze_set = true;
+                    }
+                    let mix = (param_f32(&fx.params, "mixPct", 100.0) / 100.0).clamp(0.0, 1.0);
+                    l = l * (1.0 - mix) + fx.freeze_l * mix;
+                    r = r * (1.0 - mix) + fx.freeze_r * mix;
+                }
+                MomentaryFxKind::FilterSweep => {
+                    let cutoff_pct =
+                        (param_f32(&fx.params, "cutoffPct", 35.0) / 100.0).clamp(0.0, 1.0);
+                    let resonance_pct =
+                        (param_f32(&fx.params, "resonancePct", 70.0) / 100.0).clamp(0.0, 1.0);
+                    let cutoff = 120.0 + cutoff_pct * 8_000.0;
+                    let q = 0.5 + resonance_pct * 11.5;
+                    l = fx
+                        .filt_l
+                        .process(l, FilterType::Lowpass, cutoff, q, self.sample_rate);
+                    r = fx
+                        .filt_r
+                        .process(r, FilterType::Lowpass, cutoff, q, self.sample_rate);
+                }
+                MomentaryFxKind::PitchShift => {
+                    let semitones = param_f32(&fx.params, "semitones", 7.0).clamp(-24.0, 24.0);
+                    let mix = (param_f32(&fx.params, "mixPct", 100.0) / 100.0).clamp(0.0, 1.0);
+                    fx.pitch_l[fx.pitch_write] = l;
+                    fx.pitch_r[fx.pitch_write] = r;
+                    let read = fx.pitch_read.floor() as usize % PITCH_BUFFER_LEN;
+                    let shifted_l = fx.pitch_l[read];
+                    let shifted_r = fx.pitch_r[read];
+                    fx.pitch_write = (fx.pitch_write + 1) % PITCH_BUFFER_LEN;
+                    fx.pitch_read =
+                        (fx.pitch_read + 2.0_f32.powf(semitones / 12.0)) % PITCH_BUFFER_LEN as f32;
+                    l = l * (1.0 - mix) + shifted_l * mix;
+                    r = r * (1.0 - mix) + shifted_r * mix;
+                }
+            }
+        }
+        (l, r)
     }
 
     fn sample_note_on(&mut self, slot: usize, midi_note: u8, velocity: u8) {
@@ -588,6 +714,25 @@ fn parse_instrument_kind(kind: &str) -> InstrumentKind {
         "none" => InstrumentKind::None,
         _ => InstrumentKind::Synth,
     }
+}
+
+fn parse_momentary_fx_kind(kind: &str) -> Option<MomentaryFxKind> {
+    match kind {
+        "stutter" => Some(MomentaryFxKind::Stutter),
+        "freeze" => Some(MomentaryFxKind::Freeze),
+        "filter_sweep" => Some(MomentaryFxKind::FilterSweep),
+        "pitch_shift" => Some(MomentaryFxKind::PitchShift),
+        _ => None,
+    }
+}
+
+fn param_f32(params: &BTreeMap<String, Value>, key: &str, fallback: f32) -> f32 {
+    params
+        .get(key)
+        .and_then(Value::as_f64)
+        .map(|value| value as f32)
+        .filter(|value| value.is_finite())
+        .unwrap_or(fallback)
 }
 
 fn sample_slot_for_note(note: u8) -> usize {

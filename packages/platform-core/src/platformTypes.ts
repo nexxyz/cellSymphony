@@ -112,6 +112,9 @@ export type FxBusConfig = {
 export type MomentaryFxConfig = { fxType: MomentaryFxType; params: Record<string, unknown> };
 export type FxCellConfig = { x: number; y: number; config: MomentaryFxConfig };
 export type ActiveFx = { cellX: number; cellY: number; fxType: MomentaryFxType; config: MomentaryFxConfig; activatedAtMs: number };
+export type AudioCommand =
+  | { type: "momentary_fx_start"; id: string; fxType: MomentaryFxType; params: Record<string, unknown>; target: { type: "global" } }
+  | { type: "momentary_fx_stop"; id: string };
 
 export type PartSenseConfig = {
   scanMode: ScanMode;
@@ -224,10 +227,8 @@ export type MidiEffect =
 export type SampleEffect =
   | { type: "sample_list_request"; instrumentSlot: number; sampleSlot: number; dir: string }
   | { type: "sample_preview_request"; path: string };
-export type MomentaryFxEffect =
-  | { type: "fx_momentary_activate"; fxType: MomentaryFxType; params: Record<string, unknown>; cellX: number; cellY: number }
-  | { type: "fx_momentary_deactivate"; cellX: number; cellY: number };
-export type PlatformEffect = PlatformEffectBase | MidiEffect | SampleEffect | MomentaryFxEffect;
+export type AudioCommandEffect = { type: "audio_command"; command: AudioCommand };
+export type PlatformEffect = PlatformEffectBase | MidiEffect | SampleEffect | AudioCommandEffect;
 export type StoreResultBase =
   | { type: "list_presets_result"; names: string[] } | { type: "load_preset_result"; name: string; payload: ConfigPayload | null }
   | { type: "save_preset_result"; name: string; outcome: "created" | "overwritten" } | { type: "delete_preset_result"; name: string; ok: boolean }

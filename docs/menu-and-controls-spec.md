@@ -277,7 +277,7 @@ Touch layer behavior:
 - `pan`: each row is an instrument; x=0 is hard left and x=7 is hard right, setting per-slot `Mixer > Pan Pos`.
 - `fx`: grid cells trigger mapped momentary effects. Press starts the mapped effect and release stops it.
 - FX cells are mapped from `L4: Touch > FX Page`: select an `FX Type`, edit its visible parameters, then select `Map to Grid` and press a grid cell. The effect type and current parameter values are stored on that cell. Mapping `none` clears a cell.
-- FX assignments are global-output targets in this platform-core implementation. The emitted `PlatformEffect` payloads are placeholders for the follow-up realtime DSP implementation.
+- FX assignments are global-output targets. Platform-core resolves grid semantics into audio commands; desktop forwards those commands without interpreting Touch/grid meaning; Rust applies the realtime DSP.
 - FX concurrency is limited by `Max Concurrent` (default 4). When all slots are active, additional assigned cells gray out and do not respond until a slot frees.
 - Pressing a second cell with the same effect type replaces the existing active cell of that type and emits a release for the old cell before activating the new one.
 - FX LED colours are yellow for stutter, cyan for freeze, orange for filter_sweep, and magenta for pitch_shift. Assigned inactive cells are dim, active cells are bright, and limit-blocked cells are gray.
