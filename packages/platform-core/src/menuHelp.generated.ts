@@ -2185,7 +2185,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "kind": "group",
     "title": "Touch Layer",
     "line1": "Performance grid layer for live mix, pan, and FX pages.",
-    "line2": "Fn plus the rightmost grid column toggles Touch from any layer."
+    "line2": "Fn plus the rightmost grid column selects Touch pages; Fn plus the leftmost column selects a part and exits Touch."
   },
   {
     "id": "touch_page",
@@ -2194,7 +2194,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "kind": "enum",
     "title": "Touch Page",
     "line1": "Options: none, mix, pan, fx. none returns the grid to the active behavior; mix edits instrument volume; pan edits pan position; fx triggers mapped momentary effects.",
-    "line2": "Rightmost grid-column rows select pages while Touch is enabled; Fn plus the rightmost column toggles Touch on or off."
+    "line2": "Fn plus rightmost rows select pages: row 0 mix, row 1 pan, row 2 fx."
   },
   {
     "id": "touch_bpm",
@@ -2293,15 +2293,6 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "kind": "action",
     "title": "Map to Grid",
     "line1": "Enters FX assignment mode using the current effect type and parameter values.",
-    "line2": "Press a grid cell to store the config on that cell; press Back to exit assignment mode."
-  },
-  {
-    "id": "touch_fx_max",
-    "path": "Menu > L4: Touch > FX Page > Max Concurrent",
-    "key": "key:touchFx.maxConcurrent",
-    "kind": "number",
-    "title": "Max Concurrent",
-    "line1": "Limits how many momentary FX cells can be active at once.",
-    "line2": "When the limit is full, other assigned cells gray out until a held effect is released."
+    "line2": "Press a grid cell to store the config on that cell; press Back to exit assignment mode. Momentary FX concurrency is fixed by platform capability at 4."
   }
 ];

@@ -47,6 +47,7 @@ fn bench_config() -> InstrumentsConfig {
             mixer: Some(InstrumentMixerConfig {
                 route: format!("fx_bus_{}", (idx % 4) + 1),
                 pan_pos: idx % DEFAULT_PAN_POSITIONS,
+                volume: 100.0,
             }),
         })
         .collect();

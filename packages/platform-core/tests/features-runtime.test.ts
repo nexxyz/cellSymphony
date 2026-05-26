@@ -98,9 +98,10 @@ test("applyConfigPayload reinitializes behavior state when behavior changes", ()
 });
 
 test("platform capabilities validator rejects invalid values", () => {
-  assert.throws(() => validatePlatformCapabilities({ gridWidth: 0, gridHeight: 8, partCount: 8, instrumentCount: 16, sampleSlotCount: 8 }));
-  assert.throws(() => validatePlatformCapabilities({ gridWidth: 8, gridHeight: 8, partCount: -1, instrumentCount: 16, sampleSlotCount: 8 }));
-  assert.throws(() => validatePlatformCapabilities({ gridWidth: 8, gridHeight: 8, partCount: 8, instrumentCount: 16.5, sampleSlotCount: 8 }));
+  assert.throws(() => validatePlatformCapabilities({ gridWidth: 0, gridHeight: 8, partCount: 8, instrumentCount: 16, sampleSlotCount: 8, busCount: 4, touchFxMaxConcurrent: 4 }));
+  assert.throws(() => validatePlatformCapabilities({ gridWidth: 8, gridHeight: 8, partCount: -1, instrumentCount: 16, sampleSlotCount: 8, busCount: 4, touchFxMaxConcurrent: 4 }));
+  assert.throws(() => validatePlatformCapabilities({ gridWidth: 8, gridHeight: 8, partCount: 8, instrumentCount: 16.5, sampleSlotCount: 8, busCount: 4, touchFxMaxConcurrent: 4 }));
+  assert.throws(() => validatePlatformCapabilities({ gridWidth: 8, gridHeight: 8, partCount: 8, instrumentCount: 16, sampleSlotCount: 8, busCount: 4, touchFxMaxConcurrent: 0 }));
 });
 
 test("applyConfigPayload reinitializes behavior state for same behavior id using saved behaviorConfig", () => {

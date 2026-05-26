@@ -82,7 +82,7 @@ export function buildSimulatorFrame<TState>(args: Args<TState>): SimulatorFrame 
     leds: {
       width: GRID_WIDTH,
       height: GRID_HEIGHT,
-      cells: assignLeds ?? touchLeds ?? cellsToLeds(model.cells, model.triggerTypes, scanCursor, state.runtimeConfig.gridBrightness / 100, state.system.fnHeld, activePart, args.ghostCells, state.system.touchMode)
+      cells: assignLeds ?? touchLeds ?? cellsToLeds(model.cells, model.triggerTypes, scanCursor, state.runtimeConfig.gridBrightness / 100, state.system.fnHeld, activePart, args.ghostCells, state.system.touchMode, (state.runtimeConfig as any).parts)
     },
     transport: state.transport,
     activeBehavior: model.name,

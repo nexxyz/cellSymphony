@@ -362,8 +362,7 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
               { kind: "number", label: "Cutoff", key: "touchFx.selected.params.cutoffPct", min: 0, max: 100, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "filter_sweep" },
               { kind: "number", label: "Res", key: "touchFx.selected.params.resonancePct", min: 0, max: 100, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "filter_sweep" },
               { kind: "number", label: "Semitones", key: "touchFx.selected.params.semitones", min: -24, max: 24, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "pitch_shift" },
-              { kind: "action", label: "Map to Grid", action: { type: "fx_assign_enter", config: selectedFxConfig } },
-              { kind: "number", label: "Max Concurrent", key: "touchFx.maxConcurrent", min: 1, max: 8, step: 1 }
+              { kind: "action", label: "Map to Grid", action: { type: "fx_assign_enter", config: selectedFxConfig } }
             ]
           }
         ]

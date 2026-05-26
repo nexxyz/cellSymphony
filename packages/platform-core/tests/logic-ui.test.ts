@@ -5,7 +5,7 @@ import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { DeviceInput } from "@cellsymphony/device-contracts";
 import { GRID_DOMAIN, GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contracts";
 import { keysBehavior } from "@cellsymphony/behaviors-keys";
-import { createInitialState, OLED_TEXT_COLUMNS, routeInput, tick, toOledLines, toSimulatorFrame } from "../src/index";
+import { createInitialState, OLED_TEXT_COLUMNS, PLATFORM_CAPS, routeInput, tick, toOledLines, toSimulatorFrame } from "../src/index";
 import { pitchFromIntent } from "../src/musicTransforms";
 import { cellsToLeds } from "../src/runtimeHelpers";
 
@@ -130,7 +130,7 @@ test("simulator frame exposes behavior grid interaction semantics", () => {
   assert.equal(toSimulatorFrame(keysState, keysBehavior).gridInteraction, "momentary");
 });
 
-test("Fn+rightmost grid column jumps to Touch layer", () => {
+test("Fn+rightmost grid column selects Touch pages", () => {
   let state = createInitialState(mockBehavior);
   state.system.oledMode = "normal";
 
@@ -141,23 +141,34 @@ test("Fn+rightmost grid column jumps to Touch layer", () => {
   assert.deepEqual(state.menu.stack, [3]);
   assert.equal(toSimulatorFrame(state, mockBehavior).display.page, "L4: Touch");
 
-  state = routeInput(state, { type: "grid_press", x: GRID_WIDTH - 1, y: 0 }, mockBehavior).state;
-  assert.equal(state.system.touchMode, "none");
+  state = routeInput(state, { type: "grid_press", x: GRID_WIDTH - 1, y: 1 }, mockBehavior).state;
+  assert.equal(state.system.touchMode, "pan");
+
+  state = routeInput(state, { type: "grid_press", x: GRID_WIDTH - 1, y: GRID_HEIGHT - 1 }, mockBehavior).state;
+  assert.equal(state.system.touchMode, "pan");
 });
 
-test("Fn grid overlay shows part and Touch page options", () => {
+test("Fn grid overlay shows active parts and Touch page options", () => {
   const state = createInitialState(mockBehavior);
   state.system.oledMode = "normal";
   state.system.fnHeld = true;
   state.system.touchMode = "pan";
+  state.runtimeConfig.parts[1]!.l1.behaviorId = "none";
+  state.runtimeConfig.parts[2]!.l1.behaviorId = "life";
 
   const cells = toSimulatorFrame(state, mockBehavior).leds.cells;
   const activePart = cells[GRID_DOMAIN.toDisplayIndex({ x: 0, y: 0 })]!;
+  const nonePart = cells[GRID_DOMAIN.toDisplayIndex({ x: 0, y: 1 })]!;
+  const configuredPart = cells[GRID_DOMAIN.toDisplayIndex({ x: 0, y: 2 })]!;
   const selectedPage = cells[GRID_DOMAIN.toDisplayIndex({ x: GRID_WIDTH - 1, y: 1 })]!;
   const inactivePage = cells[GRID_DOMAIN.toDisplayIndex({ x: GRID_WIDTH - 1, y: 0 })]!;
+  const unusedPage = cells[GRID_DOMAIN.toDisplayIndex({ x: GRID_WIDTH - 1, y: GRID_HEIGHT - 1 })]!;
 
   assert.ok(activePart.g > activePart.r && activePart.g > activePart.b);
+  assert.deepEqual(nonePart, { r: 0, g: 0, b: 0 });
+  assert.ok(configuredPart.g > 0 && configuredPart.g < activePart.g);
   assert.ok(selectedPage.g > inactivePage.g && selectedPage.b > inactivePage.b);
+  assert.deepEqual(unusedPage, { r: 0, g: 0, b: 0 });
 });
 
 test("Touch grid updates mixer volume and pan", () => {
@@ -169,13 +180,26 @@ test("Touch grid updates mixer volume and pan", () => {
   assert.equal(state.runtimeConfig.instruments[1]?.mixer?.volume, 0);
 
   state = routeInput(state, { type: "grid_press", x: GRID_WIDTH - 1, y: 1 }, mockBehavior).state;
-  assert.equal(state.system.touchMode, "pan");
+  assert.equal(state.system.touchMode, "mix");
+  assert.equal(state.runtimeConfig.instruments[GRID_WIDTH - 1]?.mixer?.volume, 14);
+
+  state.system.touchMode = "pan";
 
   state = routeInput(state, { type: "grid_press", x: 2, y: 1 }, mockBehavior).state;
   assert.equal(state.runtimeConfig.instruments[1]?.mixer?.panPos, 2);
 });
 
-test("Touch mix LEDs show direct and FX-routed volume markers", () => {
+test("Fn+leftmost part selection exits Touch grid mode", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.system.touchMode = "fx";
+  state = routeInput(state, { type: "button_fn", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "grid_press", x: 0, y: 2 }, mockBehavior).state;
+  assert.equal(state.runtimeConfig.activePartIndex, 2);
+  assert.equal(state.system.touchMode, "none");
+});
+
+test("Touch mix LEDs show volume markers", () => {
   const state = createInitialState(mockBehavior);
   state.system.oledMode = "normal";
   state.system.touchMode = "mix";
@@ -187,7 +211,21 @@ test("Touch mix LEDs show direct and FX-routed volume markers", () => {
   const fx = cells[GRID_DOMAIN.toDisplayIndex({ x: 1, y: 0 })]!;
 
   assert.ok(direct.g > direct.r && direct.g > direct.b);
-  assert.ok(fx.r > fx.g && fx.b > fx.g);
+  assert.ok(fx.g > fx.r && fx.g > fx.b);
+});
+
+test("Touch pan LEDs show a two-cell marker", () => {
+  const state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.system.touchMode = "pan";
+  state.runtimeConfig.instruments[0]!.mixer = { route: "direct", volume: 100, panPos: 4 };
+
+  const cells = toSimulatorFrame(state, mockBehavior).leds.cells;
+  const leftCenter = cells[GRID_DOMAIN.toDisplayIndex({ x: 3, y: 0 })]!;
+  const rightCenter = cells[GRID_DOMAIN.toDisplayIndex({ x: 4, y: 0 })]!;
+
+  assert.ok(leftCenter.r > 100 && leftCenter.g > 80);
+  assert.ok(rightCenter.r > 100 && rightCenter.g > 80);
 });
 
 test("Touch FX assignment stores selected effect config on grid cell", () => {
@@ -223,28 +261,28 @@ test("Touch FX press and release emit momentary effects", () => {
   assert.deepEqual(release.effects, [{ type: "audio_command", command: { type: "momentary_fx_stop", id: "momentary-fx:1:2" } }]);
 });
 
-test("Touch FX enforces concurrency limit and same-type replacement", () => {
+test("Touch FX enforces fixed capability limit and same-type replacement", () => {
   let state = createInitialState(mockBehavior);
   state.system.oledMode = "normal";
   state.system.touchMode = "fx";
-  (state.runtimeConfig as any).touchFx.maxConcurrent = 1;
   (state.runtimeConfig as any).touchFx.assignments = [
     { x: 0, y: 0, config: { fxType: "stutter", params: { rateHz: 6 } } },
     { x: 1, y: 0, config: { fxType: "freeze", params: { decayMs: 900 } } },
-    { x: 2, y: 0, config: { fxType: "stutter", params: { rateHz: 16 } } }
+    { x: 2, y: 0, config: { fxType: "filter_sweep", params: { cutoffPct: 40 } } },
+    { x: 3, y: 0, config: { fxType: "pitch_shift", params: { semitones: 7 } } },
+    { x: 4, y: 0, config: { fxType: "stutter", params: { rateHz: 16 } } }
   ];
 
-  const first = routeInput(state, { type: "grid_press", x: 0, y: 0 }, mockBehavior);
-  const blocked = routeInput(first.state, { type: "grid_press", x: 1, y: 0 }, mockBehavior);
-  assert.equal(blocked.state.system.activeFx.length, 1);
-  assert.deepEqual(blocked.effects, []);
+  let current = state;
+  for (let x = 0; x < PLATFORM_CAPS.touchFxMaxConcurrent; x += 1) current = routeInput(current, { type: "grid_press", x, y: 0 }, mockBehavior).state;
+  assert.equal(current.system.activeFx.length, PLATFORM_CAPS.touchFxMaxConcurrent);
 
-  const replaced = routeInput(blocked.state, { type: "grid_press", x: 2, y: 0 }, mockBehavior);
-  assert.equal(replaced.state.system.activeFx.length, 1);
-  assert.equal(replaced.state.system.activeFx[0]?.cellX, 2);
+  const replaced = routeInput(current, { type: "grid_press", x: 4, y: 0 }, mockBehavior);
+  assert.equal(replaced.state.system.activeFx.length, PLATFORM_CAPS.touchFxMaxConcurrent);
+  assert.equal(replaced.state.system.activeFx.some((fx) => fx.cellX === 4), true);
   assert.deepEqual(replaced.effects, [
     { type: "audio_command", command: { type: "momentary_fx_stop", id: "momentary-fx:0:0" } },
-    { type: "audio_command", command: { type: "momentary_fx_start", id: "momentary-fx:2:0", fxType: "stutter", params: { rateHz: 16 }, target: { type: "global" } } }
+    { type: "audio_command", command: { type: "momentary_fx_start", id: "momentary-fx:4:0", fxType: "stutter", params: { rateHz: 16 }, target: { type: "global" } } }
   ]);
 });
 
@@ -252,21 +290,44 @@ test("Touch FX LEDs show assigned, active, and limit states", () => {
   let state = createInitialState(mockBehavior);
   state.system.oledMode = "normal";
   state.system.touchMode = "fx";
-  (state.runtimeConfig as any).touchFx.maxConcurrent = 1;
   (state.runtimeConfig as any).touchFx.assignments = [
     { x: 0, y: 0, config: { fxType: "stutter", params: {} } },
-    { x: 1, y: 0, config: { fxType: "freeze", params: {} } }
+    { x: 1, y: 0, config: { fxType: "freeze", params: {} } },
+    { x: 2, y: 0, config: { fxType: "filter_sweep", params: {} } },
+    { x: 3, y: 0, config: { fxType: "pitch_shift", params: {} } },
+    { x: 4, y: 0, config: { fxType: "freeze", params: {} } }
   ];
-  state = routeInput(state, { type: "grid_press", x: 0, y: 0 }, mockBehavior).state;
+  for (let x = 0; x < PLATFORM_CAPS.touchFxMaxConcurrent; x += 1) state = routeInput(state, { type: "grid_press", x, y: 0 }, mockBehavior).state;
 
   const cells = toSimulatorFrame(state, mockBehavior).leds.cells;
   const active = cells[GRID_DOMAIN.toDisplayIndex({ x: 0, y: 0 })]!;
-  const limited = cells[GRID_DOMAIN.toDisplayIndex({ x: 1, y: 0 })]!;
-  const empty = cells[GRID_DOMAIN.toDisplayIndex({ x: 2, y: 0 })]!;
+  const limited = cells[GRID_DOMAIN.toDisplayIndex({ x: 4, y: 0 })]!;
+  const empty = cells[GRID_DOMAIN.toDisplayIndex({ x: 5, y: 0 })]!;
 
   assert.ok(active.r > 100 && active.g > 80 && active.b < 20);
   assert.ok(Math.abs(limited.r - limited.g) <= 1 && Math.abs(limited.g - limited.b) <= 1);
   assert.ok(empty.b > empty.r && empty.b > empty.g);
+});
+
+test("Touch FX momentary presses do not auto-save but mix and pan do", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.runtimeConfig.autoSaveDefault = true;
+  state.system.touchMode = "fx";
+  (state.runtimeConfig as any).touchFx.assignments = [
+    { x: 1, y: 2, config: { fxType: "stutter", params: { rateHz: 12 } } }
+  ];
+
+  const fx = routeInput(state, { type: "grid_press", x: 1, y: 2 }, mockBehavior);
+  assert.equal(fx.effects.some((effect) => effect.type === "store_save_default"), false);
+
+  state = { ...fx.state, system: { ...fx.state.system, touchMode: "mix" } };
+  const mix = routeInput(state, { type: "grid_press", x: 1, y: 2 }, mockBehavior);
+  assert.equal(mix.effects.some((effect) => effect.type === "store_save_default"), true);
+
+  state = { ...mix.state, system: { ...mix.state.system, touchMode: "pan" } };
+  const pan = routeInput(state, { type: "grid_press", x: 1, y: 2 }, mockBehavior);
+  assert.equal(pan.effects.some((effect) => effect.type === "store_save_default"), true);
 });
 
 test("sectioned row scan cursor starts from the top section", () => {

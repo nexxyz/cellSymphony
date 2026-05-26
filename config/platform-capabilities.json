@@ -4,5 +4,6 @@
   "partCount": 8,
   "instrumentCount": 8,
   "sampleSlotCount": 8,
-  "busCount": 4
+  "busCount": 4,
+  "touchFxMaxConcurrent": 4
 }

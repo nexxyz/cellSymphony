@@ -40,6 +40,75 @@ fn applies_instrument_config() {
 }
 
 #[test]
+fn mixer_volume_controls_synth_output() {
+    let mut muted = SynthEngine::new(48_000);
+    muted.set_instruments(InstrumentsConfig {
+        instruments: vec![InstrumentSlotConfig {
+            kind: "synth".to_string(),
+            synth: default_synth_config(),
+            mixer: Some(InstrumentMixerConfig {
+                route: "direct".to_string(),
+                pan_pos: DEFAULT_PAN_POSITIONS / 2,
+                volume: 0.0,
+            }),
+        }],
+        mixer: None,
+        pan_positions: DEFAULT_PAN_POSITIONS,
+    });
+    let mut full = SynthEngine::new(48_000);
+    full.set_instruments(InstrumentsConfig {
+        instruments: vec![InstrumentSlotConfig {
+            kind: "synth".to_string(),
+            synth: default_synth_config(),
+            mixer: Some(InstrumentMixerConfig {
+                route: "direct".to_string(),
+                pan_pos: DEFAULT_PAN_POSITIONS / 2,
+                volume: 100.0,
+            }),
+        }],
+        mixer: None,
+        pan_positions: DEFAULT_PAN_POSITIONS,
+    });
+    muted.note_on(0, 60, 127, 500);
+    full.note_on(0, 60, 127, 500);
+    let mut muted_sum = 0.0_f32;
+    let mut full_sum = 0.0_f32;
+    for _ in 0..2048 {
+        muted_sum += muted.next_sample().abs();
+        full_sum += full.next_sample().abs();
+    }
+    assert!(muted_sum < full_sum * 0.01);
+    assert!(full_sum > 0.0);
+}
+
+#[test]
+fn mixer_pan_controls_synth_output() {
+    let mut engine = SynthEngine::new(48_000);
+    engine.set_instruments(InstrumentsConfig {
+        instruments: vec![InstrumentSlotConfig {
+            kind: "synth".to_string(),
+            synth: default_synth_config(),
+            mixer: Some(InstrumentMixerConfig {
+                route: "direct".to_string(),
+                pan_pos: 0,
+                volume: 100.0,
+            }),
+        }],
+        mixer: None,
+        pan_positions: DEFAULT_PAN_POSITIONS,
+    });
+    engine.note_on(0, 60, 127, 500);
+    let mut left_sum = 0.0_f32;
+    let mut right_sum = 0.0_f32;
+    for _ in 0..2048 {
+        let (left, right) = engine.next_stereo_sample();
+        left_sum += left.abs();
+        right_sum += right.abs();
+    }
+    assert!(left_sum > right_sum * 10.0);
+}
+
+#[test]
 fn routes_through_dynamic_bus_count_without_allocating_bus_vec() {
     let mut engine = SynthEngine::new(48_000);
     let cfg = default_synth_config();
@@ -50,6 +119,7 @@ fn routes_through_dynamic_bus_count_without_allocating_bus_vec() {
             mixer: Some(InstrumentMixerConfig {
                 route: "fx_bus_2".to_string(),
                 pan_pos: DEFAULT_PAN_POSITIONS / 2,
+                volume: 100.0,
             }),
         }],
         mixer: Some(MixerConfig {
@@ -101,6 +171,7 @@ fn set_instruments_preserves_unchanged_fx_state() {
                 mixer: Some(InstrumentMixerConfig {
                     route: "fx_bus_1".to_string(),
                     pan_pos: DEFAULT_PAN_POSITIONS / 2,
+                    volume: 100.0,
                 }),
             },
             InstrumentSlotConfig {
@@ -109,6 +180,7 @@ fn set_instruments_preserves_unchanged_fx_state() {
                 mixer: Some(InstrumentMixerConfig {
                     route: "direct".to_string(),
                     pan_pos: DEFAULT_PAN_POSITIONS / 2,
+                    volume: 100.0,
                 }),
             },
         ]
@@ -149,6 +221,7 @@ fn sample_instrument_routes_through_bus_fx_delay_tail() {
             mixer: Some(InstrumentMixerConfig {
                 route: "fx_bus_1".to_string(),
                 pan_pos: DEFAULT_PAN_POSITIONS / 2,
+                volume: 100.0,
             }),
         }],
         mixer: Some(MixerConfig {
@@ -477,7 +550,8 @@ fn compressor_quieter_when_above_threshold() {
                 synth: default_synth_config(),
                 mixer: Some(InstrumentMixerConfig {
                     route: "direct".to_string(),
-                    pan_pos: 4
+                    pan_pos: 4,
+                    volume: 100.0,
                 }),
             };
             INSTRUMENT_SLOT_COUNT
@@ -494,7 +568,8 @@ fn compressor_quieter_when_above_threshold() {
                 synth: default_synth_config(),
                 mixer: Some(InstrumentMixerConfig {
                     route: "fx_bus_1".to_string(),
-                    pan_pos: 4
+                    pan_pos: 4,
+                    volume: 100.0,
                 }),
             };
             INSTRUMENT_SLOT_COUNT
@@ -549,7 +624,8 @@ fn compressor_makeup_restores_gain() {
                 synth: default_synth_config(),
                 mixer: Some(InstrumentMixerConfig {
                     route: "direct".to_string(),
-                    pan_pos: 4
+                    pan_pos: 4,
+                    volume: 100.0,
                 }),
             };
             INSTRUMENT_SLOT_COUNT
@@ -566,7 +642,8 @@ fn compressor_makeup_restores_gain() {
                 synth: default_synth_config(),
                 mixer: Some(InstrumentMixerConfig {
                     route: "fx_bus_1".to_string(),
-                    pan_pos: 4
+                    pan_pos: 4,
+                    volume: 100.0,
                 }),
             };
             INSTRUMENT_SLOT_COUNT
@@ -617,7 +694,8 @@ fn eq_boosts_and_cuts_band_energy() {
                 synth: default_synth_config(),
                 mixer: Some(InstrumentMixerConfig {
                     route: "direct".to_string(),
-                    pan_pos: 4
+                    pan_pos: 4,
+                    volume: 100.0,
                 }),
             };
             INSTRUMENT_SLOT_COUNT
@@ -634,7 +712,8 @@ fn eq_boosts_and_cuts_band_energy() {
                 synth: default_synth_config(),
                 mixer: Some(InstrumentMixerConfig {
                     route: "fx_bus_1".to_string(),
-                    pan_pos: 4
+                    pan_pos: 4,
+                    volume: 100.0,
                 }),
             };
             INSTRUMENT_SLOT_COUNT
@@ -703,6 +782,7 @@ fn duck_test_engine(with_duck: bool) -> SynthEngine {
                 mixer: Some(InstrumentMixerConfig {
                     route: "fx_bus_2".to_string(),
                     pan_pos: DEFAULT_PAN_POSITIONS / 2,
+                    volume: 100.0,
                 }),
             },
             InstrumentSlotConfig {
@@ -711,6 +791,7 @@ fn duck_test_engine(with_duck: bool) -> SynthEngine {
                 mixer: Some(InstrumentMixerConfig {
                     route: "fx_bus_1".to_string(),
                     pan_pos: DEFAULT_PAN_POSITIONS / 2,
+                    volume: 100.0,
                 }),
             },
         ],

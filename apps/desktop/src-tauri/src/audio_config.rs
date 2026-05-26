@@ -61,6 +61,8 @@ struct AudioInstrumentMixerConfig {
     route: Option<String>,
     #[serde(default)]
     pan_pos: Option<usize>,
+    #[serde(default)]
+    volume: Option<f32>,
 }
 
 #[derive(Deserialize)]
@@ -104,6 +106,7 @@ pub fn synth_payload(config: &AudioInstrumentsConfig) -> InstrumentsConfig {
                         .and_then(|m| m.route.clone())
                         .unwrap_or_else(|| "direct".to_string()),
                     pan_pos: slot.mixer.as_ref().and_then(|m| m.pan_pos).unwrap_or(4),
+                    volume: slot.mixer.as_ref().and_then(|m| m.volume).unwrap_or(100.0),
                 }),
             })
             .collect(),

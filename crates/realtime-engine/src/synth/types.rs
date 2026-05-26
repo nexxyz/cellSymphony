@@ -144,6 +144,12 @@ pub struct InstrumentMixerConfig {
     pub route: String,
     #[serde(rename = "panPos")]
     pub pan_pos: usize,
+    #[serde(default = "default_mixer_volume")]
+    pub volume: f32,
+}
+
+fn default_mixer_volume() -> f32 {
+    100.0
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

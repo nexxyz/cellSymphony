@@ -20,6 +20,7 @@ pub struct SynthEngine {
     sample_voices: [[SampleVoice; VOICES_PER_SLOT]; INSTRUMENT_SLOT_COUNT],
     slot_route: [usize; INSTRUMENT_SLOT_COUNT],
     slot_pan_pos: [usize; INSTRUMENT_SLOT_COUNT],
+    slot_volume: [f32; INSTRUMENT_SLOT_COUNT],
     bus_pan_pos: Vec<usize>,
     bus_mono_scratch: Vec<f32>,
     bus_slot_params: Vec<[FxBusParams; BUS_SLOTS_PER_BUS]>,
@@ -119,6 +120,7 @@ impl SynthEngine {
             sample_voices: [[SampleVoice::off(); VOICES_PER_SLOT]; INSTRUMENT_SLOT_COUNT],
             slot_route: [0; INSTRUMENT_SLOT_COUNT],
             slot_pan_pos: [DEFAULT_PAN_POSITIONS / 2; INSTRUMENT_SLOT_COUNT],
+            slot_volume: [1.0; INSTRUMENT_SLOT_COUNT],
             bus_pan_pos: Vec::new(),
             bus_mono_scratch: Vec::new(),
             bus_slot_params: Vec::new(),
@@ -178,6 +180,7 @@ impl SynthEngine {
                 if let Some(m) = slot.mixer {
                     self.slot_route[idx] = parse_route(&m.route);
                     self.slot_pan_pos[idx] = m.pan_pos.min(self.pan_positions - 1);
+                    self.slot_volume[idx] = (m.volume / 100.0).clamp(0.0, 1.0);
                 }
                 continue;
             }
@@ -185,6 +188,7 @@ impl SynthEngine {
             if let Some(m) = slot.mixer {
                 self.slot_route[idx] = parse_route(&m.route);
                 self.slot_pan_pos[idx] = m.pan_pos.min(self.pan_positions - 1);
+                self.slot_volume[idx] = (m.volume / 100.0).clamp(0.0, 1.0);
             }
         }
         let mut next_bus_pan_pos = Vec::new();
@@ -415,19 +419,20 @@ impl SynthEngine {
         let mut left = 0.0_f32;
         let mut right = 0.0_f32;
         for (slot, sample) in slot_out.iter().enumerate() {
+            let sample = *sample * self.slot_volume[slot];
             let route = self.slot_route[slot];
             if route == 0 {
                 let (gl, gr) = pan_gains(self.slot_pan_pos[slot], self.pan_positions);
-                left += *sample * gl;
-                right += *sample * gr;
+                left += sample * gl;
+                right += sample * gr;
             } else {
                 let bus = route - 1;
                 if bus < self.bus_mono_scratch.len() {
-                    self.bus_mono_scratch[bus] += *sample;
+                    self.bus_mono_scratch[bus] += sample;
                 } else {
                     let (gl, gr) = pan_gains(self.slot_pan_pos[slot], self.pan_positions);
-                    left += *sample * gl;
-                    right += *sample * gr;
+                    left += sample * gl;
+                    right += sample * gr;
                 }
             }
         }

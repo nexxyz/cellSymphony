@@ -41,14 +41,10 @@ const TOUCH_PAGES: TouchMode[] = ["mix", "pan", "fx"];
 function touchPageFromRow(y: number, current: TouchMode): TouchMode {
   const direct = TOUCH_PAGES[Math.floor(y)];
   if (direct) return direct;
-  const idx = TOUCH_PAGES.indexOf(current);
-  return TOUCH_PAGES[(idx + 1) % TOUCH_PAGES.length] ?? "mix";
+  return current === "none" ? "mix" : current;
 }
 
 function handleTouchGridPress<TState>(state: PlatformState<TState>, input: Extract<DeviceInput, { type: "grid_press" }>, effects: PlatformEffect[], deps: Deps<TState>): PlatformState<TState> {
-  if (input.x === GRID_WIDTH - 1) {
-    return { ...state, system: { ...state.system, touchMode: touchPageFromRow(input.y, state.system.touchMode) } };
-  }
   if (state.system.touchMode === "mix") {
     const inst = clamp(Math.floor(input.x), 0, Math.min(PLATFORM_CAPS.instrumentCount, GRID_WIDTH) - 1);
     const volume = Math.round(clamp(Math.floor(input.y), 0, GRID_HEIGHT - 1) / (GRID_HEIGHT - 1) * 100);
@@ -193,15 +189,15 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
   }
 
   if (input.type === "grid_press" && nextState.system.fnHeld && !nextState.system.shiftHeld && input.x === GRID_WIDTH - 1) {
-    const touchMode = nextState.system.touchMode === "none" ? "mix" : "none";
-    nextState.system = { ...nextState.system, touchMode, toast: makeToast(touchMode === "none" ? "Touch off" : "Touch") };
+    const touchMode = touchPageFromRow(input.y, nextState.system.touchMode);
+    nextState.system = { ...nextState.system, touchMode, toast: makeToast(`Touch: ${touchMode}`) };
     nextState.menu = { stack: [3], cursor: 0, editing: false };
     return { state: nextState, events, effects };
   }
 
   if (nextState.system.touchMode !== "none" && !nextState.system.fnHeld && !nextState.system.shiftHeld && input.type === "grid_press") {
     nextState = handleTouchGridPress(nextState, input, effects, deps);
-    deps.autoSaveEffect(nextState, effects);
+    if (state.system.touchMode === "mix" || state.system.touchMode === "pan") deps.autoSaveEffect(nextState, effects);
     return { state: nextState, events, effects };
   }
 
@@ -223,7 +219,7 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     }
     nextState = deps.writeAnyValue(nextState, "activePartIndex", idx);
     nextState = deps.reinitBehaviorState(nextState, "activePartIndex");
-    nextState.system = { ...nextState.system, pendingCloneSource: null, toast: makeToast(pending !== null && pending !== idx ? `Cloned P${pending + 1} → P${idx + 1}` : `Part ${idx + 1}`) };
+    nextState.system = { ...nextState.system, touchMode: "none", pendingCloneSource: null, toast: makeToast(pending !== null && pending !== idx ? `Cloned P${pending + 1} → P${idx + 1}` : `Part ${idx + 1}`) };
     return { state: nextState, events, effects };
   }
 

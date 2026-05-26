@@ -263,22 +263,21 @@ L4: Touch
 └── FX Page (group)
     ├── FX Type: [none | stutter | freeze | filter_sweep | pitch_shift]
     ├── effect parameters (visible by FX Type)
-    ├── Map to Grid (action)
-    └── Max Concurrent: [1..8] step 1  default 4
+    └── Map to Grid (action)
 ```
 
 Touch layer behavior:
 
-- Fn + rightmost grid column toggles `L4: Touch` from any layer: if Touch Page is `none`, it enables `mix`; otherwise it exits Touch by setting Touch Page to `none`.
-- When Fn is held, the left grid column shows part-selection options and the right grid column shows Touch page options. The active part and selected Touch page are highlighted.
-- With Touch enabled, rightmost grid column selects pages by row: row 0 = mix, row 1 = pan, row 2 = fx; lower rows cycle to the next page.
+- Fn + rightmost grid column selects Touch pages by row: row 0 = mix, row 1 = pan, row 2 = fx. Lower rows are unused.
+- Fn + leftmost grid column selects the active displayed part and exits Touch by setting Touch Page to `none`. Menu position is not changed by part selection.
+- When Fn is held, the left grid column shows part-selection options and the right grid column shows Touch page options. The active part and selected Touch page are highlighted; parts whose behavior is not `none` have a dim indicator; `none` parts stay dark.
 - `mix`: each column is an instrument; y=0 mutes, y=7 sets 100%, intermediate rows quantize per-slot `Mixer > Volume`.
-- `mix` LEDs show the current volume marker: green for direct-routed instruments and purple for FX-bus-routed instruments.
-- `pan`: each row is an instrument; x=0 is hard left and x=7 is hard right, setting per-slot `Mixer > Pan Pos`.
+- `mix` LEDs show the current volume marker in green.
+- `pan`: each row is an instrument; x=0 is hard left and x=7 is hard right, setting per-slot `Mixer > Pan Pos`. The marker is two cells wide so center positions are visible as the middle pair.
 - `fx`: grid cells trigger mapped momentary effects. Press starts the mapped effect and release stops it.
 - FX cells are mapped from `L4: Touch > FX Page`: select an `FX Type`, edit its visible parameters, then select `Map to Grid` and press a grid cell. The effect type and current parameter values are stored on that cell. Mapping `none` clears a cell.
 - FX assignments are global-output targets. Platform-core resolves grid semantics into audio commands; desktop forwards those commands without interpreting Touch/grid meaning; Rust applies the realtime DSP.
-- FX concurrency is limited by `Max Concurrent` (default 4). When all slots are active, additional assigned cells gray out and do not respond until a slot frees.
+- FX concurrency is fixed by platform capability at 4. When all slots are active, additional assigned cells gray out and do not respond until a slot frees.
 - Pressing a second cell with the same effect type replaces the existing active cell of that type and emits a release for the old cell before activating the new one.
 - FX LED colours are yellow for stutter, cyan for freeze, orange for filter_sweep, and magenta for pitch_shift. Assigned inactive cells are dim, active cells are bright, and limit-blocked cells are gray.
 - Grid releases in Touch mode are consumed by the Touch layer and do not reach the active behavior engine.

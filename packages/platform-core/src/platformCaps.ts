@@ -7,6 +7,7 @@ export type PlatformCapabilities = {
   instrumentCount: number;
   sampleSlotCount: number;
   busCount: number;
+  touchFxMaxConcurrent: number;
 };
 
 function toPositiveInt(value: unknown, key: keyof PlatformCapabilities): number {
@@ -25,7 +26,8 @@ export function validatePlatformCapabilities(raw: unknown): PlatformCapabilities
     partCount: toPositiveInt(source.partCount, "partCount"),
     instrumentCount: toPositiveInt(source.instrumentCount, "instrumentCount"),
     sampleSlotCount: toPositiveInt(source.sampleSlotCount, "sampleSlotCount"),
-    busCount: toPositiveInt(source.busCount, "busCount")
+    busCount: toPositiveInt(source.busCount, "busCount"),
+    touchFxMaxConcurrent: toPositiveInt(source.touchFxMaxConcurrent, "touchFxMaxConcurrent")
   };
 }
 

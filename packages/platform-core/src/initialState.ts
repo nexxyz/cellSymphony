@@ -104,8 +104,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
     },
     touchFx: {
       selected: { fxType: "stutter", params: defaultMomentaryFxParams("stutter") },
-      assignments: [],
-      maxConcurrent: 4
+      assignments: []
     }
   };
   const makePart = (idx: number): PartConfig => ({

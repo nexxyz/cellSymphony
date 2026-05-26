@@ -1,5 +1,6 @@
 import { GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contracts";
 import { clamp } from "./coreUtils";
+import { PLATFORM_CAPS } from "./platformCaps";
 import type { PlatformEffect, PlatformState } from "./platformTypes";
 import { makeToast } from "./toast";
 
@@ -13,8 +14,7 @@ export function activateMomentaryFx<TState>(state: PlatformState<TState>, x: num
   const activeFx = state.system.activeFx.filter((fx) => !(fx.cellX === cellX && fx.cellY === cellY));
   const replaced = activeFx.find((fx) => fx.fxType === config.fxType);
   const withoutSameType = activeFx.filter((fx) => fx.fxType !== config.fxType);
-  const maxConcurrent = clamp(Math.floor(Number((state.runtimeConfig as any).touchFx?.maxConcurrent ?? 4)), 1, 8);
-  if (!replaced && withoutSameType.length >= maxConcurrent) return state;
+  if (!replaced && withoutSameType.length >= PLATFORM_CAPS.touchFxMaxConcurrent) return state;
   if (replaced) effects.push({ type: "audio_command", command: { type: "momentary_fx_stop", id: momentaryFxId(replaced.cellX, replaced.cellY) } });
   const next = { cellX, cellY, fxType: config.fxType, config: structuredClone(config), activatedAtMs: Date.now() };
   effects.push({
@@ -43,7 +43,7 @@ export function applyFxAssignment<TState>(state: PlatformState<TState>, x: numbe
   if (!assign) return state;
   const cellX = clamp(Math.floor(x), 0, GRID_WIDTH - 1);
   const cellY = clamp(Math.floor(y), 0, GRID_HEIGHT - 1);
-  const touchFx = (state.runtimeConfig as any).touchFx ?? { selected: assign.config, assignments: [], maxConcurrent: 4 };
+  const touchFx = (state.runtimeConfig as any).touchFx ?? { selected: assign.config, assignments: [] };
   const assignments = Array.isArray(touchFx.assignments) ? [...touchFx.assignments] : [];
   const idx = assignments.findIndex((a) => a?.x === cellX && a?.y === cellY);
   if (assign.config.fxType === "none") {

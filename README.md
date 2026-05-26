@@ -67,7 +67,7 @@ The authoritative menu/control spec lives in `docs/menu-and-controls-spec.md`.
 - **L1: Life** — per-part behavior, step rate, behavior config, saved grid state, part naming.
 - **L2: Sense** — per-part scan mode, scan axis/unit/direction/sections, trigger routing, note mapping, modulation lanes.
 - **L3: Voice** — instruments, synth/sample/MIDI settings, sample assignment, mixer volume/pan/route, FX buses.
-- **L4: Touch** — Touch Page, BPM, Touch FX type/params, Map to Grid, Max Concurrent.
+- **L4: Touch** — Touch Page, BPM, Touch FX type/params, Map to Grid.
 - **Playback** — BPM.
 - **System** — presets/defaults/factory, sound settings, MIDI, UI settings, contextual help.
 
@@ -75,7 +75,7 @@ The authoritative menu/control spec lives in `docs/menu-and-controls-spec.md`.
 
 ## Touch Layer
 
-`Fn + rightmost grid column` toggles Touch on/off from anywhere.
+`Fn + rightmost grid column` selects Touch pages. `Fn + leftmost grid column` selects a part to display and exits Touch.
 
 - **mix**: columns are instruments, y=0 mutes and y=7 sets 100% volume.
 - **pan**: rows are instruments, x=0 is hard left and x=7 is hard right.
@@ -88,7 +88,7 @@ Touch FX maps cells to global-output momentary DSP in the Rust realtime engine:
 - `filter_sweep`
 - `pitch_shift`
 
-To map FX, go to `L4: Touch > FX Page`, select an effect type and parameters, choose `Map to Grid`, then press a grid cell. `Max Concurrent` limits simultaneous held effects; same effect type presses replace the existing active cell.
+To map FX, go to `L4: Touch > FX Page`, select an effect type and parameters, choose `Map to Grid`, then press a grid cell. The platform capability limit is 4 simultaneous held effects; same effect type presses replace the existing active cell.
 
 ---
 

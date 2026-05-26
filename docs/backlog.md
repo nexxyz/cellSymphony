@@ -394,14 +394,14 @@ Also add per-section note mapping: restart note mapping from "First note" after 
 | **Depends on** | REQ-13 (menu hooks for new layer) |
 | **Source** | lines 36–39 |
 
-New L4 layer: "Touch" / "Performance". Contains grid-mode pages (switched via rightmost column) for mixing, panning, and momentary effects, plus BPM as a regular menu parameter.
+New L4 layer: "Touch" / "Performance". Contains grid-mode pages (switched via Fn+rightmost column) for mixing, panning, and momentary effects, plus BPM as a regular menu parameter.
 
 **Pages (grid modes):**
-- **Mix (volume/mute):** Each row/column = an instrument. Y axis = volume (bottom row = mute, top row = max volume). Direct-instrument marker colour = green. FX-bus-routed marker colour = purple.
-- **Pan:** Each row/column = an instrument. X axis = pan position (left→right).
+- **Mix (volume/mute):** Each row/column = an instrument. Y axis = volume (bottom row = mute, top row = max volume). Marker colour = green.
+- **Pan:** Each row/column = an instrument. X axis = pan position (left→right), shown with a two-cell marker.
 - **Momentary FX:** Grid cells trigger effects per REQ-06.
 
-**Navigation:** FN+rightmost column jumps to Touch from any layer. Within Touch, rightmost column switches between pages (rows = pages).
+**Navigation:** FN+rightmost column selects Touch pages (rows = pages). FN+leftmost column selects a part and exits Touch.
 
 **Aux encoders:** User-mapped assignments stay active across all Touch pages.
 
@@ -409,14 +409,14 @@ New L4 layer: "Touch" / "Performance". Contains grid-mode pages (switched via ri
 
 **Acceptance:**
 - L4 appears in layer navigation labelled "Touch".
-- Rightmost column switches pages: Mix, Pan, FX.
-- Mix page: volume grid mode with mute at bottom. Green marker for direct, purple for FX-bus.
-- Pan page: pan position grid mode.
+- FN+rightmost column switches pages: Mix, Pan, FX.
+- Mix page: volume grid mode with mute at bottom and green markers.
+- Pan page: pan position grid mode with two-cell markers.
 - BPM parameter exists in Touch menu section.
 - FN+rightmost column jumps to Touch from any layer.
 - Aux encoder mappings work consistently across all Touch pages.
 
-**Implemented:** `L4: Touch` menu with Touch Page and BPM, Fn+rightmost jump, rightmost-column page selection, Mix volume/mute grid, Pan grid, FX grid rendering, and Touch LED overlay rendering.
+**Implemented:** `L4: Touch` menu with Touch Page and BPM, Fn+rightmost page selection, Fn+leftmost part selection/Touch exit, Mix volume/mute grid, Pan grid, FX grid rendering, and Touch LED overlay rendering.
 
 ---
 

@@ -159,7 +159,7 @@ export type RuntimeConfig = {
   activePartIndex: number; parts: PartConfig[]; numericDisplayMode: NumericDisplayMode; ghostCells: boolean;
   instruments: InstrumentSlotConfig[];
   mixer?: { buses: FxBusConfig[] };
-  touchFx?: { selected: MomentaryFxConfig; assignments: FxCellConfig[]; maxConcurrent: number };
+  touchFx?: { selected: MomentaryFxConfig; assignments: FxCellConfig[] };
 };
 
 export type ActionSpec =
