@@ -1,0 +1,25 @@
+import { PLATFORM_CAPS } from "./platformCaps";
+
+export const DEFAULT_VELOCITY_HIGH = 120;
+export const DEFAULT_VELOCITY_MEDIUM = 85;
+export const DEFAULT_VELOCITY_LOW = 45;
+export const DEFAULT_VELOCITY = 100;
+export const DEFAULT_BPM = 120;
+export const DEFAULT_NOTE_LENGTH_MS = 120;
+export const DEFAULT_MIDI_DURATION_MS = 120;
+
+export const DEFAULT_DISPLAY_BRIGHTNESS = 75;
+export const DEFAULT_GRID_BRIGHTNESS = 75;
+export const DEFAULT_BUTTON_BRIGHTNESS = 75;
+export const DEFAULT_MASTER_VOLUME = 73;
+export const DEFAULT_SCREEN_SLEEP_SECONDS = 60;
+
+export const DEFAULT_PITCH_STARTING_NOTE = 60;
+export const DEFAULT_PITCH_LOWEST_NOTE = 36;
+export const DEFAULT_PITCH_HIGHEST_NOTE = 74;
+
+export const DEFAULT_PAN_POS = Math.floor(PLATFORM_CAPS.gridWidth / 2);
+export const DEFAULT_VOLUME = 100;
+
+export const DEFAULT_VELOCITY_LEVELS = { high: DEFAULT_VELOCITY_HIGH, medium: DEFAULT_VELOCITY_MEDIUM, low: DEFAULT_VELOCITY_LOW };
+export const DEFAULT_MIDI_ENGINE = { velocity: DEFAULT_VELOCITY, durationMs: DEFAULT_MIDI_DURATION_MS };

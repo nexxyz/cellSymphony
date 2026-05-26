@@ -36,6 +36,12 @@ pub enum VoiceStealingMode {
     Aggressive,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct AudioLoadStatus {
+    pub ratio: f32,
+    pub voice_steal: bool,
+}
+
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct EnvConfig {
     #[serde(rename = "attackMs")]

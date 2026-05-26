@@ -44,6 +44,8 @@ export type LedMatrixFrame = {
   cells: LedCell[];
 };
 
+export type GridInteraction = "paint" | "momentary";
+
 export type TransportFrame = {
   playing: boolean;
   bpm: number;
@@ -57,4 +59,5 @@ export type SimulatorFrame = {
   leds: LedMatrixFrame;
   transport: TransportFrame;
   activeBehavior: string;
+  gridInteraction: GridInteraction;
 };

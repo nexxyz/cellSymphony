@@ -131,7 +131,7 @@ for (const t of enumTargets) {
     const token = option.toLowerCase();
     const normalized = token.replaceAll("_", " ");
     const aliases = new Set<string>([token, normalized]);
-    if (t.key === "key:scanMode" && token === "immediate") aliases.add("no scan");
+    if (t.key === "key:scanMode" && token === "immediate") aliases.add("none");
     let found = false;
     for (const a of aliases) {
       if (text.includes(a)) {

@@ -1,4 +1,4 @@
-import type { DeviceInput } from "@cellsymphony/device-contracts";
+import type { DeviceInput, GridInteraction } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 
 export type CellTriggerType = "activate" | "stable" | "deactivate" | "scanned" | "none";
@@ -35,6 +35,7 @@ export interface BehaviorEngine<State, Config> {
   deserialize(data: unknown): State;
   configMenu?(state: State): BehaviorConfigItem[];
   interpretInputTransitions?: boolean;
+  gridInteraction?: GridInteraction;
 }
 
 export { registerBehavior, getBehavior, listBehaviorIds } from "./registry";

@@ -98,7 +98,7 @@ test("menu navigation edits runtime config through hardware-parity inputs", () =
   // System -> Audio -> Master Vol
   selectLabel("System");
   press();
-  selectLabel("Audio");
+  selectLabel("Sound");
   press();
   press();
   turn(-1);

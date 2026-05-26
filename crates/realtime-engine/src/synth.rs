@@ -7,7 +7,7 @@ mod types;
 
 pub use engine::SynthEngine;
 pub use types::{
-    default_synth_config, EnvConfig, FilterConfig, FilterType, FxBusConfig, FxBusSlotConfig,
+    default_synth_config, AudioLoadStatus, EnvConfig, FilterConfig, FilterType, FxBusConfig, FxBusSlotConfig,
     InstrumentMixerConfig, InstrumentSlotConfig, InstrumentsConfig, MixerConfig, OscConfig,
     SampleBankConfig, SampleBuffer, SampleSlotConfig, SynthConfig, VoiceStealingMode,
     BUS_SLOTS_PER_BUS, DEFAULT_PAN_POSITIONS, INSTRUMENT_SLOT_COUNT, SAMPLE_SLOTS_PER_INSTRUMENT,

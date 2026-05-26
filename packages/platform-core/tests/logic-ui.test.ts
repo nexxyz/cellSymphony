@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { DeviceInput } from "@cellsymphony/device-contracts";
-import { GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contracts";
+import { GRID_DOMAIN, GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contracts";
+import { keysBehavior } from "@cellsymphony/behaviors-keys";
 import { createInitialState, OLED_TEXT_COLUMNS, routeInput, tick, toOledLines, toSimulatorFrame } from "../src/index";
+import { pitchFromIntent } from "../src/musicTransforms";
 
 type MockState = {
   cells: boolean[];
@@ -96,7 +98,7 @@ test("edit marker uses compact star prefix", () => {
 
   selectLabel("System");
   press();
-  selectLabel("Audio");
+  selectLabel("Sound");
   press();
   // Master Vol
   press();
@@ -104,6 +106,75 @@ test("edit marker uses compact star prefix", () => {
   const hasStarEdit = frame.display.lines.some((line) => line.includes("*Vol:"));
   assert.equal(hasStarEdit, true);
 });
+
+test("OLED renders audio load indicator colors", () => {
+  const state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+
+  const yellow = toSimulatorFrame(state, mockBehavior, { audioLoad: { ratio: 0.7, voiceSteal: false } }).oled!;
+  const red = toSimulatorFrame(state, mockBehavior, { audioLoad: { ratio: 0.9, voiceSteal: false } }).oled!;
+  const idle = toSimulatorFrame(state, mockBehavior, { audioLoad: { ratio: 0.1, voiceSteal: false } }).oled!;
+
+  assert.equal(pixel565(yellow.pixels, 123, 5), 0xffe0);
+  assert.equal(pixel565(red.pixels, 123, 5), 0xf800);
+  assert.notEqual(pixel565(idle.pixels, 123, 5), 0xffe0);
+  assert.notEqual(pixel565(idle.pixels, 123, 5), 0xf800);
+});
+
+test("simulator frame exposes behavior grid interaction semantics", () => {
+  const paintState = createInitialState(mockBehavior);
+  const keysState = createInitialState(keysBehavior);
+
+  assert.equal(toSimulatorFrame(paintState, mockBehavior).gridInteraction, "paint");
+  assert.equal(toSimulatorFrame(keysState, keysBehavior).gridInteraction, "momentary");
+});
+
+test("Fn+rightmost grid column jumps to Touch layer", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+
+  state = routeInput(state, { type: "button_fn", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "grid_press", x: GRID_WIDTH - 1, y: 0 }, mockBehavior).state;
+
+  assert.equal(state.system.touchMode, "mix");
+  assert.deepEqual(state.menu.stack, [3]);
+  assert.equal(toSimulatorFrame(state, mockBehavior).display.page, "L4: Touch");
+});
+
+test("Touch grid updates mixer volume and pan", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.system.touchMode = "mix";
+
+  state = routeInput(state, { type: "grid_press", x: 1, y: 0 }, mockBehavior).state;
+  assert.equal(state.runtimeConfig.instruments[1]?.mixer?.volume, 0);
+
+  state = routeInput(state, { type: "grid_press", x: GRID_WIDTH - 1, y: 1 }, mockBehavior).state;
+  assert.equal(state.system.touchMode, "pan");
+
+  state = routeInput(state, { type: "grid_press", x: 2, y: 1 }, mockBehavior).state;
+  assert.equal(state.runtimeConfig.instruments[1]?.mixer?.panPos, 2);
+});
+
+test("Touch mix LEDs show direct and FX-routed volume markers", () => {
+  const state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.system.touchMode = "mix";
+  state.runtimeConfig.instruments[0]!.mixer = { route: "direct", volume: 100, panPos: 4 };
+  state.runtimeConfig.instruments[1]!.mixer = { route: "fx_bus_1", volume: 0, panPos: 4 };
+
+  const cells = toSimulatorFrame(state, mockBehavior).leds.cells;
+  const direct = cells[GRID_DOMAIN.toDisplayIndex({ x: 0, y: GRID_HEIGHT - 1 })]!;
+  const fx = cells[GRID_DOMAIN.toDisplayIndex({ x: 1, y: 0 })]!;
+
+  assert.ok(direct.g > direct.r && direct.g > direct.b);
+  assert.ok(fx.r > fx.g && fx.b > fx.g);
+});
+
+function pixel565(pixels: Uint8Array, x: number, y: number): number {
+  const offset = (y * 128 + x) * 2;
+  return ((pixels[offset] ?? 0) << 8) | (pixels[offset + 1] ?? 0);
+}
 
 test("modulation mode labels are user-facing", () => {
   let state = createInitialState(mockBehavior);
@@ -155,6 +226,26 @@ test("default State Notes is on for all parts", () => {
   for (const part of parts) {
     assert.equal(part?.l2?.stateEnabled, true);
   }
+});
+
+test("section restart makes pitch mapping local to scan section", () => {
+  const state = createInitialState(mockBehavior) as any;
+  const cfg = state.runtimeConfig;
+  cfg.scanMode = "scanning";
+  cfg.scanAxis = "rows";
+  cfg.scanSections = "2";
+  cfg.x.pitch.enabled = false;
+  cfg.y.pitch.enabled = true;
+  cfg.y.pitch.steps = 1;
+  cfg.y.pitch.restartEachSection = false;
+
+  const absolute = pitchFromIntent({ x: 0, y: 4 }, cfg, 60);
+  cfg.y.pitch.restartEachSection = true;
+  const firstSection = pitchFromIntent({ x: 0, y: 0 }, cfg, 60);
+  const secondSection = pitchFromIntent({ x: 0, y: 4 }, cfg, 60);
+
+  assert.notEqual(absolute, firstSection);
+  assert.equal(secondSection, firstSection);
 });
 
 test("config save default requires confirmation before emitting effect", () => {

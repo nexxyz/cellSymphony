@@ -5,15 +5,17 @@ export type ScanMode = "immediate" | "scanning";
 export type ScanAxis = "rows" | "columns";
 export type Direction = "forward" | "reverse";
 export type NoteUnit = "1/16" | "1/8" | "1/4" | "1/2" | "1/1";
+export type SectionCount = "1" | "2" | "4" | "8";
 export type Curve = "linear" | "curve";
 export type VoiceStealingMode = "off" | "lenient" | "balanced" | "aggressive";
 export type NumericDisplayMode = "bar" | "numbers" | "bar+numbers";
+export type TouchMode = "none" | "mix" | "pan" | "fx";
 export type BarValue = { frac: number; numChars: number };
 export type ScaleId = "chromatic" | "major" | "natural_minor" | "dorian" | "mixolydian" | "major_pentatonic" | "minor_pentatonic" | "harmonic_minor";
 export type RootName = "C" | "C#" | "D" | "D#" | "E" | "F" | "F#" | "G" | "G#" | "A" | "A#" | "B";
 type OutOfRangeMode = "clamp" | "wrap";
 type PitchSettings = { startingNote: number; lowestNote: number; highestNote: number; outOfRange: OutOfRangeMode; scale: ScaleId; root: RootName };
-type PitchLaneConfig = { enabled: boolean; steps: number };
+type PitchLaneConfig = { enabled: boolean; steps: number; restartEachSection: boolean };
 export type ValueLaneConfig = { enabled: boolean; from: number; to: number; gridOffset: number; curve: Curve };
 type AxisModConfig = { pitch: PitchLaneConfig; velocity: ValueLaneConfig; filterCutoff: ValueLaneConfig; filterResonance: ValueLaneConfig };
 type TriggerAction = "none" | "note_on" | "note_off";
@@ -48,7 +50,7 @@ export type SynthConfig = {
 };
 
 export type InstrumentSlotConfig = {
-  type: "synth" | "sample" | "midi";
+  type: "synth" | "sample" | "midi" | "none";
   autoName: boolean;
   name: string;
   noteBehavior: "oneshot" | "hold";
@@ -71,7 +73,7 @@ export type InstrumentSlotConfig = {
     velocity: number;
     durationMs: number;
   };
-  mixer?: { route: string; panPos: number };
+  mixer?: { route: string; panPos: number; volume: number };
 };
 
 export type FxBusEffectType =
@@ -111,6 +113,7 @@ export type PartSenseConfig = {
   scanAxis: ScanAxis;
   scanUnit: NoteUnit;
   scanDirection: Direction;
+  scanSections: SectionCount;
   eventEnabled: boolean;
   stateEnabled: boolean;
   pitch: PitchSettings;
@@ -142,10 +145,10 @@ export type RuntimeConfig = {
   masterVolume: number; displayBrightness: number; gridBrightness: number; buttonBrightness: number; screenSleepSeconds: number;
   midi: { enabled: boolean; outId: string | null; clockOutEnabled: boolean; inId: string | null; clockInEnabled: boolean; syncMode: "internal" | "external"; respondToStartStop: boolean };
   sound: { noteLengthMs: number; velocityScalePct: number; velocityCurve: "linear" | "soft" | "hard"; voiceStealingMode: VoiceStealingMode };
-  scanMode: ScanMode; scanAxis: ScanAxis; scanUnit: NoteUnit; scanDirection: Direction; algorithmStepUnit: NoteUnit;
+  scanMode: ScanMode; scanAxis: ScanAxis; scanUnit: NoteUnit; scanDirection: Direction; scanSections: SectionCount; algorithmStepUnit: NoteUnit;
   activeBehavior: string; autoSaveDefault: boolean; behaviorConfig: Record<string, unknown>; eventEnabled: boolean; stateEnabled: boolean;
   pitch: PitchSettings; x: AxisModConfig; y: AxisModConfig;
-  activePartIndex: number; parts: PartConfig[]; numericDisplayMode: NumericDisplayMode;
+  activePartIndex: number; parts: PartConfig[]; numericDisplayMode: NumericDisplayMode; ghostCells: boolean;
   instruments: InstrumentSlotConfig[];
   mixer?: { buses: FxBusConfig[] };
 };
@@ -163,7 +166,8 @@ export type ActionSpec =
   | { type: "sample_assign_enter"; instrumentSlot: number; sampleSlot: number }
   | { type: "sample_assign_exit" }
   | { type: "midi_select_output"; id: string | null } | { type: "midi_select_input"; id: string | null }
-  | { type: "midi_panic" } | { type: "behavior_action"; behaviorId: string; actionType: string };
+  | { type: "midi_panic" } | { type: "behavior_action"; behaviorId: string; actionType: string }
+  | { type: "instrument_clone"; slot: number } | { type: "instrument_reset"; slot: number };
 
 export type MenuState = { stack: number[]; cursor: number; editing: boolean };
 export type ConfigPayload = { activeBehavior: string; runtimeConfig: RuntimeConfig; mappingConfig: MappingConfig };
@@ -189,6 +193,7 @@ export type SystemState = {
   midiOutputs: MidiPortInfo[]; midiInputs: MidiPortInfo[]; midiStatus: string | null; externalPpqnPulse: number; pendingResync: boolean; pausedByUser: boolean;
   oledMode: "normal" | "splash" | "off"; oledSplashText: string; oledSplashUntilMs: number; lastInteractionMs: number; auxBindings: Record<string, AuxBinding | null>;
   heldNotes: string[];
+  pendingCloneSource: number | null;
   sampleAssign: { instrumentSlot: number; sampleSlot: number } | null;
   sampleAssignLastPress: { x: number; y: number; atMs: number } | null;
   sampleBrowser: {
@@ -197,6 +202,7 @@ export type SystemState = {
     dir: string;
     entries: Array<{ name: string; path: string; isDir: boolean }>;
   } | null;
+  touchMode: TouchMode;
 };
 
 export type PlatformEffectBase =

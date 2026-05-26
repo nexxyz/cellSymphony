@@ -73,8 +73,10 @@ test("behavior config number param edit via menu", () => {
   state.system.oledMode = "normal";
   state.runtimeConfig.activeBehavior = "life";
 
-  // Navigate: L1: Life → "Spawn Count"
+  // Navigate: L1: Life → P1: mock → "Spawn Count"
   state = selectLabel(state, "L1: Life");
+  state = press(state).state;
+  state = selectLabel(state, "P1: mock");
   state = press(state).state;
   state = selectLabel(state, "Spawn Count");
   state = press(state).state; // enter edit mode
@@ -90,9 +92,12 @@ test("behavior config enum param edit via menu", () => {
   state.system.oledMode = "normal";
   state.runtimeConfig.activeBehavior = "life";
   (state.runtimeConfig.behaviorConfig as any).life = { randomCellsPerTick: 0, randomTickInterval: 1 };
+  ((state.runtimeConfig as any).parts[0].l1.behaviorConfig as any) = { life: { randomCellsPerTick: 0, randomTickInterval: 1 } };
 
-  // L1: Life → "Spawn Interval" (number)
+  // L1: Life → P1: mock → "Spawn Interval" (number)
   state = selectLabel(state, "L1: Life");
+  state = press(state).state;
+  state = selectLabel(state, "P1: mock");
   state = press(state).state;
   state = selectLabel(state, "Spawn Interval");
   state = press(state).state; // enter edit
@@ -110,7 +115,7 @@ test("FX type selection seeds editable default parameters", () => {
   state = press(state).state;
   state = selectLabel(state, "FX Buses");
   state = press(state).state;
-  state = selectLabel(state, "Bus 1");
+  state = selectLabel(state, "B1: (none)");
   state = press(state).state;
   state = selectLabel(state, "Slot 1");
   state = press(state).state;
@@ -134,7 +139,7 @@ test("newly selected FX parameters edit as finite numbers", () => {
   state = press(state).state;
   state = selectLabel(state, "FX Buses");
   state = press(state).state;
-  state = selectLabel(state, "Bus 1");
+  state = selectLabel(state, "B1: (none)");
   state = press(state).state;
   state = selectLabel(state, "Slot 1");
   state = press(state).state;
@@ -181,13 +186,13 @@ test("FX compressor type selection seeds editable default parameters", () => {
   state = press(state).state;
   state = selectLabel(state, "FX Buses");
   state = press(state).state;
-  state = selectLabel(state, "Bus 1");
+  state = selectLabel(state, "B1: (none)");
   state = press(state).state; // enter FX Bus 1
   state = press(state).state; // enter Slot 1
   state = selectLabel(state, "Type");
   state = press(state).state; // enter edit
-  // Turn from "none" past: reverb(1), delay(2), tremolo(3), vibrato(4), auto_pan(5), chorus(6), flanger(7), wah(8), filter_lfo(9), duck(10), bitcrusher(11), saturator(12), distortion(13), glitch(14), compressor(15), eq(16)
-  for (let i = 0; i < 15; i += 1) {
+  // Turn from "none" past: reverb(1), delay(2), tremolo(3), chorus(4), flanger(5), vibrato(6), auto_pan(7), filter_lfo(8), wah(9), eq(10), compressor(11)
+  for (let i = 0; i < 11; i += 1) {
     const r2 = turn(state, 1);
     state = r2.state;
   }
@@ -209,13 +214,13 @@ test("FX eq type selection seeds editable default parameters", () => {
   state = press(state).state;
   state = selectLabel(state, "FX Buses");
   state = press(state).state;
-  state = selectLabel(state, "Bus 1");
+  state = selectLabel(state, "B1: (none)");
   state = press(state).state; // enter FX Bus 1
   state = press(state).state; // enter Slot 1
   state = selectLabel(state, "Type");
   state = press(state).state; // enter edit
-  // Turn past none, reverb, delay, tremolo, vibrato, auto_pan, chorus, flanger, wah, filter_lfo, duck, bitcrusher, saturator, distortion, glitch = 15 turns to compressor, 16 to eq
-  for (let i = 0; i < 16; i += 1) {
+  // Turn past none, reverb, delay, tremolo, chorus, flanger, vibrato, auto_pan, filter_lfo, wah = 10 turns to eq
+  for (let i = 0; i < 10; i += 1) {
     const r2 = turn(state, 1);
     state = r2.state;
   }
@@ -270,13 +275,15 @@ test("behavior config persists independently per behavior", () => {
     life: { randomCellsPerTick: 5, randomTickInterval: 3 },
     brain: { fireThreshold: 3, randomSeedCells: 0 }
   } as any;
+  ((state.runtimeConfig as any).parts[0].l1.behaviorConfig as any) = { randomCellsPerTick: 5, randomTickInterval: 3 };
 
   // Switch to brain
   state = selectLabel(state, "L1: Life");
   state = press(state).state;
+  state = selectLabel(state, "P1: mock");
+  state = press(state).state;
 
   // The "Behavior" menu item should be at a specific position
-  // Let's navigate more directly by finding it
   state = selectLabel(state, "Behavior");
   state = press(state).state; // enter edit mode for Behavior enum
 
@@ -303,7 +310,7 @@ test("autoSaveDefault on emits store_save_default on value edit", () => {
   // Navigate to System → Audio → Master Vol
   state = selectLabel(state, "System");
   state = press(state).state;
-  state = selectLabel(state, "Audio");
+  state = selectLabel(state, "Sound");
   state = press(state).state;
   state = press(state).state; // enter edit mode for Master Vol
   const r = turn(state, -1); // change value
@@ -327,7 +334,7 @@ test("autoSaveDefault off does not emit store_save_default", () => {
 
   state = selectLabel(state, "System");
   state = press(state).state;
-  state = selectLabel(state, "Audio");
+  state = selectLabel(state, "Sound");
   state = press(state).state;
   state = press(state).state; // enter edit
   const r = turn(state, -1);
@@ -367,7 +374,7 @@ test("auto-save payload contains post-edit state", () => {
 
   state = selectLabel(state, "System");
   state = press(state).state;
-  state = selectLabel(state, "Audio");
+  state = selectLabel(state, "Sound");
   state = press(state).state;
   state = press(state).state;
   const r = turn(state, 1);
@@ -387,8 +394,11 @@ test("activeBehavior change with autoSaveDefault on emits store_save_default", (
   state.system.oledMode = "normal";
   state.runtimeConfig.autoSaveDefault = true;
   state.runtimeConfig.activeBehavior = "sequencer";
+  ((state.runtimeConfig as any).parts[0] as any).l1.behaviorId = "sequencer";
 
   state = selectLabel(state, "L1: Life");
+  state = press(state).state;
+  state = selectLabel(state, "P1: mock");
   state = press(state).state;
   state = selectLabel(state, "Behavior");
   state = press(state).state; // enter edit
@@ -526,5 +536,108 @@ test("midi_status updates system midi status", () => {
   assert.equal(ok.state.system.midiStatus, "MIDI ok");
   const bad = applyStoreResult(state, { type: "midi_status", ok: false, message: "failed" } as any, mockBehavior);
   assert.equal(bad.state.system.midiStatus, "failed");
+});
+
+test("FN+SHIFT+rightmost grid press stores clone source", () => {
+  let state = makeState();
+  state = routeInput(state, { type: "button_fn", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "button_shift", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "grid_press", x: 7, y: 1 }, mockBehavior).state;
+  assert.equal(state.system.pendingCloneSource, 1);
+  assert.ok(state.system.toast?.message.includes("Clone P2"));
+});
+
+test("FN+left column with pending clone source executes clone", () => {
+  let state = makeState();
+  const origP1Beh = ((state.runtimeConfig as any).parts[0] as any).l1.behaviorId;
+  const origP3Beh = ((state.runtimeConfig as any).parts[2] as any).l1.behaviorId;
+  assert.notEqual(origP1Beh, origP3Beh);
+
+  state.system.pendingCloneSource = 0; // source = P1
+  state = routeInput(state, { type: "button_fn", pressed: true }, mockBehavior).state;
+  const result = routeInput(state, { type: "grid_press", x: 0, y: 2 }, mockBehavior);
+  state = result.state;
+  assert.equal(state.system.pendingCloneSource, null);
+  assert.equal(((state.runtimeConfig as any).parts[2] as any).l1.behaviorId, origP1Beh);
+  assert.equal(((state.runtimeConfig as any).activePartIndex), 2);
+  assert.ok(state.system.toast?.message.includes("Cloned P1 → P3"));
+});
+
+test("FN+left column without pending clone source just selects part", () => {
+  let state = makeState();
+  state = routeInput(state, { type: "button_fn", pressed: true }, mockBehavior).state;
+  const result = routeInput(state, { type: "grid_press", x: 0, y: 5 }, mockBehavior);
+  assert.equal(result.state.system.pendingCloneSource, null);
+  assert.equal((result.state.runtimeConfig as any).activePartIndex, 5);
+  assert.equal(result.state.system.toast?.message, "Part 6");
+});
+
+test("FN+SHIFT+BACK resets active part to none behavior", () => {
+  let state = makeState();
+  const activeIdx = (state.runtimeConfig as any).activePartIndex;
+  (state.runtimeConfig as any).parts[activeIdx].l1.behaviorId = "life";
+
+  state = routeInput(state, { type: "button_fn", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "button_shift", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "button_a", pressed: true }, mockBehavior).state;
+
+  assert.equal(((state.runtimeConfig as any).parts[activeIdx] as any).l1.behaviorId, "none");
+  assert.equal(state.activeBehavior, "none");
+  assert.ok(state.system.toast?.message.includes("reset"));
+});
+
+test("factory reset defaults match REQ-14 specification", () => {
+  let state = makeState();
+  state.runtimeConfig.activeBehavior = "sequencer";
+  state.activeBehavior = "sequencer";
+  state.system.confirm = {
+    kind: "load_factory",
+    action: { kind: "factory_load" },
+    cursor: 0,
+    options: ["Yes", "No"],
+    scroll: 0
+  };
+  const result = routeInput(state, { type: "encoder_press" } as DeviceInput, mockBehavior);
+  state = result.state;
+  const rc: any = state.runtimeConfig;
+
+  // P1: life with auto-spawn=12
+  assert.equal(rc.parts[0].l1.behaviorId, "life");
+  assert.equal(rc.parts[0].l1.behaviorConfig.randomCellsPerTick, 12);
+  assert.equal(rc.parts[0].l2.mapping.activate.slot, 0);
+
+  // P2: sequencer with horizontal scan, scanned→I2
+  assert.equal(rc.parts[1].l1.behaviorId, "sequencer");
+  assert.equal(rc.parts[1].l2.scanAxis, "rows");
+  assert.equal(rc.parts[1].l2.mapping.scanned.slot, 1);
+
+  // P3–P8: none
+  for (let i = 2; i < 8; i += 1) {
+    assert.equal(rc.parts[i].l1.behaviorId, "none");
+    assert.equal(rc.parts[i].l2.mapping.activate.slot, 0);
+  }
+
+  // I1: synth soft pad, routed→FX Bus 1
+  assert.equal(rc.instruments[0].type, "synth");
+  assert.equal(rc.instruments[0].mixer.route, "fx_bus_1");
+
+  // I2: perc hit, routed direct
+  assert.equal(rc.instruments[1].type, "synth");
+  assert.equal(rc.instruments[1].mixer.route, "direct");
+
+  // I3–I8: none
+  for (let i = 2; i < 8; i += 1) {
+    assert.equal(rc.instruments[i].type, "none");
+  }
+
+  // FX Bus 1 (bus 0): delay + duck
+  assert.equal(rc.mixer.buses[0].slot1.type, "delay");
+  assert.equal(rc.mixer.buses[0].slot2.type, "duck");
+
+  // All other buses: no effects
+  for (let i = 1; i < rc.mixer.buses.length; i += 1) {
+    assert.equal(rc.mixer.buses[i].slot1.type, "none");
+    assert.equal(rc.mixer.buses[i].slot2.type, "none");
+  }
 });
 

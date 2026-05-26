@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
-const tsvPath = resolve(process.cwd(), "..", "..", "docs", "menu-help-texts.tsv");
+const tsvPath = resolve(process.cwd(), "resources", "menu-help-texts.tsv");
 const outPath = resolve(process.cwd(), "src", "menuHelp.generated.ts");
 
 const raw = readFileSync(tsvPath, "utf8");

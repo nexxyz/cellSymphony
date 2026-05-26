@@ -1,10 +1,11 @@
-import type { BehaviorEngine } from "@cellsymphony/behavior-api";
+import { getBehavior, type BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { TransportFrame } from "@cellsymphony/device-contracts";
-import { clamp, mod, readNestedValue, readValue, writeNestedValue, writeValue, deriveBusAutoName, derivePartAutoName, deriveInstAutoName } from "./coreUtils";
+import { clamp, mod, readNestedValue, readValue, writeNestedValue, writeValue, deriveBusAutoName, derivePartAutoName, deriveInstAutoName, overrideFromPart, preferMapping } from "./coreUtils";
 import { defaultFxParam, defaultFxParams, isBusEffectType } from "./fxDefaults";
 import type { ConfigPayload, MenuNode, PlatformState, SystemState } from "./platformTypes";
-import { clampPartIndex } from "./platformCaps";
+import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
+import { SYNTH_PRESETS } from "./synthPresets";
 
 type AnyState = PlatformState<any>;
 
@@ -20,6 +21,7 @@ function syncLegacyFromActivePart<TState>(state: PlatformState<TState>): Platfor
     scanAxis: part.l2.scanAxis,
     scanUnit: part.l2.scanUnit,
     scanDirection: part.l2.scanDirection,
+    scanSections: part.l2.scanSections ?? "1",
     eventEnabled: part.l2.eventEnabled,
     stateEnabled: part.l2.stateEnabled,
     pitch: structuredClone(part.l2.pitch),
@@ -30,15 +32,7 @@ function syncLegacyFromActivePart<TState>(state: PlatformState<TState>): Platfor
       [part.l1.behaviorId]: { ...(part.l1.behaviorConfig ?? {}) }
     }
   };
-  const nextMapping: any = {
-    ...(state.mappingConfig as any),
-    activate: { ...(state.mappingConfig as any).activate, action: part.l2.mapping.activate.action, channel: part.l2.mapping.activate.slot },
-    stable: { ...(state.mappingConfig as any).stable, action: part.l2.mapping.stable.action, channel: part.l2.mapping.stable.slot },
-    deactivate: { ...(state.mappingConfig as any).deactivate, action: part.l2.mapping.deactivate.action, channel: part.l2.mapping.deactivate.slot },
-    scanned: { ...(state.mappingConfig as any).scanned, action: part.l2.mapping.scanned.action, channel: part.l2.mapping.scanned.slot },
-    scanned_empty: { ...(state.mappingConfig as any).scanned_empty, action: part.l2.mapping.scanned_empty.action, channel: part.l2.mapping.scanned_empty.slot }
-  };
-  return { ...state, runtimeConfig: nextRuntime, mappingConfig: nextMapping };
+  return { ...state, runtimeConfig: nextRuntime, mappingConfig: overrideFromPart(state.mappingConfig, part) as any };
 }
 
 function syncActivePartFromLegacy<TState>(state: PlatformState<TState>): PlatformState<TState> {
@@ -47,6 +41,7 @@ function syncActivePartFromLegacy<TState>(state: PlatformState<TState>): Platfor
   const current = parts[active];
   if (!current) return state;
   const behaviorId = String((state.runtimeConfig as any).activeBehavior ?? current.l1.behaviorId);
+  const merged = preferMapping(state.mappingConfig, current);
   const nextPart = {
     ...current,
     l1: {
@@ -61,17 +56,18 @@ function syncActivePartFromLegacy<TState>(state: PlatformState<TState>): Platfor
       scanAxis: (state.runtimeConfig as any).scanAxis,
       scanUnit: (state.runtimeConfig as any).scanUnit,
       scanDirection: (state.runtimeConfig as any).scanDirection,
+      scanSections: (state.runtimeConfig as any).scanSections ?? "1",
       eventEnabled: Boolean((state.runtimeConfig as any).eventEnabled),
       stateEnabled: Boolean((state.runtimeConfig as any).stateEnabled),
       pitch: structuredClone((state.runtimeConfig as any).pitch),
       x: structuredClone((state.runtimeConfig as any).x),
       y: structuredClone((state.runtimeConfig as any).y),
       mapping: {
-        activate: { action: (state.mappingConfig as any).activate?.action ?? current.l2.mapping.activate.action, slot: Number((state.mappingConfig as any).activate?.channel ?? current.l2.mapping.activate.slot) },
-        stable: { action: (state.mappingConfig as any).stable?.action ?? current.l2.mapping.stable.action, slot: Number((state.mappingConfig as any).stable?.channel ?? current.l2.mapping.stable.slot) },
-        deactivate: { action: (state.mappingConfig as any).deactivate?.action ?? current.l2.mapping.deactivate.action, slot: Number((state.mappingConfig as any).deactivate?.channel ?? current.l2.mapping.deactivate.slot) },
-        scanned: { action: (state.mappingConfig as any).scanned?.action ?? current.l2.mapping.scanned.action, slot: Number((state.mappingConfig as any).scanned?.channel ?? current.l2.mapping.scanned.slot) },
-        scanned_empty: { action: (state.mappingConfig as any).scanned_empty?.action ?? current.l2.mapping.scanned_empty.action, slot: Number((state.mappingConfig as any).scanned_empty?.channel ?? current.l2.mapping.scanned_empty.slot) }
+        activate: { action: merged.activate.action, slot: Number(merged.activate.channel) },
+        stable: { action: merged.stable.action, slot: Number(merged.stable.channel) },
+        deactivate: { action: merged.deactivate.action, slot: Number(merged.deactivate.channel) },
+        scanned: { action: merged.scanned.action, slot: Number(merged.scanned.channel) },
+        scanned_empty: { action: merged.scanned_empty.action, slot: Number(merged.scanned_empty.channel) }
       }
     }
   };
@@ -110,7 +106,120 @@ export function formatTimestamp(nowMs: number): string {
 
 export function factoryPayload<TState>(behavior: BehaviorEngine<TState, unknown>, createInitialState: (b: BehaviorEngine<TState, unknown>) => PlatformState<TState>, extractConfigPayload: (s: PlatformState<TState>) => ConfigPayload): ConfigPayload {
   const s = createInitialState(behavior);
-  return extractConfigPayload(s);
+  const rc: any = s.runtimeConfig;
+  const parts: any[] = rc.parts;
+  const instruments: any[] = rc.instruments;
+
+  // P1: life with auto-spawn=12, activate→I1, routed→FX Bus 1
+  parts[0].l1.behaviorId = "life";
+  parts[0].l1.behaviorConfig = { ...((rc.behaviorConfig ?? {}).life ?? {}), randomCellsPerTick: 12, randomTickInterval: 1 };
+  parts[0].l1.stepRate = "1/8";
+  parts[0].l2.mapping = {
+    activate: { action: "note_on", slot: 0 },
+    stable: { action: "none", slot: 0 },
+    deactivate: { action: "note_off", slot: 1 },
+    scanned: { action: "none", slot: 0 },
+    scanned_empty: { action: "note_off", slot: 0 }
+  };
+  parts[0].l2.scanAxis = "columns";
+  parts[0].l2.eventEnabled = true;
+  parts[0].l2.stateEnabled = true;
+  parts[0].name = "life";
+  parts[0].autoName = true;
+
+  // P2: sequencer with horizontal scan, scanned→I2, routed direct
+  parts[1].l1.behaviorId = "sequencer";
+  parts[1].l1.behaviorConfig = {};
+  parts[1].l1.stepRate = "1/4";
+  parts[1].l2.mapping = {
+    activate: { action: "none", slot: 0 },
+    stable: { action: "none", slot: 0 },
+    deactivate: { action: "none", slot: 0 },
+    scanned: { action: "note_on", slot: 1 },
+    scanned_empty: { action: "note_off", slot: 1 }
+  };
+  parts[1].l2.scanAxis = "rows";
+  parts[1].l2.eventEnabled = true;
+  parts[1].l2.stateEnabled = true;
+  parts[1].name = "sequencer";
+  parts[1].autoName = true;
+
+  // P3–P8: "none", no triggers
+  for (let i = 2; i < PLATFORM_CAPS.partCount; i += 1) {
+    parts[i].l1.behaviorId = "none";
+    parts[i].l1.behaviorConfig = {};
+    parts[i].l2.mapping = {
+      activate: { action: "none", slot: 0 },
+      stable: { action: "none", slot: 0 },
+      deactivate: { action: "none", slot: 0 },
+      scanned: { action: "none", slot: 0 },
+      scanned_empty: { action: "none", slot: 0 }
+    };
+    parts[i].l2.eventEnabled = false;
+    parts[i].l2.stateEnabled = false;
+    parts[i].name = "(none)";
+    parts[i].autoName = true;
+  }
+
+  // I1: synth with soft pad preset, routed→FX Bus 1 (fx_bus_1 → bus index 0)
+  instruments[0].type = "synth";
+  instruments[0].synth = structuredClone(SYNTH_PRESETS[1]!.synth);
+  instruments[0].mixer = { route: "fx_bus_1", panPos: 0, volume: 100 };
+  instruments[0].name = "synth";
+  instruments[0].autoName = true;
+  instruments[0].noteBehavior = "oneshot";
+
+  // I2: drum kit (perc hit), routed direct
+  instruments[1].type = "synth";
+  instruments[1].synth = structuredClone(SYNTH_PRESETS[7]!.synth);
+  instruments[1].mixer = { route: "direct", panPos: 0, volume: 100 };
+  instruments[1].name = "drums";
+  instruments[1].autoName = true;
+  instruments[1].noteBehavior = "oneshot";
+
+  // I3–I8: "none"
+  for (let i = 2; i < PLATFORM_CAPS.instrumentCount; i += 1) {
+    instruments[i].type = "none";
+    instruments[i].mixer = { route: "direct", panPos: 0, volume: 100 };
+    instruments[i].name = "(none)";
+    instruments[i].autoName = true;
+  }
+
+  // FX Bus 1 (bus 0): delay + duck sourcing I2
+  rc.mixer.buses[0] = {
+    slot1: { type: "delay", params: { timeMs: 280, feedbackPct: 38, mixPct: 45 } },
+    slot2: { type: "duck", params: { source: "I2", threshold: 0.08, amountPct: 60, attackMs: 8, releaseMs: 160 } },
+    panPos: 0,
+    autoName: true,
+    name: "Bus 1"
+  };
+
+  // All other FX buses: no effects
+  for (let i = 1; i < PLATFORM_CAPS.busCount; i += 1) {
+    rc.mixer.buses[i] = {
+      slot1: { type: "none", params: {} },
+      slot2: { type: "none", params: {} },
+      panPos: 0,
+      autoName: true,
+      name: "(none)"
+    };
+  }
+
+  // Align active part and behavior
+  rc.activePartIndex = 0;
+  rc.activeBehavior = "life";
+
+  // Reinitialize part states to match new config
+  const partStates: any[] = [];
+  for (const p of parts) {
+    const engine = getBehavior(p.l1.behaviorId) ?? behavior;
+    partStates.push(engine.init({ ...(p.l1.behaviorConfig ?? {}) }));
+  }
+  s.partStates = partStates;
+  s.behaviorState = partStates[0];
+  s.activeBehavior = "life";
+
+  return extractConfigPayload({ ...s, runtimeConfig: rc });
 }
 
 export function readAnyValue<TState>(state: PlatformState<TState>, key: string): unknown {
@@ -128,84 +237,52 @@ export function readAnyValue<TState>(state: PlatformState<TState>, key: string):
   return readValue(state.runtimeConfig, key);
 }
 
+type AutoNameRule = {
+  match: RegExp;
+  onSet: (rc: any, idx: number) => any;
+};
+
+type AutoNameToggle = {
+  match: RegExp;
+  deriveName: (rc: any, idx: number) => string;
+};
+
+const AUTO_NAME_RULES: AutoNameRule[] = [
+  { match: /^instruments\.(\d+)\.type$/, onSet: (rc, idx) => { const inst = rc.instruments?.[idx]; return inst && inst.autoName === true ? writeValue(rc, `instruments.${idx}.name`, deriveInstAutoName(inst)) : rc; } },
+  { match: /^parts\.(\d+)\.l1\.behaviorId$/, onSet: (rc, idx) => { const part = rc.parts?.[idx]; return part && part.autoName === true ? writeValue(rc, `parts.${idx}.name`, derivePartAutoName(part)) : rc; } },
+  { match: /^mixer\.buses\.(\d+)\.(slot[12])\.type$/, onSet: (rc, idx) => { const bus = rc.mixer?.buses?.[idx]; return bus && bus.autoName === true ? writeValue(rc, `mixer.buses.${idx}.name`, deriveBusAutoName(bus)) : rc; } }
+];
+
+const AUTO_NAME_CLEAR: AutoNameRule[] = [
+  { match: /^instruments\.(\d+)\.name$/, onSet: (rc, idx) => writeValue(rc, `instruments.${idx}.autoName`, false) },
+  { match: /^parts\.(\d+)\.name$/, onSet: (rc, idx) => writeValue(rc, `parts.${idx}.autoName`, false) },
+  { match: /^mixer\.buses\.(\d+)\.name$/, onSet: (rc, idx) => writeValue(rc, `mixer.buses.${idx}.autoName`, false) }
+];
+
+const AUTO_NAME_TOGGLE: AutoNameToggle[] = [
+  { match: /^instruments\.(\d+)\.autoName$/, deriveName: (rc, idx) => { const inst = rc.instruments?.[idx]; return inst ? deriveInstAutoName(inst) : ""; } },
+  { match: /^parts\.(\d+)\.autoName$/, deriveName: (rc, idx) => { const part = rc.parts?.[idx]; return part ? derivePartAutoName(part) : ""; } },
+  { match: /^mixer\.buses\.(\d+)\.autoName$/, deriveName: (rc, idx) => { const bus = rc.mixer?.buses?.[idx]; return bus ? deriveBusAutoName(bus) : ""; } }
+];
+
 function applyAutoName<TState>(state: PlatformState<TState>, rc: any, key: string, setVal: unknown): PlatformState<TState> {
-  const instrMatch = /^instruments\.(\d+)\.type$/.exec(key);
-  if (instrMatch) {
-    const idx = Number(instrMatch[1]);
-    const inst = rc.instruments?.[idx];
-    if (inst && inst.autoName === true) {
-      rc = writeValue(rc, `instruments.${idx}.name`, deriveInstAutoName(inst));
-    }
-    return { ...state, runtimeConfig: rc };
+  for (const rule of AUTO_NAME_RULES) {
+    const m = rule.match.exec(key);
+    if (m) return { ...state, runtimeConfig: rule.onSet(rc, Number(m[1])) };
   }
-  const instrNameMatch = /^instruments\.(\d+)\.name$/.exec(key);
-  if (instrNameMatch) {
-    const idx = Number(instrNameMatch[1]);
-    rc = writeValue(rc, `instruments.${idx}.autoName`, false);
-    return { ...state, runtimeConfig: rc };
+  for (const rule of AUTO_NAME_CLEAR) {
+    const m = rule.match.exec(key);
+    if (m) return { ...state, runtimeConfig: rule.onSet(rc, Number(m[1])) };
   }
-  const instrAutoMatch = /^instruments\.(\d+)\.autoName$/.exec(key);
-  if (instrAutoMatch) {
-    const idx = Number(instrAutoMatch[1]);
-    if (setVal === true) {
-      const inst = rc.instruments?.[idx];
-      if (inst) {
-        rc = writeValue(rc, `instruments.${idx}.name`, deriveInstAutoName(inst));
+  for (const rule of AUTO_NAME_TOGGLE) {
+    const m = rule.match.exec(key);
+    if (m) {
+      if (setVal === true) {
+        const name = rule.deriveName(rc, Number(m[1]));
+        if (name) rc = writeValue(rc, key.replace(/\.autoName$/, ".name"), name);
       }
+      return { ...state, runtimeConfig: rc };
     }
-    return { ...state, runtimeConfig: rc };
-  }
-  const partBehMatch = /^parts\.(\d+)\.l1\.behaviorId$/.exec(key);
-  if (partBehMatch) {
-    const idx = Number(partBehMatch[1]);
-    const part = rc.parts?.[idx];
-    if (part && part.autoName === true) {
-      rc = writeValue(rc, `parts.${idx}.name`, derivePartAutoName(part));
-    }
-    return { ...state, runtimeConfig: rc };
-  }
-  const partNameMatch = /^parts\.(\d+)\.name$/.exec(key);
-  if (partNameMatch) {
-    const idx = Number(partNameMatch[1]);
-    rc = writeValue(rc, `parts.${idx}.autoName`, false);
-    return { ...state, runtimeConfig: rc };
-  }
-  const partAutoMatch = /^parts\.(\d+)\.autoName$/.exec(key);
-  if (partAutoMatch) {
-    const idx = Number(partAutoMatch[1]);
-    if (setVal === true) {
-      const part = rc.parts?.[idx];
-      if (part) {
-        rc = writeValue(rc, `parts.${idx}.name`, derivePartAutoName(part));
-      }
-    }
-    return { ...state, runtimeConfig: rc };
-  }
-  const busSlotMatch = /^mixer\.buses\.(\d+)\.(slot[12])\.type$/.exec(key);
-  if (busSlotMatch) {
-    const idx = Number(busSlotMatch[1]);
-    const bus = rc.mixer?.buses?.[idx];
-    if (bus && bus.autoName === true) {
-      rc = writeValue(rc, `mixer.buses.${idx}.name`, deriveBusAutoName(bus));
-    }
-    return { ...state, runtimeConfig: rc };
-  }
-  const busNameMatch = /^mixer\.buses\.(\d+)\.name$/.exec(key);
-  if (busNameMatch) {
-    const idx = Number(busNameMatch[1]);
-    rc = writeValue(rc, `mixer.buses.${idx}.autoName`, false);
-    return { ...state, runtimeConfig: rc };
-  }
-  const busAutoMatch = /^mixer\.buses\.(\d+)\.autoName$/.exec(key);
-  if (busAutoMatch) {
-    const idx = Number(busAutoMatch[1]);
-    if (setVal === true) {
-      const bus = rc.mixer?.buses?.[idx];
-      if (bus) {
-        rc = writeValue(rc, `mixer.buses.${idx}.name`, deriveBusAutoName(bus));
-      }
-    }
-    return { ...state, runtimeConfig: rc };
   }
   return { ...state, runtimeConfig: rc };
 }
@@ -235,14 +312,13 @@ export function writeAnyValue<TState>(state: PlatformState<TState>, key: string,
     const normalized = key.endsWith(".slot") || key.endsWith(".sample.selectedSlot") ? Number(value) : value;
     let nextState = { ...state, runtimeConfig: writeValue(state.runtimeConfig, key, normalized) };
     const behMatch = key.endsWith(".l1.behaviorId");
+    const autoNameMatch = /^parts\.\d+\.(name|autoName)$/.test(key);
     const active = clampPartIndex((nextState.runtimeConfig as any).activePartIndex ?? 0);
-    if (behMatch || key.startsWith(`parts.${active}.`)) {
-      if (behMatch) {
-        nextState = applyAutoName(nextState, nextState.runtimeConfig as any, key, value);
-      }
-      if (key.startsWith(`parts.${active}.`)) {
-        nextState = syncLegacyFromActivePart(nextState);
-      }
+    if (behMatch || autoNameMatch) {
+      nextState = applyAutoName(nextState, nextState.runtimeConfig as any, key, value);
+    }
+    if (key.startsWith(`parts.${active}.`)) {
+      nextState = syncLegacyFromActivePart(nextState);
     }
     return nextState;
   }

@@ -348,8 +348,8 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "key:activeBehavior",
     "kind": "enum",
     "title": "Behavior",
-    "line1": "Options: life, brain, ant, bounce, pulse, raindrops, dla, glider, sequencer, shapes. life is classic birth/survival growth; brain is three-state firing/wave propagation; ant is directional trail-writing motion.",
-    "line2": "bounce is moving particle collisions; pulse emits expanding pulses; raindrops creates drip/ripple impacts; dla builds branching aggregates; glider injects traveling Conway motifs; sequencer is deterministic stepped patterns; shapes focuses geometric transforms. Switching behavior reinitializes behavior state."
+    "line1": "Options: none, life, sequencer, keys, brain, ant, bounce, pulse, raindrops, dla, glider, shapes. none is a no-op with an always-empty grid; life is classic birth/survival growth; sequencer is deterministic stepped patterns; keys activates cells on press and deactivates on release with optional quantize-to-step.",
+    "line2": "brain is three-state firing/wave propagation; ant is directional trail-writing motion; bounce is moving particle collisions; pulse emits expanding pulses; raindrops creates drip/ripple impacts; dla builds branching aggregates; glider injects traveling Conway motifs; shapes focuses geometric transforms. Switching behavior reinitializes behavior state."
   },
   {
     "id": "sense_section",
@@ -361,13 +361,31 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "This is where scan/event sources get routed toward instruments."
   },
   {
-    "id": "life_part_select",
-    "path": "Menu > L1: Life > Part",
+    "id": "life_part_group",
+    "path": "Menu > L1: Life > P*: *",
     "key": "",
-    "kind": "enum",
-    "title": "Active Part",
-    "line1": "Selects which of the 8 parts receives current L1/L2 edits.",
-    "line2": "Mirrors Fn + leftmost-column selection; while Fn is held, layer indicators appear on the left column (gray, active green)."
+    "kind": "group",
+    "title": "Part",
+    "line1": "Configures the selected part's behavior, timing, and runtime settings.",
+    "line2": "Each of the 8 parts runs its own behavior and L1/L2 config independently."
+  },
+  {
+    "id": "sense_part_group",
+    "path": "Menu > L2: Sense > P*: *",
+    "key": "",
+    "kind": "group",
+    "title": "Part",
+    "line1": "Per-part Sense interpretation, scanning, and trigger routing settings.",
+    "line2": "Part-specific event/state toggles, X/Y modulation, note mapping, and instrument targets."
+  },
+  {
+    "id": "life_save_grid_state",
+    "path": "Menu > L1: Life > Save Grid State",
+    "key": "",
+    "kind": "bool",
+    "title": "Save Grid State",
+    "line1": "When On, this part's runtime/grid state is stored in preset/default saves.",
+    "line2": "When Off, saves keep this part's config but not its current runtime/grid snapshot."
   },
   {
     "id": "scan_mode",
@@ -375,7 +393,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "key:scanMode",
     "kind": "enum",
     "title": "Scan Mode",
-    "line1": "Options: no scan, scanning. no scan uses whole-grid interpretation without a scan cursor.",
+    "line1": "Options: none, scanning. none uses whole-grid interpretation without a scan cursor.",
     "line2": "scanning moves a cursor by scan unit/axis/direction and emits scanned/scanned-empty triggers."
   },
   {
@@ -406,6 +424,15 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "Use reverse for back-and-forth style phrasing with manual resets."
   },
   {
+    "id": "scan_sections",
+    "path": "*",
+    "key": "key:parts.*.l2.scanSections",
+    "kind": "enum",
+    "title": "Sections",
+    "line1": "Splits scanning into 1, 2, 4, or 8 lane sections.",
+    "line2": "1 preserves current full-grid scan behavior; higher values scan smaller lanes in sequence."
+  },
+  {
     "id": "event_enabled",
     "path": "*",
     "key": "key:eventEnabled",
@@ -421,7 +448,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "kind": "bool",
     "title": "State Notes",
     "line1": "Enables state-based scan triggers from current cell occupancy.",
-    "line2": "Disable to use only transition events from cell changes."
+    "line2": "Default is On for all parts; disable to use only transition events from cell changes."
   },
   {
     "id": "targets_group",
@@ -847,12 +874,147 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "Works together with Env Amount."
   },
   {
-    "id": "inst_type",
+    "id": "inst_type_1",
     "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
-    "key": "",
+    "key": "key:instruments.0.type",
     "kind": "enum",
     "title": "Instrument Type",
-    "line1": "Options: synth, sample, MIDI only. synth is a two-oscillator subtractive engine; sample is assignment-driven playback; MIDI only is external MIDI event output.",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_2",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.1.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_3",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.2.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_4",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.3.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_5",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.4.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_6",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.5.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_7",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.6.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_8",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.7.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_9",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.8.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_10",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.9.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_11",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.10.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_12",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.11.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_13",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.12.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_14",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.13.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_15",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.14.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
+    "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
+  },
+  {
+    "id": "inst_type_16",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Type",
+    "key": "key:instruments.15.type",
+    "kind": "enum",
+    "title": "Instrument Type",
+    "line1": "Options: none, synth, sample, midi. none is a silent placeholder; synth is a two-oscillator subtractive engine; sample is assignment-driven playback; midi is external MIDI event output.",
     "line2": "Select the engine family for this slot; the editable section below changes to match the selected type."
   },
   {
@@ -880,7 +1042,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "kind": "group",
     "title": "Choose Sample",
     "line1": "Browse files inside the `samples/` folder tree (wav only).",
-    "line2": "Press Space to preview highlighted wav; press Enter to pick it."
+    "line2": "Press Space to preview directly; assigned playback follows instrument routing and bus FX."
   },
   {
     "id": "inst_sample_assign",
@@ -1153,13 +1315,13 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "Affects internal clock rate and algorithm pulse timing."
   },
   {
-    "id": "sys_audio_group",
-    "path": "Menu > System > Audio",
+    "id": "sound_group",
+    "path": "Menu > System > Sound",
     "key": "",
     "kind": "group",
-    "title": "Audio",
-    "line1": "Global output level controls.",
-    "line2": "Applies after per-instrument voice shaping."
+    "title": "Sound",
+    "line1": "Global volume, voice shaping, and note behavior controls.",
+    "line2": "Includes Master Vol, Voice Stealing, Note Length, Velocity Scale, and Velocity Curve."
   },
   {
     "id": "master_vol",
@@ -1169,6 +1331,15 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "title": "Master Volume",
     "line1": "Sets overall output volume scaling.",
     "line2": "Use this for final level trim without changing patch balance."
+  },
+  {
+    "id": "voice_stealing_mode",
+    "path": "*",
+    "key": "key:sound.voiceStealingMode",
+    "kind": "enum",
+    "title": "Voice Stealing",
+    "line1": "Controls global load-aware voice stealing behavior: off, lenient, balanced, aggressive.",
+    "line2": "Aggressive keeps more CPU headroom under load; lenient preserves longer tails."
   },
   {
     "id": "presets_group",
@@ -1203,17 +1374,8 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "key:autoSaveDefault",
     "kind": "bool",
     "title": "Auto Save Default",
-    "line1": "When enabled, config edits also update default storage.",
+    "line1": "When enabled, config edits update default storage after a short cooldown so sweeps save only the latest settled value.",
     "line2": "Turning this on and exiting the row saves the current config immediately."
-  },
-  {
-    "id": "sound_group",
-    "path": "Menu > System > Sound",
-    "key": "",
-    "kind": "group",
-    "title": "Sound",
-    "line1": "Global note shaping applied to generated note_on events.",
-    "line2": "Useful when you want broad behavior without touching each instrument."
   },
   {
     "id": "note_length",
@@ -1243,15 +1405,6 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "Soft raises low velocities; hard emphasizes stronger hits."
   },
   {
-    "id": "voice_stealing_mode",
-    "path": "*",
-    "key": "key:sound.voiceStealingMode",
-    "kind": "enum",
-    "title": "Voice Stealing",
-    "line1": "Controls global load-aware voice stealing behavior: off, lenient, balanced, aggressive.",
-    "line2": "Aggressive keeps more CPU headroom under load; lenient preserves longer tails."
-  },
-  {
     "id": "ui_group",
     "path": "Menu > System > UI Settings",
     "key": "",
@@ -1259,6 +1412,15 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "title": "UI Settings",
     "line1": "Display and lighting behavior for the device/simulator UI.",
     "line2": "These do not change musical generation."
+  },
+  {
+    "id": "ghost_cells",
+    "path": "*",
+    "key": "key:ghostCells",
+    "kind": "bool",
+    "title": "Ghost Cells",
+    "line1": "Shows dim cells from inactive parts behind the active part.",
+    "line2": "Off by default for clarity; active part cells always take visual priority."
   },
   {
     "id": "screen_sleep",
@@ -1297,6 +1459,15 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "Helps match hardware feel to ambient light."
   },
   {
+    "id": "numeric_display",
+    "path": "*",
+    "key": "key:numericDisplayMode",
+    "kind": "enum",
+    "title": "Numeric Display",
+    "line1": "Controls how bar-style numeric parameters are displayed.",
+    "line2": "bar shows a visual bar only; numbers shows plain numbers; bar+numbers shows both bar and numeric label."
+  },
+  {
     "id": "sense_x_axis_group",
     "path": "Menu > L2: Sense > X Axis",
     "key": "",
@@ -1313,6 +1484,15 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "title": "X Pitch Steps",
     "line1": "Controls pitch stepping derived from X position.",
     "line2": "Disable to remove X-axis pitch influence."
+  },
+  {
+    "id": "restart_section_x",
+    "path": "*",
+    "key": "key:parts.*.l2.x.pitch.restartEachSection",
+    "kind": "bool",
+    "title": "Restart Section",
+    "line1": "Restarts X pitch stepping inside each scan section.",
+    "line2": "Use with sectioned column scans for repeated motifs per lane."
   },
   {
     "id": "sense_x_velocity_group",
@@ -1358,6 +1538,15 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "title": "Y Pitch Steps",
     "line1": "Controls pitch stepping derived from Y position.",
     "line2": "Disable to remove Y-axis pitch influence."
+  },
+  {
+    "id": "restart_section_y",
+    "path": "*",
+    "key": "key:parts.*.l2.y.pitch.restartEachSection",
+    "kind": "bool",
+    "title": "Restart Section",
+    "line1": "Restarts Y pitch stepping inside each scan section.",
+    "line2": "Use with sectioned row scans for repeated motifs per lane."
   },
   {
     "id": "sense_y_velocity_group",
@@ -1482,7 +1671,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "",
     "kind": "group",
     "title": "System",
-    "line1": "Global configuration area for audio, presets, MIDI, and UI.",
+    "line1": "Global configuration area for presets, sound, MIDI, and UI.",
     "line2": "Use this for environment and persistence behavior."
   },
   {
@@ -1745,5 +1934,275 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "title": "Load Synth Preset",
     "line1": "Loads the chosen synth preset into this instrument slot.",
     "line2": "A confirmation step protects against accidental overwrite."
+  },
+  {
+    "id": "inst_mixer_group",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Mixer",
+    "key": "",
+    "kind": "group",
+    "title": "Instrument Mixer",
+    "line1": "Sets this instrument output route and pan position.",
+    "line2": "Route to direct output or to one of the four FX buses."
+  },
+  {
+    "id": "inst_mixer_route",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Mixer > Route",
+    "key": "key:instruments.*.mixer.route",
+    "kind": "enum",
+    "title": "Route",
+    "line1": "Options: direct, fx_bus_1, fx_bus_2, fx_bus_3, fx_bus_4.",
+    "line2": "Synth and sample audio follow this route; MIDI emits external events and is not processed by audio FX."
+  },
+  {
+    "id": "inst_mixer_pan",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Mixer > Pan Pos",
+    "key": "key:instruments.*.mixer.panPos",
+    "kind": "number",
+    "title": "Pan Position",
+    "line1": "Sets quantized pan position for direct output sends.",
+    "line2": "0 is left, max is right, midpoint is centered."
+  },
+  {
+    "id": "fx_buses_group",
+    "path": "Menu > L3: Voice > FX Buses",
+    "key": "",
+    "kind": "group",
+    "title": "FX Buses",
+    "line1": "Configures four shared buses used by instrument bus routing.",
+    "line2": "Each bus has two effect slots and output pan."
+  },
+  {
+    "id": "fx_bus_names_group",
+    "path": "Menu > L3: Voice > FX Buses > Names",
+    "key": "",
+    "kind": "group",
+    "title": "Bus Names",
+    "line1": "Sets auto-naming and custom name for each bus.",
+    "line2": "Auto name is computed from the assigned FX slot types; turning off auto lets you edit the name freely."
+  },
+  {
+    "id": "fx_bus_name_group",
+    "path": "Menu > L3: Voice > FX Buses > Names > Bus *",
+    "key": "",
+    "kind": "group",
+    "title": "Bus Name",
+    "line1": "Configures naming for this bus.",
+    "line2": "Auto Name on derives a label from FX slot types; Name lets you type any text when Auto is off."
+  },
+  {
+    "id": "fx_bus_wild",
+    "path": "Menu > L3: Voice > FX Buses > B*: *",
+    "key": "",
+    "kind": "group",
+    "title": "FX Bus",
+    "line1": "Settings for this FX bus.",
+    "line2": "Use Slot 1 and Slot 2 to build a bus chain."
+  },
+  {
+    "id": "fx_bus_1",
+    "path": "Menu > L3: Voice > FX Buses > Bus 1",
+    "key": "",
+    "kind": "group",
+    "title": "FX Bus",
+    "line1": "Settings for this FX bus.",
+    "line2": "Use Slot 1 and Slot 2 to build a bus chain."
+  },
+  {
+    "id": "fx_bus_2",
+    "path": "Menu > L3: Voice > FX Buses > Bus 2",
+    "key": "",
+    "kind": "group",
+    "title": "FX Bus",
+    "line1": "Settings for this FX bus.",
+    "line2": "Use Slot 1 and Slot 2 to build a bus chain."
+  },
+  {
+    "id": "fx_bus_3",
+    "path": "Menu > L3: Voice > FX Buses > Bus 3",
+    "key": "",
+    "kind": "group",
+    "title": "FX Bus",
+    "line1": "Settings for this FX bus.",
+    "line2": "Use Slot 1 and Slot 2 to build a bus chain."
+  },
+  {
+    "id": "fx_bus_4",
+    "path": "Menu > L3: Voice > FX Buses > Bus 4",
+    "key": "",
+    "kind": "group",
+    "title": "FX Bus",
+    "line1": "Settings for this FX bus.",
+    "line2": "Use Slot 1 and Slot 2 to build a bus chain."
+  },
+  {
+    "id": "fx_bus_slot1",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1",
+    "key": "key:mixer.buses.*.slot1",
+    "kind": "enum",
+    "title": "FX Slot 1",
+    "line1": "First effect slot in the bus chain.",
+    "line2": "Default None means passthrough."
+  },
+  {
+    "id": "fx_bus_slot2",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2",
+    "key": "key:mixer.buses.*.slot2",
+    "kind": "enum",
+    "title": "FX Slot 2",
+    "line1": "Second effect slot in the bus chain.",
+    "line2": "Default None means passthrough."
+  },
+  {
+    "id": "fx_bus_pan",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Pan Pos",
+    "key": "key:mixer.buses.*.panPos",
+    "kind": "number",
+    "title": "FX Bus Pan Position",
+    "line1": "Sets quantized output pan position for this bus.",
+    "line2": "0 is left, max is right, midpoint is centered."
+  },
+  {
+    "id": "fx_bus_slot1_group",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1",
+    "key": "",
+    "kind": "group",
+    "title": "FX Slot",
+    "line1": "Configures one effect slot in the bus chain.",
+    "line2": "Choose Type, then edit effect parameters below."
+  },
+  {
+    "id": "fx_bus_slot2_group",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2",
+    "key": "",
+    "kind": "group",
+    "title": "FX Slot",
+    "line1": "Configures one effect slot in the bus chain.",
+    "line2": "Choose Type, then edit effect parameters below."
+  },
+  {
+    "id": "fx_bus_slot1_type",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1 > Type",
+    "key": "key:mixer.buses.*.slot1.type",
+    "kind": "enum",
+    "title": "Slot Type",
+    "line1": "Options: none, reverb, delay, tremolo, chorus, flanger, vibrato, auto_pan, filter_lfo, wah, eq, compressor, duck, saturator, distortion, bitcrusher, glitch.",
+    "line2": "Selecting an effect initializes its editable parameter defaults; none is passthrough."
+  },
+  {
+    "id": "fx_bus_slot2_type",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2 > Type",
+    "key": "key:mixer.buses.*.slot2.type",
+    "kind": "enum",
+    "title": "Slot Type",
+    "line1": "Options: none, reverb, delay, tremolo, chorus, flanger, vibrato, auto_pan, filter_lfo, wah, eq, compressor, duck, saturator, distortion, bitcrusher, glitch.",
+    "line2": "Selecting an effect initializes its editable parameter defaults; none is passthrough."
+  },
+  {
+    "id": "fx_bus_slot1_duck_group",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1 > duck",
+    "key": "",
+    "kind": "group",
+    "title": "duck",
+    "line1": "Sidechain-style ducking effect.",
+    "line2": "Reduces this bus level when the selected source is loud."
+  },
+  {
+    "id": "fx_bus_slot2_duck_group",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2 > duck",
+    "key": "",
+    "kind": "group",
+    "title": "duck",
+    "line1": "Sidechain-style ducking effect.",
+    "line2": "Reduces this bus level when the selected source is loud."
+  },
+  {
+    "id": "fx_bus_slot1_duck_source",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1 > duck > Source",
+    "key": "key:mixer.buses.*.slot1.params.source",
+    "kind": "enum",
+    "title": "duck Source",
+    "line1": "Selects which signal triggers ducking.",
+    "line2": "Options are I# (instrument) and B# (bus), capability-sized."
+  },
+  {
+    "id": "fx_bus_slot2_duck_source",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2 > duck > Source",
+    "key": "key:mixer.buses.*.slot2.params.source",
+    "kind": "enum",
+    "title": "duck Source",
+    "line1": "Selects which signal triggers ducking.",
+    "line2": "Options are I# (instrument) and B# (bus), capability-sized."
+  },
+  {
+    "id": "fx_bus_slot1_compressor_group",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1 > compressor",
+    "key": "",
+    "kind": "group",
+    "title": "compressor",
+    "line1": "Dynamics processor that reduces gain when signal exceeds a threshold.",
+    "line2": "Adjust threshold, ratio, attack, release, makeup gain, and dry/wet mix."
+  },
+  {
+    "id": "fx_bus_slot2_compressor_group",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2 > compressor",
+    "key": "",
+    "kind": "group",
+    "title": "compressor",
+    "line1": "Dynamics processor that reduces gain when signal exceeds a threshold.",
+    "line2": "Adjust threshold, ratio, attack, release, makeup gain, and dry/wet mix."
+  },
+  {
+    "id": "fx_bus_slot1_eq_group",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1 > eq",
+    "key": "",
+    "kind": "group",
+    "title": "eq",
+    "line1": "Three-band equalizer with low shelf, peaking mid, and high shelf bands.",
+    "line2": "Boosts or cuts each band independently; gain range ±12 dB."
+  },
+  {
+    "id": "fx_bus_slot2_eq_group",
+    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2 > eq",
+    "key": "",
+    "kind": "group",
+    "title": "eq",
+    "line1": "Three-band equalizer with low shelf, peaking mid, and high shelf bands.",
+    "line2": "Boosts or cuts each band independently; gain range ±12 dB."
+  },
+  {
+    "id": "inst_mixer_volume",
+    "path": "Menu > L3: Voice > Instruments > Instrument * > Mixer > Volume",
+    "key": "key:instruments.*.mixer.volume",
+    "kind": "number",
+    "title": "Mixer Volume",
+    "line1": "Sets the per-instrument post-voice fader from 0 to 100.",
+    "line2": "The Touch mix page also controls this value from the grid."
+  },
+  {
+    "id": "touch_section",
+    "path": "Menu > L4: Touch",
+    "key": "",
+    "kind": "group",
+    "title": "Touch Layer",
+    "line1": "Performance grid layer for live mix, pan, and FX pages.",
+    "line2": "Fn plus the rightmost grid column jumps here from any layer."
+  },
+  {
+    "id": "touch_page",
+    "path": "Menu > L4: Touch > Touch Page",
+    "key": "key:system.touchMode",
+    "kind": "enum",
+    "title": "Touch Page",
+    "line1": "Options: none, mix, pan, fx. none returns the grid to the active behavior; mix edits instrument volume; pan edits pan position; fx is a placeholder for the FX performance page.",
+    "line2": "Rightmost grid-column rows select pages while Touch is enabled."
+  },
+  {
+    "id": "touch_bpm",
+    "path": "Menu > L4: Touch > BPM",
+    "key": "",
+    "kind": "number",
+    "title": "BPM",
+    "line1": "Sets master tempo in beats per minute from the Touch layer.",
+    "line2": "This mirrors the Playback BPM setting for performance access."
   }
 ];

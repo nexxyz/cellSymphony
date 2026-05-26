@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
-import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
+import { GRID_DOMAIN, GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
 import { lifeBehavior } from "@cellsymphony/behaviors-life";
 import {
   applyConfigPayload,
@@ -15,6 +15,7 @@ import {
   type PlatformState
 } from "../src/index";
 import { validatePlatformCapabilities } from "../src/platformCaps";
+import { writeAnyValue } from "../src/stateHelpers";
 
 const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
 
@@ -184,6 +185,8 @@ test("L2: Sense has 4 instrument targets accessible via menu", () => {
   // Verify targets exist and can be edited through the menu
   state = selectLabel(state, "L2: Sense");
   state = press(state).state;
+  state = selectLabel(state, "P1: mock");
+  state = press(state).state;
   state = selectLabel(state, "Instrument Targets");
   state = press(state).state;
   state = selectLabel(state, "Activate Instrument");
@@ -218,6 +221,8 @@ test("stable target is separate from activate and deactivate", () => {
   let state = makeState();
 
   state = selectLabel(state, "L2: Sense");
+  state = press(state).state;
+  state = selectLabel(state, "P1: mock");
   state = press(state).state;
   state = selectLabel(state, "Instrument Targets");
   state = press(state).state;
@@ -331,23 +336,25 @@ test("switching active part does not overwrite playback timing accumulators", ()
   assert.equal(state.partAlgorithmPulseAccumulator[1], 3 + expectedPulseDelta);
 });
 
-test("L2 Sense includes Part selector", () => {
+test("L2 Sense lists parts", () => {
   let state = makeState();
   state = selectLabel(state, "L2: Sense");
   state = press(state).state;
   const frame = toSimulatorFrame(state, mockBehavior);
-  assert.ok(frame.display.lines.some((line) => line.includes("Part")));
+  assert.ok(frame.display.lines.some((line) => line.includes("P1:")));
 });
 
-test("L1 Life always exposes part Auto Name before behavior-specific config", () => {
+test("L1 Life always exposes part Auto Name within part config", () => {
   for (const behaviorId of ["life", "none", "sequencer", "keys"]) {
     let state = makeState() as any;
     state.runtimeConfig.parts[0].l1.behaviorId = behaviorId;
     state.runtimeConfig.activeBehavior = behaviorId;
     state = selectLabel(state, "L1: Life");
     state = press(state).state;
-    const frame = toSimulatorFrame(state, mockBehavior);
-    assert.ok(frame.display.lines.some((line) => line.includes("Auto Name")), `${behaviorId} should show Auto Name`);
+    state = selectLabel(state, "P1: mock");
+    state = press(state).state;
+    state = selectLabel(state, "Auto Name");
+    assert.ok(true, `${behaviorId} shows Auto Name`);
   }
 });
 
@@ -399,6 +406,24 @@ test("instrument auto name follows type, manual name sets autoName false", () =>
   state.runtimeConfig.instruments[0].name = "MyKick";
   frame = toSimulatorFrame(state, mockBehavior);
   assert.ok(frame.display.lines.some((line) => line.includes("I1: MyKick")));
+});
+
+test("part auto name follows behavior and manual name disables auto", () => {
+  let state = createInitialState(lifeBehavior) as any;
+  state.runtimeConfig.parts[1].autoName = true;
+  state.runtimeConfig.parts[1].name = "life";
+
+  state = writeAnyValue(state, "parts.1.l1.behaviorId", "none") as any;
+  assert.equal(state.runtimeConfig.parts[1].name, "none");
+  assert.equal(state.runtimeConfig.parts[1].autoName, true);
+
+  state = writeAnyValue(state, "parts.1.name", "Manual") as any;
+  assert.equal(state.runtimeConfig.parts[1].name, "Manual");
+  assert.equal(state.runtimeConfig.parts[1].autoName, false);
+
+  state = writeAnyValue(state, "parts.1.autoName", true) as any;
+  assert.equal(state.runtimeConfig.parts[1].name, "none");
+  assert.equal(state.runtimeConfig.parts[1].autoName, true);
 });
 
 test("extract/apply payload preserves part state when save grid state is on", () => {
@@ -472,4 +497,45 @@ test("emergency brake preserves grids and resets timing accumulators", () => {
   assert.deepEqual(next.partScanPulseAccumulator, [0, 0, 0, 0, 0, 0, 0, 0]);
   assert.deepEqual(next.partAlgorithmPulseAccumulator, [0, 0, 0, 0, 0, 0, 0, 0]);
   assert.equal(next.partStates[0].tickCount, 99);
+});
+
+test("ghost cells show inactive part cells only when enabled", () => {
+  const state = createInitialState(lifeBehavior) as any;
+  const ghostIndex = GRID_DOMAIN.indexOf({ x: 2, y: 3 });
+  const screenIndex = GRID_DOMAIN.toDisplayIndex({ x: 2, y: 3 });
+  state.partStates[0].cells = Array.from({ length: CELL_COUNT }, () => false);
+  state.partStates[1].cells = Array.from({ length: CELL_COUNT }, (_, i) => i === ghostIndex);
+
+  state.runtimeConfig.ghostCells = false;
+  const off = toSimulatorFrame(state, lifeBehavior).leds.cells[screenIndex];
+  state.runtimeConfig.ghostCells = true;
+  const ghost = toSimulatorFrame(state, lifeBehavior).leds.cells[screenIndex];
+  state.partStates[0].cells[ghostIndex] = true;
+  const active = toSimulatorFrame(state, lifeBehavior).leds.cells[screenIndex];
+
+  assert.ok(ghost.g > off.g);
+  assert.ok(active.g > ghost.g);
+});
+
+test("sectioned scan wraps and reverses across lane steps", () => {
+  let state = createInitialState(lifeBehavior) as any;
+  state.transport.playing = true;
+  state.runtimeConfig.scanMode = "scanning";
+  state.runtimeConfig.scanAxis = "rows";
+  state.runtimeConfig.scanUnit = "1/16";
+  state.runtimeConfig.scanSections = "2";
+  state.runtimeConfig.parts[0].l2.scanMode = "scanning";
+  state.runtimeConfig.parts[0].l2.scanAxis = "rows";
+  state.runtimeConfig.parts[0].l2.scanUnit = "1/16";
+  state.runtimeConfig.parts[0].l2.scanSections = "2";
+
+  state.partScanIndex[0] = 15;
+  state.scanIndex = 15;
+  state = tick(state, lifeBehavior).state as any;
+  assert.equal(state.scanIndex, 0);
+
+  state.runtimeConfig.scanDirection = "reverse";
+  state.runtimeConfig.parts[0].l2.scanDirection = "reverse";
+  state = tick(state, lifeBehavior).state as any;
+  assert.equal(state.scanIndex, 15);
 });

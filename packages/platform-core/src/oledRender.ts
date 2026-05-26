@@ -10,6 +10,7 @@ export type OledRenderState = {
   transportIcon?: "play" | "pause" | "stop";
   transportFlash?: "none" | "beat" | "measure";
   eventDotOn?: boolean;
+  audioLoadIndicator?: "yellow" | "red";
   toast?: string | null;
   toastStartedAtMs?: number;
   renderNowMs?: number;
@@ -222,6 +223,11 @@ function drawTransport(
   fillRect(buf, { x: dotX - 1, y: dotY - 1, w: 3, h: 3 }, eventDotOn ? dotOn : dotOff);
 }
 
+function drawAudioLoadIndicator(buf: Uint8Array, indicator: "yellow" | "red") {
+  const color = indicator === "red" ? 0xf800 : 0xffe0;
+  fillRect(buf, { x: OLED_W - 7, y: 3, w: 4, h: 4 }, color);
+}
+
 function toastWindow(message: string, now: number, startedAtMs: number, maxChars: number): string {
   if (message.length <= maxChars) return message;
   const holdMs = 700;
@@ -298,6 +304,8 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
   if (state.transportIcon) {
     drawTransport(buf, state.transportIcon, state.transportFlash ?? "none", Boolean(state.eventDotOn));
   }
+
+  if (state.audioLoadIndicator) drawAudioLoadIndicator(buf, state.audioLoadIndicator);
 
   if (state.toast) {
     // Reserve the rightmost area for transport indicator.

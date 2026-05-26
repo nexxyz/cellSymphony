@@ -80,6 +80,16 @@ export function App() {
     setPainted((prev) => new Set(prev).add(key));
   }
 
+  function pressMomentaryCell(x: number, y: number) {
+    const world = logicalCellFromDisplay(x, y);
+    const previous = lastPressedCell.current;
+    const sameCell = previous?.x === world.x && previous.y === world.y;
+    if (sameCell) return;
+    if (previous) dispatch({ type: "grid_release", x: previous.x, y: previous.y });
+    dispatch({ type: "grid_press", x: world.x, y: world.y });
+    lastPressedCell.current = world;
+  }
+
   function endPaint() {
     setPaintMode(null);
     setPainted(new Set());
@@ -206,6 +216,12 @@ export function App() {
                   className="cell"
                   style={{ backgroundColor: `rgb(${cell.r}, ${cell.g}, ${cell.b})` }}
                   onMouseDown={() => {
+                    if (frame.gridInteraction === "momentary") {
+                      setPaintMode(null);
+                      setPainted(new Set());
+                      pressMomentaryCell(x, y);
+                      return;
+                    }
                     const desired = !cellAlive(index);
                     setPaintMode(desired);
                     setPainted(new Set());
@@ -213,7 +229,12 @@ export function App() {
                     applyPaint(x, y, desired);
                   }}
                   onMouseEnter={(event) => {
-                    if (paintMode === null || event.buttons !== 1) return;
+                    if (event.buttons !== 1) return;
+                    if (frame.gridInteraction === "momentary") {
+                      pressMomentaryCell(x, y);
+                      return;
+                    }
+                    if (paintMode === null) return;
                     applyPaint(x, y, paintMode);
                   }}
                   onClick={(event) => event.preventDefault()}

@@ -20,6 +20,7 @@ import { createLocalStorageConfigStore } from "./configStore";
 import { TauriMidiService } from "./midi/tauriMidi";
 import { invoke } from "@tauri-apps/api/core";
 import type { ConfigPayload } from "@cellsymphony/platform-core";
+import { TauriAudioLoadService, type AudioLoadService, type AudioLoadStatus } from "../audio/audioLoadEvents";
 
 type SimulatorRuntime = {
   dispatch(input: DeviceInput): void;
@@ -52,6 +53,7 @@ type RuntimeMidiService = {
 type RuntimeDeps = {
   store?: RuntimeStore;
   midiService?: RuntimeMidiService;
+  audioLoadService?: AudioLoadService;
   invoke?: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
   autoSaveCooldownMs?: number;
 };
@@ -83,6 +85,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
   const midiQueue: ScheduledMidi[] = [];
   const listeners = new Set<RuntimeListener>();
   const eventListeners = new Set<EventsListener>();
+  let audioLoad: AudioLoadStatus = { ratio: 0, voiceSteal: false };
   const autoSaveCooldownMs = deps.autoSaveCooldownMs ?? DEFAULT_AUTO_SAVE_COOLDOWN_MS;
   let pendingDefaultSave: ConfigPayload | null = null;
   let pendingDefaultSaveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -118,7 +121,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
   }
 
   function snapshotFromState(next: typeof state): SimulatorSnapshot {
-    const frame = toSimulatorFrame(next, activeBehavior());
+    const frame = toSimulatorFrame(next, activeBehavior(), { audioLoad });
     const flash = next.system.transportFlash; // read from core state, same as OLED
     return {
       frame,
@@ -132,6 +135,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       buttonBrightness: (next as any).runtimeConfig.buttonBrightness ?? 75,
       masterVolume: (next as any).runtimeConfig.masterVolume ?? 100,
       voiceStealingMode: ((next as any).runtimeConfig.sound?.voiceStealingMode ?? "balanced") as any,
+      audioLoad,
       instruments: Array.isArray((next as any).runtimeConfig.instruments) ? ((next as any).runtimeConfig.instruments as unknown[]) : [],
       mixer: (next as any).runtimeConfig.mixer ?? { buses: [] }
     };
@@ -295,6 +299,7 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
     }
   }
   const tauriMidi: RuntimeMidiService = deps.midiService ?? new TauriMidiService();
+  const audioLoadService: AudioLoadService = deps.audioLoadService ?? new TauriAudioLoadService();
   const invokeBridge = deps.invoke ?? invoke;
 
   let selectedOutId: string | null = null;
@@ -340,6 +345,11 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
         extMsgs.push("stop");
       }
     }
+  });
+
+  void audioLoadService.listenAudioLoad((status) => {
+    audioLoad = { ratio: Math.max(0, Math.min(2, status.ratio)), voiceSteal: status.voiceSteal };
+    publishSnapshot();
   });
 
   // Prime MIDI port lists on boot.

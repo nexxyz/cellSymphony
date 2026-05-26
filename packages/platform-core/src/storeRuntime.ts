@@ -4,7 +4,9 @@ import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { ConfigPayload, PlatformEffect, PlatformState, RuntimeConfig, StoreResult } from "./index";
 import { isBusEffectType, sanitizeFxParams } from "./fxDefaults";
 import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
+import { cutoffHzToDisplay, overrideFromPart, preferMapping } from "./coreUtils";
 import { makeToast } from "./toast";
+import { DEFAULT_VELOCITY_LEVELS, DEFAULT_MIDI_ENGINE, DEFAULT_VELOCITY, DEFAULT_VOLUME } from "./runtimeDefaults";
 
 type StoreDeps<TState> = {
   resolveBehavior: (id: string) => BehaviorEngine<any, any>;
@@ -55,13 +57,16 @@ export function extractConfigPayload<TState>(state: PlatformState<TState>): Conf
         pitch: structuredClone(runtimeAny.pitch),
         x: structuredClone(runtimeAny.x),
         y: structuredClone(runtimeAny.y),
-        mapping: {
-          activate: { action: (state.mappingConfig as any).activate?.action ?? parts[active].l2.mapping.activate.action, slot: Number((state.mappingConfig as any).activate?.channel ?? parts[active].l2.mapping.activate.slot) },
-          stable: { action: (state.mappingConfig as any).stable?.action ?? parts[active].l2.mapping.stable.action, slot: Number((state.mappingConfig as any).stable?.channel ?? parts[active].l2.mapping.stable.slot) },
-          deactivate: { action: (state.mappingConfig as any).deactivate?.action ?? parts[active].l2.mapping.deactivate.action, slot: Number((state.mappingConfig as any).deactivate?.channel ?? parts[active].l2.mapping.deactivate.slot) },
-          scanned: { action: (state.mappingConfig as any).scanned?.action ?? parts[active].l2.mapping.scanned.action, slot: Number((state.mappingConfig as any).scanned?.channel ?? parts[active].l2.mapping.scanned.slot) },
-          scanned_empty: { action: (state.mappingConfig as any).scanned_empty?.action ?? parts[active].l2.mapping.scanned_empty.action, slot: Number((state.mappingConfig as any).scanned_empty?.channel ?? parts[active].l2.mapping.scanned_empty.slot) }
-        }
+        mapping: (() => {
+          const merged = preferMapping(state.mappingConfig as any, parts[active]);
+          return {
+            activate: { action: merged.activate.action, slot: Number(merged.activate.channel) },
+            stable: { action: merged.stable.action, slot: Number(merged.stable.channel) },
+            deactivate: { action: merged.deactivate.action, slot: Number(merged.deactivate.channel) },
+            scanned: { action: merged.scanned.action, slot: Number(merged.scanned.channel) },
+            scanned_empty: { action: merged.scanned_empty.action, slot: Number(merged.scanned_empty.channel) }
+          };
+        })()
       }
     };
   }
@@ -126,132 +131,130 @@ export function applyConfigPayload<TState>(
     externalPpqnPulse: 0,
     sampleAssign: null,
     sampleAssignLastPress: null,
-    sampleBrowser: null
+    sampleBrowser: null,
+    touchMode: "none"
   };
   return next as PlatformState<TState>;
+}
+
+function sanitizeInstruments(incoming: any, factory: any): any[] {
+  const factorySlots: any[] = Array.isArray((factory.runtimeConfig as any).instruments)
+    ? (factory.runtimeConfig as any).instruments
+    : [];
+  const baseSlots = factorySlots.length > 0 ? factorySlots : Array.from({ length: PLATFORM_CAPS.instrumentCount }, () => ({ type: "synth", midi: { enabled: false, channel: 0 }, synth: {}, sample: { baseVelocity: DEFAULT_VELOCITY, velocityLevelsEnabled: false, velocityLevels: { ...DEFAULT_VELOCITY_LEVELS }, selectedSlot: 0, slots: Array.from({ length: PLATFORM_CAPS.sampleSlotCount }, () => ({ path: null })), tuneSemis: 0, amp: {}, ampEnv: {}, filter: {}, filterEnv: {}, assignments: [] }, midiEngine: { ...DEFAULT_MIDI_ENGINE }, mixer: { route: "direct", panPos: Math.floor(PLATFORM_CAPS.gridWidth / 2), volume: DEFAULT_VOLUME } }));
+  const src = Array.isArray(incoming) ? incoming : [];
+  const out: any[] = [];
+  for (let i = 0; i < PLATFORM_CAPS.instrumentCount; i += 1) {
+    const f = baseSlots[i] ?? baseSlots[0] ?? { type: "synth", midi: { enabled: false, channel: i }, synth: {}, sample: { baseVelocity: DEFAULT_VELOCITY, velocityLevelsEnabled: false, velocityLevels: { ...DEFAULT_VELOCITY_LEVELS }, selectedSlot: 0, slots: Array.from({ length: PLATFORM_CAPS.sampleSlotCount }, () => ({ path: null })), tuneSemis: 0, amp: {}, ampEnv: {}, filter: {}, filterEnv: {}, assignments: [] }, midiEngine: { ...DEFAULT_MIDI_ENGINE }, mixer: { route: "direct", panPos: Math.floor(PLATFORM_CAPS.gridWidth / 2), volume: DEFAULT_VOLUME } };
+    const s = src[i] ?? {};
+    const incomingAutoName = typeof (s as any).autoName === "boolean" ? (s as any).autoName : true;
+    const incomingName = typeof (s as any).name === "string" && (s as any).name.trim().length > 0 ? (s as any).name.trim() : "";
+    const fallbackAutoName = typeof (f as any).autoName === "boolean" ? (f as any).autoName : true;
+    const fallbackName = typeof (f as any).name === "string" && (f as any).name.trim().length > 0 ? (f as any).name.trim() : "";
+    out.push({
+      ...(f as any),
+      ...(s as any),
+      type: (s as any).type === "sample" || (s as any).type === "midi" || (s as any).type === "synth" || (s as any).type === "none" ? (s as any).type : (f as any).type,
+      autoName: incomingAutoName,
+      name: incomingName || fallbackName || (f as any).name || "synth",
+      midi: { ...(f as any).midi, ...((s as any).midi ?? {}) },
+      synth: {
+        ...(f as any).synth,
+        ...((s as any).synth ?? {}),
+        osc1: { ...(f as any).synth?.osc1, ...((s as any).synth?.osc1 ?? {}) },
+        osc2: { ...(f as any).synth?.osc2, ...((s as any).synth?.osc2 ?? {}) },
+        amp: { ...(f as any).synth?.amp, ...((s as any).synth?.amp ?? {}) },
+        ampEnv: { ...(f as any).synth?.ampEnv, ...((s as any).synth?.ampEnv ?? {}) },
+        filter: { ...(f as any).synth?.filter, ...((s as any).synth?.filter ?? {}) },
+        filterEnv: { ...(f as any).synth?.filterEnv, ...((s as any).synth?.filterEnv ?? {}) }
+      },
+      sample: {
+        ...(f as any).sample,
+        ...((s as any).sample ?? {}),
+        velocityLevels: { ...(f as any).sample?.velocityLevels, ...((s as any).sample?.velocityLevels ?? {}) },
+        slots: (() => {
+          const incomingSlots = Array.isArray((s as any).sample?.slots)
+            ? (s as any).sample.slots.slice(0, PLATFORM_CAPS.sampleSlotCount).map((entry: any) => ({ path: typeof entry?.path === "string" ? entry.path : null }))
+            : (Array.isArray((f as any).sample?.slots) ? (f as any).sample.slots.slice(0, PLATFORM_CAPS.sampleSlotCount).map((entry: any) => ({ path: typeof entry?.path === "string" ? entry.path : null })) : []);
+          while (incomingSlots.length < PLATFORM_CAPS.sampleSlotCount) incomingSlots.push({ path: null });
+          return incomingSlots;
+        })(),
+        assignments: Array.isArray((s as any).sample?.assignments) ? (s as any).sample.assignments : (Array.isArray((f as any).sample?.assignments) ? (f as any).sample.assignments : []),
+        amp: { ...(f as any).sample?.amp, ...((s as any).sample?.amp ?? {}) },
+        ampEnv: { ...(f as any).sample?.ampEnv, ...((s as any).sample?.ampEnv ?? {}) },
+        filter: { ...(f as any).sample?.filter, ...((s as any).sample?.filter ?? {}) },
+        filterEnv: { ...(f as any).sample?.filterEnv, ...((s as any).sample?.filterEnv ?? {}) }
+      },
+      midiEngine: {
+        ...(f as any).midiEngine,
+        ...((s as any).midiEngine ?? {})
+      },
+      mixer: {
+        route: (() => {
+          const raw = String((s as any).mixer?.route ?? (f as any).mixer?.route ?? "direct");
+          if (raw === "direct") return "direct";
+          const m = /^(?:fx_)?bus_(\d+)$/.exec(raw);
+          if (!m) return "direct";
+          const idx = Number(m[1]);
+          if (!Number.isFinite(idx) || idx < 1 || idx > PLATFORM_CAPS.busCount) return "direct";
+          return `fx_bus_${idx}`;
+        })(),
+        panPos: Math.max(0, Math.min(PLATFORM_CAPS.gridWidth - 1, Number((s as any).mixer?.panPos ?? (f as any).mixer?.panPos ?? Math.floor(PLATFORM_CAPS.gridWidth / 2)))),
+        volume: Math.max(0, Math.min(100, Number((s as any).mixer?.volume ?? (f as any).mixer?.volume ?? DEFAULT_VOLUME)))
+      }
+    });
+    const inst = out[i] as Record<string, any>;
+    for (const prefix of ["synth", "sample"]) {
+      const section = inst[prefix] as Record<string, any> | undefined;
+      const filter = section?.filter;
+      if (filter && typeof filter.cutoffHz === "number" && filter.cutoffHz > 255) {
+        section.filter = { ...filter, cutoffHz: cutoffHzToDisplay(filter.cutoffHz) };
+      }
+    }
+  }
+  return out;
+}
+
+const BUS_EFFECT_TYPES = new Set([
+  "none", "reverb", "delay", "tremolo", "vibrato", "auto_pan",
+  "chorus", "flanger", "wah", "filter_lfo", "duck", "bitcrusher",
+  "saturator", "distortion", "glitch", "compressor", "eq"
+]);
+
+function normalizeSlot(raw: any): any {
+  if (typeof raw === "string") {
+    const type = BUS_EFFECT_TYPES.has(raw) ? raw : "none";
+    return { type, params: sanitizeFxParams(type, {}) };
+  }
+  const typeRaw = typeof raw?.type === "string" ? raw.type : "none";
+  const type = isBusEffectType(typeRaw) && BUS_EFFECT_TYPES.has(typeRaw) ? typeRaw : "none";
+  const params = sanitizeFxParams(type, raw?.params);
+  return { type, params };
+}
+
+function sanitizeMixer(incoming: any, factory: any): any {
+  const factoryMixer = (factory.runtimeConfig as any).mixer;
+  const sourceBuses = Array.isArray(incoming?.buses) ? incoming.buses : (Array.isArray(factoryMixer?.buses) ? factoryMixer.buses : []);
+  const buses: any[] = [];
+  for (let i = 0; i < PLATFORM_CAPS.busCount; i += 1) {
+    const src = sourceBuses[i] ?? {};
+    const autoName = typeof src.autoName === "boolean" ? src.autoName : true;
+    const srcName = typeof src.name === "string" && src.name.trim().length > 0 ? src.name.trim() : "(none)";
+    buses.push({
+      slot1: normalizeSlot(src.slot1),
+      slot2: normalizeSlot(src.slot2),
+      panPos: Math.max(0, Math.min(PLATFORM_CAPS.gridWidth - 1, Number(src.panPos ?? Math.floor(PLATFORM_CAPS.gridWidth / 2)))),
+      autoName,
+      name: srcName
+    });
+  }
+  return { buses };
 }
 
 function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngine<TState, unknown>, deps: StoreDeps<TState>): ConfigPayload {
   const factory = deps.factoryPayload(behavior);
   const p: any = payload ?? {};
   const rt: any = p.runtimeConfig ?? {};
-
-  const sanitizeInstruments = (incoming: any): any[] => {
-    const factorySlots: any[] = Array.isArray((factory.runtimeConfig as any).instruments)
-      ? (factory.runtimeConfig as any).instruments
-      : [];
-    const baseSlots = factorySlots.length > 0 ? factorySlots : Array.from({ length: PLATFORM_CAPS.instrumentCount }, () => ({ type: "synth", midi: { enabled: false, channel: 0 }, synth: {}, sample: { baseVelocity: 100, velocityLevelsEnabled: false, velocityLevels: { high: 120, medium: 85, low: 45 }, selectedSlot: 0, slots: Array.from({ length: PLATFORM_CAPS.sampleSlotCount }, () => ({ path: null })), tuneSemis: 0, amp: {}, ampEnv: {}, filter: {}, filterEnv: {}, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } }));
-    const src = Array.isArray(incoming) ? incoming : [];
-    const out: any[] = [];
-    for (let i = 0; i < PLATFORM_CAPS.instrumentCount; i += 1) {
-      const f = baseSlots[i] ?? baseSlots[0] ?? { type: "synth", midi: { enabled: false, channel: i }, synth: {}, sample: { baseVelocity: 100, velocityLevelsEnabled: false, velocityLevels: { high: 120, medium: 85, low: 45 }, selectedSlot: 0, slots: Array.from({ length: PLATFORM_CAPS.sampleSlotCount }, () => ({ path: null })), tuneSemis: 0, amp: {}, ampEnv: {}, filter: {}, filterEnv: {}, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 } };
-      const s = src[i] ?? {};
-      const incomingAutoName = typeof (s as any).autoName === "boolean" ? (s as any).autoName : true;
-      const incomingName = typeof (s as any).name === "string" && (s as any).name.trim().length > 0 ? (s as any).name.trim() : "";
-      const fallbackAutoName = typeof (f as any).autoName === "boolean" ? (f as any).autoName : true;
-      const fallbackName = typeof (f as any).name === "string" && (f as any).name.trim().length > 0 ? (f as any).name.trim() : "";
-      out.push({
-        ...(f as any),
-        ...(s as any),
-        type: (s as any).type === "sample" || (s as any).type === "midi" || (s as any).type === "synth" ? (s as any).type : (f as any).type,
-        autoName: incomingAutoName,
-        name: incomingName || fallbackName || (f as any).name || "synth",
-        midi: { ...(f as any).midi, ...((s as any).midi ?? {}) },
-        synth: {
-          ...(f as any).synth,
-          ...((s as any).synth ?? {}),
-          osc1: { ...(f as any).synth?.osc1, ...((s as any).synth?.osc1 ?? {}) },
-          osc2: { ...(f as any).synth?.osc2, ...((s as any).synth?.osc2 ?? {}) },
-          amp: { ...(f as any).synth?.amp, ...((s as any).synth?.amp ?? {}) },
-          ampEnv: { ...(f as any).synth?.ampEnv, ...((s as any).synth?.ampEnv ?? {}) },
-          filter: { ...(f as any).synth?.filter, ...((s as any).synth?.filter ?? {}) },
-          filterEnv: { ...(f as any).synth?.filterEnv, ...((s as any).synth?.filterEnv ?? {}) }
-        },
-        sample: {
-          ...(f as any).sample,
-          ...((s as any).sample ?? {}),
-          velocityLevels: { ...(f as any).sample?.velocityLevels, ...((s as any).sample?.velocityLevels ?? {}) },
-          slots: (() => {
-            const incomingSlots = Array.isArray((s as any).sample?.slots)
-              ? (s as any).sample.slots.slice(0, PLATFORM_CAPS.sampleSlotCount).map((entry: any) => ({ path: typeof entry?.path === "string" ? entry.path : null }))
-              : (Array.isArray((f as any).sample?.slots) ? (f as any).sample.slots.slice(0, PLATFORM_CAPS.sampleSlotCount).map((entry: any) => ({ path: typeof entry?.path === "string" ? entry.path : null })) : []);
-            while (incomingSlots.length < PLATFORM_CAPS.sampleSlotCount) incomingSlots.push({ path: null });
-            return incomingSlots;
-          })(),
-          assignments: Array.isArray((s as any).sample?.assignments) ? (s as any).sample.assignments : (Array.isArray((f as any).sample?.assignments) ? (f as any).sample.assignments : []),
-          amp: { ...(f as any).sample?.amp, ...((s as any).sample?.amp ?? {}) },
-          ampEnv: { ...(f as any).sample?.ampEnv, ...((s as any).sample?.ampEnv ?? {}) },
-          filter: { ...(f as any).sample?.filter, ...((s as any).sample?.filter ?? {}) },
-          filterEnv: { ...(f as any).sample?.filterEnv, ...((s as any).sample?.filterEnv ?? {}) }
-        },
-        midiEngine: {
-          ...(f as any).midiEngine,
-          ...((s as any).midiEngine ?? {})
-        },
-        mixer: {
-          route: (() => {
-            const raw = String((s as any).mixer?.route ?? (f as any).mixer?.route ?? "direct");
-            if (raw === "direct") return "direct";
-            const m = /^(?:fx_)?bus_(\d+)$/.exec(raw);
-            if (!m) return "direct";
-            const idx = Number(m[1]);
-            if (!Number.isFinite(idx) || idx < 1 || idx > PLATFORM_CAPS.busCount) return "direct";
-            return `fx_bus_${idx}`;
-          })(),
-          panPos: Math.max(0, Math.min(PLATFORM_CAPS.gridWidth - 1, Number((s as any).mixer?.panPos ?? (f as any).mixer?.panPos ?? Math.floor(PLATFORM_CAPS.gridWidth / 2))))
-        }
-      });
-    }
-    return out;
-  };
-
-  const sanitizeMixer = (incoming: any): any => {
-    const factoryMixer = (factory.runtimeConfig as any).mixer;
-    const sourceBuses = Array.isArray(incoming?.buses) ? incoming.buses : (Array.isArray(factoryMixer?.buses) ? factoryMixer.buses : []);
-    const buses: any[] = [];
-    const normalizeSlot = (raw: any): any => {
-      const allowed = new Set([
-        "none",
-        "reverb",
-        "delay",
-        "tremolo",
-        "vibrato",
-        "auto_pan",
-        "chorus",
-        "flanger",
-        "wah",
-        "filter_lfo",
-        "duck",
-        "bitcrusher",
-        "saturator",
-        "distortion",
-        "glitch",
-        "compressor",
-        "eq"
-      ]);
-      if (typeof raw === "string") {
-        const type = allowed.has(raw) ? raw : "none";
-        return { type, params: sanitizeFxParams(type, {}) };
-      }
-      const typeRaw = typeof raw?.type === "string" ? raw.type : "none";
-      const type = isBusEffectType(typeRaw) && allowed.has(typeRaw) ? typeRaw : "none";
-      const params = sanitizeFxParams(type, raw?.params);
-      return { type, params };
-    };
-    for (let i = 0; i < PLATFORM_CAPS.busCount; i += 1) {
-      const src = sourceBuses[i] ?? {};
-      const autoName = typeof src.autoName === "boolean" ? src.autoName : true;
-      const srcName = typeof src.name === "string" && src.name.trim().length > 0 ? src.name.trim() : "(none)";
-      buses.push({
-        slot1: normalizeSlot(src.slot1),
-        slot2: normalizeSlot(src.slot2),
-        panPos: Math.max(0, Math.min(PLATFORM_CAPS.gridWidth - 1, Number(src.panPos ?? Math.floor(PLATFORM_CAPS.gridWidth / 2)))),
-        autoName,
-        name: srcName
-      });
-    }
-    return { buses };
-  };
 
   const mergedRuntime: RuntimeConfig = {
     ...(factory.runtimeConfig as any),
@@ -282,8 +285,8 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
         : "bar+numbers",
     activePartIndex: clampPartIndex(rt.activePartIndex ?? (factory.runtimeConfig as any).activePartIndex ?? 0),
     parts: Array.isArray(rt.parts) ? rt.parts : Array.isArray((factory.runtimeConfig as any).parts) ? (factory.runtimeConfig as any).parts : [],
-    instruments: sanitizeInstruments(rt.instruments),
-    mixer: sanitizeMixer(rt.mixer)
+    instruments: sanitizeInstruments(rt.instruments, factory),
+    mixer: sanitizeMixer(rt.mixer, factory)
   };
 
   const voiceStealingMode = (mergedRuntime as any).sound?.voiceStealingMode;
@@ -309,6 +312,7 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     mergedRuntime.scanAxis = p.l2?.scanAxis ?? mergedRuntime.scanAxis;
     mergedRuntime.scanUnit = p.l2?.scanUnit ?? mergedRuntime.scanUnit;
     mergedRuntime.scanDirection = p.l2?.scanDirection ?? mergedRuntime.scanDirection;
+    mergedRuntime.scanSections = p.l2?.scanSections ?? mergedRuntime.scanSections ?? "1";
     mergedRuntime.eventEnabled = p.l2?.eventEnabled ?? mergedRuntime.eventEnabled;
     mergedRuntime.stateEnabled = p.l2?.stateEnabled ?? mergedRuntime.stateEnabled;
     mergedRuntime.pitch = p.l2?.pitch ? structuredClone(p.l2.pitch) : mergedRuntime.pitch;
@@ -333,12 +337,14 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
   for (let i = 0; i < parts.length; i += 1) {
     const part = parts[i];
     if (!part?.l1) continue;
+    const basePart = (factory.runtimeConfig as any).parts?.[i] ?? (factory.runtimeConfig as any).parts?.[0] ?? {};
     parts[i] = {
       ...part,
       l1: {
         ...part.l1,
         saveGridState: part.l1.saveGridState !== false
       },
+      l2: sanitizePartL2(part.l2, basePart.l2),
       autoName: typeof (part as any).autoName === "boolean" ? (part as any).autoName : true,
       name: typeof (part as any).name === "string" && (part as any).name.trim().length > 0 ? (part as any).name.trim() : (part as any).l1?.behaviorId ?? "life"
     };
@@ -347,15 +353,8 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
 
   const mappingConfig = p.mappingConfig ? (p.mappingConfig as MappingConfig) : factory.mappingConfig;
   const activePart = (mergedRuntime as any).parts?.[active];
-  const mergedMapping: MappingConfig = activePart?.l2?.mapping
-    ? {
-      ...mappingConfig,
-      activate: { ...mappingConfig.activate, action: activePart.l2.mapping.activate.action, channel: activePart.l2.mapping.activate.slot },
-      stable: { ...mappingConfig.stable, action: activePart.l2.mapping.stable.action, channel: activePart.l2.mapping.stable.slot },
-      deactivate: { ...mappingConfig.deactivate, action: activePart.l2.mapping.deactivate.action, channel: activePart.l2.mapping.deactivate.slot },
-      scanned: { ...mappingConfig.scanned, action: activePart.l2.mapping.scanned.action, channel: activePart.l2.mapping.scanned.slot },
-      scanned_empty: { ...mappingConfig.scanned_empty, action: activePart.l2.mapping.scanned_empty.action, channel: activePart.l2.mapping.scanned_empty.slot }
-    }
+  const mergedMapping = activePart?.l2?.mapping
+    ? overrideFromPart(mappingConfig, activePart)
     : mappingConfig;
 
   return {
@@ -363,6 +362,25 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     runtimeConfig: mergedRuntime,
     mappingConfig: mergedMapping
   };
+}
+
+function sanitizePartL2(partL2: any, baseL2: any): any {
+  const base = baseL2 ?? {};
+  const l2 = partL2 ?? {};
+  return {
+    ...base,
+    ...l2,
+    scanSections: l2.scanSections === "2" || l2.scanSections === "4" || l2.scanSections === "8" ? l2.scanSections : base.scanSections ?? "1",
+    pitch: { ...(base.pitch ?? {}), ...(l2.pitch ?? {}) },
+    x: sanitizeAxis(l2.x, base.x),
+    y: sanitizeAxis(l2.y, base.y)
+  };
+}
+
+function sanitizeAxis(axis: any, baseAxis: any): any {
+  const base = baseAxis ?? {};
+  const src = axis ?? {};
+  return { ...base, ...src, pitch: { ...(base.pitch ?? {}), ...(src.pitch ?? {}), restartEachSection: src.pitch?.restartEachSection === true } };
 }
 
 export function applyStoreResult<TState>(

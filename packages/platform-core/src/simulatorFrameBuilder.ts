@@ -2,7 +2,7 @@ import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import { GRID_HEIGHT, GRID_WIDTH, type DisplayFrame, type SimulatorFrame } from "@cellsymphony/device-contracts";
 import type { BarValue, PlatformState } from "./platformTypes";
 import { OLED_TEXT_LINES } from "./platformTypes";
-import { cellsToLeds, sampleAssignmentToLeds } from "./runtimeHelpers";
+import { cellsToLeds, sampleAssignmentToLeds, touchModeToLeds } from "./runtimeHelpers";
 import { renderOledFrame } from "./oledRender";
 import { logoSepia128Rgb565be } from "./oledAssets/logoSepia128_rgb565be";
 import { logo128Rgb565be } from "./oledAssets/logo128_rgb565be";
@@ -15,9 +15,18 @@ type Args<TState> = {
   engine: BehaviorEngine<any, unknown>;
   model: { name: string; cells: boolean[]; triggerTypes?: import("@cellsymphony/behavior-api").CellTriggerType[] };
   menuView: { path: string; lines: string[]; colors: number[]; barValues: (BarValue | null)[] };
-  scanCursor: { axis: "rows" | "columns"; index: number } | null;
+  scanCursor: { axis: "rows" | "columns"; index: number; sections?: unknown } | null;
   toOledLines: (display: DisplayFrame) => OledLines;
+  audioLoad?: { ratio: number; voiceSteal: boolean };
+  ghostCells?: boolean[];
 };
+
+function audioLoadIndicator(status: { ratio: number; voiceSteal: boolean } | undefined): "yellow" | "red" | undefined {
+  if (!status) return undefined;
+  if (status.ratio >= 0.85) return "red";
+  if (status.ratio >= 0.6 || status.voiceSteal) return "yellow";
+  return undefined;
+}
 
 export function buildSimulatorFrame<TState>(args: Args<TState>): SimulatorFrame {
   const { state, activePart, model, menuView, scanCursor, toOledLines } = args;
@@ -51,6 +60,7 @@ export function buildSimulatorFrame<TState>(args: Args<TState>): SimulatorFrame 
     transportIcon,
     transportFlash: state.system.transportFlash,
     eventDotOn: state.system.eventBlipUntilMs > now,
+    audioLoadIndicator: audioLoadIndicator(args.audioLoad),
     toast,
     toastStartedAtMs,
     renderNowMs: now,
@@ -65,15 +75,17 @@ export function buildSimulatorFrame<TState>(args: Args<TState>): SimulatorFrame 
     const levels = inst.sample?.velocityLevelsEnabled === true;
     return sampleAssignmentToLeds(assignments, sampleAssign.sampleSlot, levels, state.runtimeConfig.gridBrightness / 100);
   })();
+  const touchLeds = touchModeToLeds(state, state.runtimeConfig.gridBrightness / 100);
   return {
     display: baseDisplay,
     oled,
     leds: {
       width: GRID_WIDTH,
       height: GRID_HEIGHT,
-      cells: assignLeds ?? cellsToLeds(model.cells, model.triggerTypes, scanCursor, state.runtimeConfig.gridBrightness / 100, state.system.fnHeld, activePart)
+      cells: assignLeds ?? touchLeds ?? cellsToLeds(model.cells, model.triggerTypes, scanCursor, state.runtimeConfig.gridBrightness / 100, state.system.fnHeld, activePart, args.ghostCells)
     },
     transport: state.transport,
-    activeBehavior: model.name
+    activeBehavior: model.name,
+    gridInteraction: args.engine.gridInteraction ?? "paint"
   };
 }

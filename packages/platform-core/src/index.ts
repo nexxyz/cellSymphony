@@ -1,15 +1,15 @@
 import { type BehaviorEngine, getBehavior, registerBehavior } from "@cellsymphony/behavior-api";
-import { sequencerBehavior } from "@cellsymphony/behaviors-sequencer";
-import { brainBehavior } from "@cellsymphony/behaviors-brain";
+import { noneBehavior } from "@cellsymphony/behaviors-none";
 import { lifeBehavior } from "@cellsymphony/behaviors-life";
+import { sequencerBehavior } from "@cellsymphony/behaviors-sequencer";
+import { keysBehavior } from "@cellsymphony/behaviors-keys";
+import { brainBehavior } from "@cellsymphony/behaviors-brain";
 import { antBehavior } from "@cellsymphony/behaviors-ant";
 import { bounceBehavior } from "@cellsymphony/behaviors-bounce";
 import { shapesBehavior } from "@cellsymphony/behaviors-pulse";
 import { raindropsBehavior } from "@cellsymphony/behaviors-raindrops";
 import { dlaBehavior } from "@cellsymphony/behaviors-dla";
 import { gliderBehavior } from "@cellsymphony/behaviors-glider";
-import { noneBehavior } from "@cellsymphony/behaviors-none";
-import { keysBehavior } from "@cellsymphony/behaviors-keys";
 import {
   GRID_HEIGHT,
   GRID_WIDTH,
@@ -37,6 +37,7 @@ import { handleMenuAction } from "./actions";
 import { getSynthPreset } from "./synthPresets";
 export { GRID_DOMAIN, createGridDomain, type GridCell, type GridDomain } from "./gridDomain";
 export { PLATFORM_CAPS } from "./platformCaps";
+export { cutoffDisplayToHz } from "./coreUtils";
 import {
   factoryPayload,
   formatTimestamp,
@@ -58,6 +59,7 @@ import {
 import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
 import {
   clamp,
+  cutoffDisplayToHz,
   fitOledMenuLine as fitOledMenuLineToColumns,
   fitOledText as fitOledTextToColumns,
   fitOledTextToWidth,
@@ -66,9 +68,9 @@ import {
   wrapOledText,
   writeValue
 } from "./coreUtils";
-// Register available behaviors
+registerBehavior(noneBehavior); registerBehavior(lifeBehavior);
 registerBehavior(sequencerBehavior);
-registerBehavior(lifeBehavior);
+registerBehavior(keysBehavior);
 registerBehavior(brainBehavior);
 registerBehavior(antBehavior);
 registerBehavior(bounceBehavior);
@@ -76,11 +78,11 @@ registerBehavior(shapesBehavior);
 registerBehavior(raindropsBehavior);
 registerBehavior(dlaBehavior);
 registerBehavior(gliderBehavior);
-registerBehavior(noneBehavior); registerBehavior(keysBehavior);
 function resolveBehavior(activeId: string): BehaviorEngine<any, any> {
   return getBehavior(activeId) ?? sequencerBehavior;
 }
 import { buildSimulatorFrame } from "./simulatorFrameBuilder";
+import { ghostCellsForInactiveParts } from "./runtimeHelpers";
 import { emergencyBrakeState } from "./transportSafety";
 import {
   OLED_HEIGHT,
@@ -109,17 +111,7 @@ export {
   OLED_TEXT_LINES,
   OLED_WIDTH
 } from "./platformTypes";
-export type {
-  ActionSpec,
-  BarValue,
-  ConfigPayload,
-  MenuNode,
-  NumericDisplayMode,
-  PlatformEffect,
-  PlatformState,
-  RuntimeConfig,
-  StoreResult
-} from "./platformTypes";
+export type { ActionSpec, BarValue, ConfigPayload, MenuNode, NumericDisplayMode, PlatformEffect, PlatformState, RuntimeConfig, StoreResult, TouchMode } from "./platformTypes";
 
 export function createInitialState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
   return createInitialPlatformState(behavior);
@@ -323,7 +315,7 @@ export function applyStoreResult<TState>(
   });
 }
 
-export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>): SimulatorFrame {
+export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior: BehaviorEngine<TState, unknown>, options: { audioLoad?: { ratio: number; voiceSteal: boolean } } = {}): SimulatorFrame {
   const activePart = clampPartIndex((state.runtimeConfig as any).activePartIndex ?? 0);
   const part = (state.runtimeConfig as any).parts?.[activePart];
   const activeBehaviorId = String(part?.l1?.behaviorId ?? state.runtimeConfig.activeBehavior);
@@ -333,9 +325,11 @@ export function toSimulatorFrame<TState>(state: PlatformState<TState>, behavior:
   const menuView = currentMenuView(state);
   const scanMode = part?.l2?.scanMode ?? state.runtimeConfig.scanMode;
   const scanAxis = part?.l2?.scanAxis ?? state.runtimeConfig.scanAxis;
+  const scanSections = part?.l2?.scanSections ?? state.runtimeConfig.scanSections;
   const scanIndex = ((state as any).partScanIndex?.[activePart] ?? state.scanIndex) as number;
-  const scanCursor = scanMode === "scanning" ? { axis: scanAxis, index: scanIndex } : null;
-  return buildSimulatorFrame({ state, activePart, engine, model, menuView, scanCursor, toOledLines });
+  const scanCursor = scanMode === "scanning" ? { axis: scanAxis, index: scanIndex, sections: scanSections } : null;
+  const ghostCells = state.runtimeConfig.ghostCells === true ? ghostCellsForInactiveParts(state, activePart, model.cells.length) : undefined;
+  return buildSimulatorFrame({ state, activePart, engine, model, menuView, scanCursor, toOledLines, audioLoad: options.audioLoad, ghostCells });
 }
 
 function menuTree<TState>(state: PlatformState<TState>): MenuNode {
@@ -395,6 +389,8 @@ function pressMenu<TState>(state: PlatformState<TState>, effects: PlatformEffect
     menuTree,
     handleAction,
     readAnyValue,
+    writeAnyValue,
+    reinitBehaviorState: (nextState, key) => reinitBehaviorState(nextState, key, resolveBehavior),
     formatTimestamp,
     extractConfigPayload
   });
@@ -489,11 +485,5 @@ export function enumerateEnumHelpTargets<TState>(state: PlatformState<TState>): 
   walk(menuTree(state), state, "Menu");
   return out;
 }
-
-function isMainEncoderInput(id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined): boolean {
-  return id === undefined || id === "main";
-}
-
-export function emergencyBrake<TState>(state: PlatformState<TState>): { state: PlatformState<TState>; events: MusicalEvent[] } {
-  return emergencyBrakeState(state);
-}
+function isMainEncoderInput(id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined): boolean { return id === undefined || id === "main"; }
+export function emergencyBrake<TState>(state: PlatformState<TState>): { state: PlatformState<TState>; events: MusicalEvent[] } { return emergencyBrakeState(state); }

@@ -1,4 +1,30 @@
+import { cutoffDisplayToHz } from "@cellsymphony/platform-core";
+
 export type AudioConfigPayload = { instruments: unknown[]; mixer: unknown; panPositions: number };
+
+function convertInstrumentForEngine(inst: unknown): unknown {
+  if (typeof inst !== "object" || inst === null) return inst;
+  const out = { ...(inst as Record<string, unknown>) };
+
+  for (const prefix of ["synth", "sample"]) {
+    const section = out[prefix] as Record<string, unknown> | undefined;
+    if (!section) continue;
+    const filter = section.filter as Record<string, unknown> | undefined;
+    if (!filter) continue;
+    if (typeof filter.cutoffHz === "number" && filter.cutoffHz <= 255) {
+      out[prefix] = { ...section, filter: { ...filter, cutoffHz: cutoffDisplayToHz(filter.cutoffHz) } };
+    }
+  }
+
+  return out;
+}
+
+function normalizeForEngine(config: AudioConfigPayload): AudioConfigPayload {
+  return {
+    ...config,
+    instruments: (config.instruments as unknown[]).map(convertInstrumentForEngine)
+  };
+}
 
 export function audioConfigSignature(config: AudioConfigPayload): string {
   return JSON.stringify(config);
@@ -8,7 +34,6 @@ export function createCoalescedAudioConfigSender(
   send: (config: AudioConfigPayload) => void | Promise<void>,
   delayMs = 16
 ) {
-  let lastSignature = "";
   let pending: AudioConfigPayload | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -24,10 +49,10 @@ export function createCoalescedAudioConfigSender(
   }
 
   function schedule(config: AudioConfigPayload): boolean {
-    const signature = audioConfigSignature(config);
-    if (signature === lastSignature) return false;
-    lastSignature = signature;
-    pending = config;
+    const normalized = normalizeForEngine(config);
+    const newSignature = audioConfigSignature(normalized);
+    if (pending && audioConfigSignature(pending) === newSignature) return false;
+    pending = normalized;
     if (timer !== null) clearTimeout(timer);
     timer = setTimeout(flush, delayMs);
     return true;

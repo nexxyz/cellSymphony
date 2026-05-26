@@ -2,8 +2,55 @@ import { PLATFORM_CAPS } from "./platformCaps";
 import type { FxBusConfig, FxBusEffectType, PartConfig } from "./platformTypes";
 import type { RuntimeConfig } from "./platformTypes";
 
+const TRIGGER_KEYS = ["activate", "stable", "deactivate", "scanned", "scanned_empty"] as const;
+
+export function mergeMapping(mapping: any, part: any, preferBase: boolean, slotField = "slot"): any {
+  const next: any = { ...mapping };
+  for (const key of TRIGGER_KEYS) {
+    const m = mapping[key] ?? {};
+    const p = part?.l2?.mapping?.[key] ?? {};
+    next[key] = {
+      ...m,
+      action: preferBase ? (m.action ?? p.action) : (p.action ?? m.action),
+      channel: Number(preferBase ? (m.channel ?? p[slotField] ?? 0) : (p[slotField] ?? m.channel ?? 0))
+    };
+  }
+  return next;
+}
+
+export function overrideFromPart(mapping: any, part: any): any {
+  const next: any = { ...mapping };
+  for (const key of TRIGGER_KEYS) {
+    const p = part?.l2?.mapping?.[key] ?? {};
+    next[key] = { ...next[key], action: p.action, channel: Number(p.slot ?? next[key]?.channel ?? 0) };
+  }
+  return next;
+}
+
+export function preferMapping(mapping: any, part: any): any {
+  const next: any = { ...mapping };
+  for (const key of TRIGGER_KEYS) {
+    const p = part?.l2?.mapping?.[key] ?? {};
+    next[key] = { ...next[key], action: mapping[key]?.action ?? p.action, channel: Number(mapping[key]?.channel ?? p.slot ?? 0) };
+  }
+  return next;
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+const CUTOFF_MIN_HZ = 80;
+const CUTOFF_MAX_HZ = 16000;
+
+export function cutoffDisplayToHz(display: number): number {
+  const t = clamp(display, 0, 255) / 255;
+  return Math.round(CUTOFF_MIN_HZ * Math.exp(t * Math.log(CUTOFF_MAX_HZ / CUTOFF_MIN_HZ)));
+}
+
+export function cutoffHzToDisplay(hz: number): number {
+  const h = clamp(hz, CUTOFF_MIN_HZ, CUTOFF_MAX_HZ);
+  return Math.round(Math.log(h / CUTOFF_MIN_HZ) / Math.log(CUTOFF_MAX_HZ / CUTOFF_MIN_HZ) * 255);
 }
 
 export function mod(value: number, base: number): number {
@@ -109,6 +156,7 @@ export function derivePartAutoName(part: PartConfig): string {
 export function deriveInstAutoName(instrument: { type: string }): string {
   if (instrument.type === "midi") return "MIDI";
   if (instrument.type === "sample") return "sample";
+  if (instrument.type === "none") return "none";
   return "synth";
 }
 
@@ -125,60 +173,77 @@ export function instrumentLabel(state: { runtimeConfig: { instruments: Array<{ n
   return `I${idx + 1}: ${inst.name ?? "synth"}`;
 }
 
+type FormatFn = (value: unknown, cfg?: RuntimeConfig) => string;
+
+const CHANNEL_RE = /^instruments\.\d+\.midi\.channel$/;
+const INSTR_TYPE_RE = /^instruments\.\d+\.type$/;
+const SLOT_RE = /^instruments\.\d+\.sample\.selectedSlot$/;
+const ROUTE_RE = /^instruments\.\d+\.mixer\.route$/;
+const MAPPING_SLOT_RE = /\.l2\.mapping\.(activate|stable|deactivate|scanned|scanned_empty)\.slot$/;
+const MAPPING_CHANNEL_RE = /^mapping\.(activate|stable|deactivate|scanned|scanned_empty)\.channel$/;
+const PITCH_NOTE_RE = /^(?:pitch\.(?:startingNote|lowestNote|highestNote)|.+\.l2\.pitch\.(?:startingNote|lowestNote|highestNote))$/;
+const SCAN_MODE_RE = /^(?:scanMode|.+\.l2\.scanMode)$/;
+const SCAN_AXIS_RE = /^(?:scanAxis|.+\.l2\.scanAxis)$/;
+const SCAN_DIR_RE = /^(?:scanDirection|.+\.l2\.scanDirection)$/;
+const PITCH_OUT_RE = /^(?:pitch\.outOfRange|.+\.l2\.pitch\.outOfRange)$/;
+const PITCH_SCALE_RE = /^(?:pitch\.scale|.+\.l2\.pitch\.scale)$/;
+const PITCH_ROOT_RE = /^(?:pitch\.root|.+\.l2\.pitch\.root)$/;
+
+const FORMAT_MAP: Array<[RegExp | string, FormatFn]> = [
+  [MAPPING_CHANNEL_RE, (v, cfg) => routeOptionLabel(Number(v), cfg)],
+  [MAPPING_SLOT_RE, (v, cfg) => routeOptionLabel(Number(v), cfg)],
+  [CHANNEL_RE, (v) => String(clamp(Math.floor(Number(v)), 0, 15) + 1)],
+  [INSTR_TYPE_RE, (v) => v === "midi" ? "MIDI only" : v === "sample" ? "sample" : v === "none" ? "none" : "synth"],
+  [SLOT_RE, (v) => String(clamp(Math.floor(Number(v)), 0, PLATFORM_CAPS.sampleSlotCount - 1) + 1)],
+  [ROUTE_RE, (v, cfg) => routeLabel(String(v), cfg)],
+  [SCAN_MODE_RE, (v) => v === "immediate" ? "none" : "scanning"],
+  [SCAN_AXIS_RE, (v) => v === "columns" ? "cols" : "rows"],
+  [SCAN_DIR_RE, (v) => v === "forward" ? "fwd" : "rev"],
+  [PITCH_NOTE_RE, (v) => formatNoteWithMidi(Number(v))],
+  [PITCH_OUT_RE, (v) => v === "wrap" ? "wrap" : "clamp"],
+  [PITCH_SCALE_RE, (v) => formatScaleName(String(v))],
+  [PITCH_ROOT_RE, (v) => String(v)],
+  ["masterVolume", (v) => `Vol: ${v}%`],
+  ["displayBrightness", (v) => `OLED ${v}%`],
+  ["gridBrightness", (v) => `Grid ${v}%`],
+  ["buttonBrightness", (v) => `Btn ${v}%`],
+  ["screenSleepSeconds", (v) => Number(v) <= 0 ? "Sleep: Off" : `Sleep: ${v}s`],
+  ["activeBehavior", (v) => String(v)],
+  ["activePartIndex", (v, cfg) => activePartLabel(Number(v), cfg)],
+  ["transport.playing", (v) => v === true || v === "true" ? "Play" : "Stop"]
+];
+
+function routeOptionLabel(n: number, cfg?: RuntimeConfig): string {
+  const idx = clamp(Math.floor(n), 0, 15);
+  const inst = cfg?.instruments?.[idx];
+  if (inst) return `${idx + 1}: ${instrumentLabel({ runtimeConfig: cfg as any }, idx)}`;
+  return String(idx + 1);
+}
+
+function activePartLabel(n: number, cfg?: RuntimeConfig): string {
+  const idx = clamp(Math.floor(n), 0, PLATFORM_CAPS.partCount - 1);
+  const parts = cfg?.parts ?? [];
+  if (parts[idx]) return partLabel(idx, parts[idx]);
+  return `Part ${idx + 1}`;
+}
+
+function routeLabel(raw: string, cfg?: RuntimeConfig): string {
+  if (raw === "direct") return "direct";
+  const m = /^fx_bus_(\d+)$/.exec(raw);
+  if (m && cfg?.mixer?.buses) {
+    const busIdx = Number(m[1]) - 1;
+    const bus = cfg.mixer.buses[busIdx];
+    if (bus) return fxBusLabel(busIdx, bus);
+  }
+  return raw;
+}
+
 export function formatDisplayValue(key: string, value: unknown, runtimeConfig?: RuntimeConfig): string {
-  if (key === "mapping.activate.channel" || key === "mapping.stable.channel" || key === "mapping.deactivate.channel" || key === "mapping.scanned.channel" || key === "mapping.scanned_empty.channel" || /\.l2\.mapping\.(activate|stable|deactivate|scanned|scanned_empty)\.slot$/.test(key)) {
-    const n = clamp(Math.floor(Number(value)), 0, 15);
-    const parts = runtimeConfig?.parts ?? [];
-    const inst = runtimeConfig?.instruments?.[n];
-    if (inst) return `${n + 1}: ${instrumentLabel({ runtimeConfig: runtimeConfig as any }, n)}`;
-    return String(n + 1);
-  }
-  if (/^instruments\.\d+\.midi\.channel$/.test(key)) {
-    const n = clamp(Math.floor(Number(value)), 0, 15);
-    return String(n + 1);
-  }
-  if (/^instruments\.\d+\.type$/.test(key)) {
-    if (value === "midi") return "MIDI only";
-    if (value === "sample") return "sample";
-    return "synth";
-  }
-  if (key === "masterVolume") return `Vol: ${value}%`;
-  if (key === "displayBrightness") return `OLED ${value}%`;
-  if (key === "gridBrightness") return `Grid ${value}%`;
-  if (key === "buttonBrightness") return `Btn ${value}%`;
-  if (key === "screenSleepSeconds") return Number(value) <= 0 ? "Sleep: Off" : `Sleep: ${value}s`;
-  if (key === "activeBehavior") return String(value);
-  if (key === "activePartIndex") {
-    const n = clamp(Math.floor(Number(value)), 0, PLATFORM_CAPS.partCount - 1);
-    const parts = runtimeConfig?.parts ?? [];
-    if (parts[n]) return partLabel(n, parts[n]);
-    return `Part ${n + 1}`;
-  }
-  if (/^instruments\.\d+\.sample\.selectedSlot$/.test(key)) {
-    const n = clamp(Math.floor(Number(value)), 0, PLATFORM_CAPS.sampleSlotCount - 1);
-    return String(n + 1);
-  }
-  if (key === "scanMode" || key.endsWith(".l2.scanMode")) return value === "immediate" ? "no scan" : "scanning";
-  if (key === "scanAxis" || key.endsWith(".l2.scanAxis")) return value === "columns" ? "cols" : "rows";
-  if (key === "scanDirection" || key.endsWith(".l2.scanDirection")) return value === "forward" ? "fwd" : "rev";
-  if (key === "pitch.startingNote" || key === "pitch.lowestNote" || key === "pitch.highestNote" || key.endsWith(".l2.pitch.startingNote") || key.endsWith(".l2.pitch.lowestNote") || key.endsWith(".l2.pitch.highestNote")) {
-    return formatNoteWithMidi(Number(value));
-  }
-  if (key === "pitch.outOfRange" || key.endsWith(".l2.pitch.outOfRange")) return value === "wrap" ? "wrap" : "clamp";
-  if (key === "pitch.scale" || key.endsWith(".l2.pitch.scale")) return formatScaleName(String(value));
-  if (key === "pitch.root" || key.endsWith(".l2.pitch.root")) return String(value);
-  if (/^instruments\.\d+\.mixer\.route$/.test(key)) {
-    const raw = String(value);
-    if (raw === "direct") return "direct";
-    const m = /^fx_bus_(\d+)$/.exec(raw);
-    if (m && runtimeConfig?.mixer?.buses) {
-      const busIdx = Number(m[1]) - 1;
-      const bus = runtimeConfig.mixer.buses[busIdx];
-      if (bus) return fxBusLabel(busIdx, bus);
+  for (const [pattern, fn] of FORMAT_MAP) {
+    if (typeof pattern === "string" ? key === pattern : pattern.test(key)) {
+      return fn(value, runtimeConfig);
     }
-    return raw;
   }
-  if (key === "transport.playing") return value === true || value === "true" ? "Play" : "Stop";
   if (typeof value === "boolean") return value ? "On" : "Off";
   return String(value);
 }

@@ -1,11 +1,13 @@
 import type { MenuNode } from "./index";
 import { FX_SLOT_TYPES } from "./fxDefaults";
 import { PLATFORM_CAPS } from "./platformCaps";
+import { fxBusLabel } from "./coreUtils";
 
-function duckSourceOptions(): string[] {
+function duckSourceOptions(busIdx: number): string[] {
+  const selfBus = `B${busIdx + 1}`;
   return [
     ...Array.from({ length: PLATFORM_CAPS.instrumentCount }, (_, i) => `I${i + 1}`),
-    ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, i) => `B${i + 1}`)
+    ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, i) => `B${i + 1}`).filter(label => label !== selfBus)
   ];
 }
 
@@ -23,7 +25,7 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
         label: "duck",
         visible: (c: any) => c.mixer?.buses?.[busIdx]?.[slotKey]?.type === "duck",
         children: [
-          { kind: "enum", label: "Source", key: `mixer.buses.${busIdx}.${slotKey}.params.source`, options: duckSourceOptions() },
+          { kind: "enum", label: "Source", key: `mixer.buses.${busIdx}.${slotKey}.params.source`, options: duckSourceOptions(busIdx) },
           { kind: "number", label: "Threshold", key: `mixer.buses.${busIdx}.${slotKey}.params.threshold`, min: 0, max: 1, step: 0.01 },
           { kind: "number", label: "Amount %", key: `mixer.buses.${busIdx}.${slotKey}.params.amountPct`, min: 0, max: 100, step: 1 },
           { kind: "number", label: "Attack ms", key: `mixer.buses.${busIdx}.${slotKey}.params.attackMs`, min: 1, max: 500, step: 1 },
@@ -35,9 +37,9 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
         label: "delay",
         visible: (c: any) => c.mixer?.buses?.[busIdx]?.[slotKey]?.type === "delay",
         children: [
+          { kind: "number", label: "Mix %", key: `mixer.buses.${busIdx}.${slotKey}.params.mixPct`, min: 0, max: 100, step: 1 },
           { kind: "number", label: "Time ms", key: `mixer.buses.${busIdx}.${slotKey}.params.timeMs`, min: 1, max: 2000, step: 5 },
-          { kind: "number", label: "Feedback", key: `mixer.buses.${busIdx}.${slotKey}.params.feedback`, min: 0, max: 0.98, step: 0.01 },
-          { kind: "number", label: "Mix %", key: `mixer.buses.${busIdx}.${slotKey}.params.mixPct`, min: 0, max: 100, step: 1 }
+          { kind: "number", label: "Feedback", key: `mixer.buses.${busIdx}.${slotKey}.params.feedback`, min: 0, max: 0.98, step: 0.01 }
         ]
       },
       {
@@ -73,8 +75,8 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
         label: "bitcrusher",
         visible: (c: any) => c.mixer?.buses?.[busIdx]?.[slotKey]?.type === "bitcrusher",
         children: [
-          { kind: "number", label: "Rate Div", key: `mixer.buses.${busIdx}.${slotKey}.params.rateDiv`, min: 1, max: 128, step: 1 },
           { kind: "number", label: "Bits", key: `mixer.buses.${busIdx}.${slotKey}.params.bits`, min: 1, max: 16, step: 1 },
+          { kind: "number", label: "Rate Div", key: `mixer.buses.${busIdx}.${slotKey}.params.rateDiv`, min: 1, max: 128, step: 1 },
           { kind: "number", label: "Mix %", key: `mixer.buses.${busIdx}.${slotKey}.params.mixPct`, min: 0, max: 100, step: 1 }
         ]
       },
@@ -83,11 +85,11 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
         label: "mod delay",
         visible: (c: any) => ["vibrato", "chorus", "flanger"].includes(c.mixer?.buses?.[busIdx]?.[slotKey]?.type),
         children: [
+          { kind: "number", label: "Mix %", key: `mixer.buses.${busIdx}.${slotKey}.params.mixPct`, min: 0, max: 100, step: 1 },
           { kind: "number", label: "Rate Hz", key: `mixer.buses.${busIdx}.${slotKey}.params.rateHz`, min: 0.02, max: 20, step: 0.05 },
-          { kind: "number", label: "Base ms", key: `mixer.buses.${busIdx}.${slotKey}.params.baseMs`, min: 0.1, max: 80, step: 0.1 },
           { kind: "number", label: "Depth ms", key: `mixer.buses.${busIdx}.${slotKey}.params.depthMs`, min: 0, max: 40, step: 0.1 },
-          { kind: "number", label: "Feedback", key: `mixer.buses.${busIdx}.${slotKey}.params.feedback`, min: -0.95, max: 0.95, step: 0.01 },
-          { kind: "number", label: "Mix %", key: `mixer.buses.${busIdx}.${slotKey}.params.mixPct`, min: 0, max: 100, step: 1 }
+          { kind: "number", label: "Base ms", key: `mixer.buses.${busIdx}.${slotKey}.params.baseMs`, min: 0.1, max: 80, step: 0.1 },
+          { kind: "number", label: "Feedback", key: `mixer.buses.${busIdx}.${slotKey}.params.feedback`, min: -0.95, max: 0.95, step: 0.01 }
         ]
       },
       {
@@ -150,9 +152,9 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
         children: [
           { kind: "number", label: "Low Gain dB", key: `mixer.buses.${busIdx}.${slotKey}.params.lowGainDb`, min: -12, max: 12, step: 0.5 },
           { kind: "number", label: "Mid Gain dB", key: `mixer.buses.${busIdx}.${slotKey}.params.midGainDb`, min: -12, max: 12, step: 0.5 },
+          { kind: "number", label: "High Gain dB", key: `mixer.buses.${busIdx}.${slotKey}.params.highGainDb`, min: -12, max: 12, step: 0.5 },
           { kind: "number", label: "Mid Freq Hz", key: `mixer.buses.${busIdx}.${slotKey}.params.midFreqHz`, min: 40, max: 8000, step: 10 },
           { kind: "number", label: "Mid Q", key: `mixer.buses.${busIdx}.${slotKey}.params.midQ`, min: 0.25, max: 20, step: 0.25 },
-          { kind: "number", label: "High Gain dB", key: `mixer.buses.${busIdx}.${slotKey}.params.highGainDb`, min: -12, max: 12, step: 0.5 },
           { kind: "number", label: "Mix %", key: `mixer.buses.${busIdx}.${slotKey}.params.mixPct`, min: 0, max: 100, step: 1 }
         ]
       }
@@ -160,33 +162,24 @@ function fxSlotNode(busIdx: number, slotIdx: 1 | 2): MenuNode {
   };
 }
 
-export function fxBusesMenuNode(): MenuNode {
-  const busGroupLabel = (busIdx: number): string => `Bus ${busIdx + 1}`;
+export function fxBusesMenuNode(state?: any): MenuNode {
+  const busGroupLabel = (busIdx: number): string => {
+    const bus = state?.runtimeConfig?.mixer?.buses?.[busIdx];
+    return bus ? fxBusLabel(busIdx, bus) : `Bus ${busIdx + 1}`;
+  };
   return {
     kind: "group",
     label: "FX Buses",
-    children: [
-      {
-        kind: "group",
-        label: "Names",
-        children: Array.from({ length: PLATFORM_CAPS.busCount }, (_, busIdx): MenuNode => ({
-          kind: "group",
-          label: busGroupLabel(busIdx),
-          children: [
-            { kind: "bool", label: "Auto Name", key: `mixer.buses.${busIdx}.autoName` },
-            { kind: "text", label: "Name", key: `mixer.buses.${busIdx}.name`, maxLen: 32 }
-          ]
-        }))
-      },
-      ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, busIdx): MenuNode => ({
-        kind: "group",
-        label: busGroupLabel(busIdx),
-        children: [
-          fxSlotNode(busIdx, 1),
-          fxSlotNode(busIdx, 2),
-          { kind: "number", label: "Pan Pos", key: `mixer.buses.${busIdx}.panPos`, min: 0, max: PLATFORM_CAPS.gridWidth - 1, step: 1 }
-        ]
-      }))
-    ]
+    children: Array.from({ length: PLATFORM_CAPS.busCount }, (_, busIdx): MenuNode => ({
+      kind: "group",
+      label: busGroupLabel(busIdx),
+      children: [
+        fxSlotNode(busIdx, 1),
+        fxSlotNode(busIdx, 2),
+        { kind: "number", label: "Pan Pos", key: `mixer.buses.${busIdx}.panPos`, min: 0, max: PLATFORM_CAPS.gridWidth - 1, step: 1 },
+        { kind: "bool", label: "Auto Name", key: `mixer.buses.${busIdx}.autoName` },
+        { kind: "text", label: "Name", key: `mixer.buses.${busIdx}.name`, maxLen: 32 }
+      ]
+    }))
   };
 }

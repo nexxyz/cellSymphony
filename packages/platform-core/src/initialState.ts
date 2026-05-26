@@ -3,8 +3,23 @@ import { loadDefaultMappingConfig } from "@cellsymphony/mapping-core";
 import type { PartConfig, PlatformState, RuntimeConfig } from "./platformTypes";
 import { SYNTH_PRESETS } from "./synthPresets";
 import { PLATFORM_CAPS } from "./platformCaps";
-
-const DEFAULT_PAN_POS = Math.floor(PLATFORM_CAPS.gridWidth / 2);
+import {
+  DEFAULT_VELOCITY_LEVELS,
+  DEFAULT_MIDI_ENGINE,
+  DEFAULT_NOTE_LENGTH_MS,
+  DEFAULT_VELOCITY,
+  DEFAULT_MASTER_VOLUME,
+  DEFAULT_DISPLAY_BRIGHTNESS,
+  DEFAULT_GRID_BRIGHTNESS,
+  DEFAULT_BUTTON_BRIGHTNESS,
+  DEFAULT_SCREEN_SLEEP_SECONDS,
+  DEFAULT_PITCH_STARTING_NOTE,
+  DEFAULT_PITCH_LOWEST_NOTE,
+  DEFAULT_PITCH_HIGHEST_NOTE,
+  DEFAULT_BPM,
+  DEFAULT_PAN_POS,
+  DEFAULT_VOLUME
+} from "./runtimeDefaults";
 
 export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
   const defaultMapping = loadDefaultMappingConfig();
@@ -16,9 +31,9 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
     midi: { enabled: false, channel: idx },
     synth: structuredClone(SYNTH_PRESETS[idx % 8]!.synth as RuntimeConfig["instruments"][number]["synth"]),
     sample: {
-      baseVelocity: 100,
+      baseVelocity: DEFAULT_VELOCITY,
       velocityLevelsEnabled: false,
-      velocityLevels: { high: 120, medium: 85, low: 45 },
+      velocityLevels: { ...DEFAULT_VELOCITY_LEVELS },
       selectedSlot: 0,
       slots: Array.from({ length: PLATFORM_CAPS.sampleSlotCount }, () => ({ path: null })),
       tuneSemis: 0,
@@ -28,22 +43,23 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       filterEnv: structuredClone((SYNTH_PRESETS[idx % 8]!.synth as any).filterEnv),
       assignments: []
     },
-    midiEngine: { velocity: 100, durationMs: 120 },
-    mixer: { route: "direct" as const, panPos: DEFAULT_PAN_POS }
+    midiEngine: { ...DEFAULT_MIDI_ENGINE },
+    mixer: { route: "direct" as const, panPos: DEFAULT_PAN_POS, volume: DEFAULT_VOLUME }
   }));
 
   const runtimeConfig: RuntimeConfig = {
-    masterVolume: 73,
-    displayBrightness: 75,
-    gridBrightness: 75,
-    buttonBrightness: 75,
-    screenSleepSeconds: 60,
+    masterVolume: DEFAULT_MASTER_VOLUME,
+    displayBrightness: DEFAULT_DISPLAY_BRIGHTNESS,
+    gridBrightness: DEFAULT_GRID_BRIGHTNESS,
+    buttonBrightness: DEFAULT_BUTTON_BRIGHTNESS,
+    screenSleepSeconds: DEFAULT_SCREEN_SLEEP_SECONDS,
     midi: { enabled: false, outId: null, clockOutEnabled: false, inId: null, clockInEnabled: false, syncMode: "internal", respondToStartStop: true },
-    sound: { noteLengthMs: 120, velocityScalePct: 100, velocityCurve: "linear", voiceStealingMode: "balanced" },
+    sound: { noteLengthMs: DEFAULT_NOTE_LENGTH_MS, velocityScalePct: 100, velocityCurve: "linear", voiceStealingMode: "balanced" },
     scanMode: "immediate",
     scanAxis: "columns",
     scanUnit: "1/8",
     scanDirection: "forward",
+    scanSections: "1",
     algorithmStepUnit: "1/8",
     activeBehavior: behavior.id,
     autoSaveDefault: false,
@@ -59,20 +75,21 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
     eventEnabled: true,
     stateEnabled: true,
     numericDisplayMode: "bar+numbers",
-    pitch: { startingNote: 60, lowestNote: 36, highestNote: 74, outOfRange: "clamp", scale: "major_pentatonic", root: "D" },
+    pitch: { startingNote: DEFAULT_PITCH_STARTING_NOTE, lowestNote: DEFAULT_PITCH_LOWEST_NOTE, highestNote: DEFAULT_PITCH_HIGHEST_NOTE, outOfRange: "clamp", scale: "major_pentatonic", root: "D" },
     x: {
-      pitch: { enabled: true, steps: 0 },
+      pitch: { enabled: true, steps: 0, restartEachSection: false },
       velocity: { enabled: false, from: 20, to: 100, gridOffset: 0, curve: "linear" },
       filterCutoff: { enabled: false, from: 20, to: 127, gridOffset: 0, curve: "linear" },
       filterResonance: { enabled: false, from: 10, to: 90, gridOffset: 0, curve: "linear" }
     },
     y: {
-      pitch: { enabled: true, steps: 1 },
+      pitch: { enabled: true, steps: 1, restartEachSection: false },
       velocity: { enabled: false, from: 20, to: 100, gridOffset: 0, curve: "linear" },
       filterCutoff: { enabled: false, from: 20, to: 127, gridOffset: 0, curve: "linear" },
       filterResonance: { enabled: false, from: 10, to: 90, gridOffset: 0, curve: "linear" }
     },
     activePartIndex: 0,
+    ghostCells: false,
     parts: [],
     instruments,
     mixer: {
@@ -97,6 +114,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       scanAxis: "columns",
       scanUnit: "1/8",
       scanDirection: "forward",
+      scanSections: "1",
       eventEnabled: idx === 0,
       stateEnabled: true,
       pitch: structuredClone(runtimeConfig.pitch),
@@ -127,7 +145,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
     return engine.init({ ...(part.l1.behaviorConfig ?? {}) });
   });
   return {
-    transport: { playing: false, bpm: 120, tick: 0, ppqnPulse: 0 },
+    transport: { playing: false, bpm: DEFAULT_BPM, tick: 0, ppqnPulse: 0 },
     behaviorState: behavior.init({}),
     activeBehavior: behavior.id,
     mappingConfig: loadDefaultMappingConfig(),
@@ -162,8 +180,10 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       auxBindings: {},
       heldNotes: [],
       sampleAssign: null,
+      pendingCloneSource: null,
       sampleAssignLastPress: null,
-      sampleBrowser: null
+      sampleBrowser: null,
+      touchMode: "none"
     },
     scanIndex: 0,
     scanPulseAccumulator: 0,

@@ -127,6 +127,21 @@ export function handleMenuAction<TState>(state: PlatformState<TState>, action: a
     return { ...state, runtimeConfig: nextCfg };
   }
   if (action.type === "midi_panic") return openConfirm("midi_panic", { kind: "midi_panic" });
+  if (action.type === "instrument_clone") {
+    const instruments = Array.isArray((state.runtimeConfig as any).instruments) ? [...((state.runtimeConfig as any).instruments as any[])] : [];
+    const src = instruments[action.slot];
+    if (!src) return state;
+    const targetIdx = instruments.findIndex((inst: any) => inst?.type === "none");
+    if (targetIdx < 0) return toast("All slots in use");
+    instruments[targetIdx] = { ...structuredClone(src), autoName: true, name: src.name ?? "synth", midi: { enabled: false, channel: targetIdx } };
+    return { ...state, runtimeConfig: { ...state.runtimeConfig, instruments } as any };
+  }
+  if (action.type === "instrument_reset") {
+    const instruments = Array.isArray((state.runtimeConfig as any).instruments) ? [...((state.runtimeConfig as any).instruments as any[])] : [];
+    if (!instruments[action.slot]) return state;
+    instruments[action.slot] = { type: "none", autoName: true, name: "none", midi: { enabled: false, channel: action.slot }, synth: {}, sample: { baseVelocity: 100, velocityLevelsEnabled: false, velocityLevels: { high: 120, medium: 85, low: 45 }, selectedSlot: 0, slots: Array.from({ length: 8 }, () => ({ path: null })), tuneSemis: 0, amp: {}, ampEnv: {}, filter: {}, filterEnv: {}, assignments: [] }, midiEngine: { velocity: 100, durationMs: 120 }, mixer: { route: "direct", panPos: Math.floor(8 / 2), volume: 100 } };
+    return { ...state, runtimeConfig: { ...state.runtimeConfig, instruments } as any };
+  }
   if (action.type === "behavior_action") {
     const behavior = deps.resolveBehavior(action.behaviorId);
     const newState = behavior.onInput(state.behaviorState, { type: "behavior_action", actionType: action.actionType } as DeviceInput, {

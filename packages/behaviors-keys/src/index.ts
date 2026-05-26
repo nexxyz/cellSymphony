@@ -21,6 +21,7 @@ function cellIndex(x: number, y: number): number {
 export const keysBehavior: BehaviorEngine<KeysState, KeysConfig> = {
   id: "keys",
   interpretInputTransitions: true,
+  gridInteraction: "momentary",
 
   init(config): KeysState {
     return {

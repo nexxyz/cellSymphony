@@ -16,8 +16,8 @@ export type CellTransition = {
 export type TickStrategy =
   | { mode: "whole_grid_transitions" }
   | { mode: "whole_grid_active" }
-  | { mode: "scan_column_active" }
-  | { mode: "scan_row_active" };
+  | { mode: "scan_column_active"; sections?: number }
+  | { mode: "scan_row_active"; sections?: number };
 
 export type AxisStrategy =
   | { mode: "scale_step"; step: number }
@@ -99,6 +99,8 @@ function selectStateCandidates(
   }
 
   if (strategy.mode === "scan_column_active") {
+    const sections = sectionCount(strategy.sections, next.width);
+    if (sections > 1) return scanColumnSections(next, tick, sections);
     const column = tick % next.width;
     const out: Array<{ x: number; y: number; kind: CellTriggerKind }> = [];
     for (let y = 0; y < next.height; y += 1) {
@@ -115,6 +117,9 @@ function selectStateCandidates(
     return [];
   }
 
+  const sections = sectionCount(strategy.sections, next.height);
+  if (sections > 1) return scanRowSections(next, tick, sections);
+
   const row = tick % next.height;
   const out: Array<{ x: number; y: number; kind: CellTriggerKind }> = [];
   for (let x = 0; x < next.width; x += 1) {
@@ -125,6 +130,39 @@ function selectStateCandidates(
     }
   }
   return out;
+}
+
+function scanRowSections(next: GridSnapshot, tick: number, sections: number): Array<{ x: number; y: number; kind: CellTriggerKind }> {
+  const sectionHeight = Math.max(1, Math.floor(next.height / sections));
+  const step = tick % (next.width * sections);
+  const section = Math.floor(step / next.width);
+  const x = step % next.width;
+  const firstY = section * sectionHeight;
+  const out: Array<{ x: number; y: number; kind: CellTriggerKind }> = [];
+  for (let dy = 0; dy < sectionHeight && firstY + dy < next.height; dy += 1) {
+    const y = firstY + dy;
+    out.push({ x, y, kind: next.cells[y * next.width + x] ? "scanned" : "scanned_empty" });
+  }
+  return out;
+}
+
+function scanColumnSections(next: GridSnapshot, tick: number, sections: number): Array<{ x: number; y: number; kind: CellTriggerKind }> {
+  const sectionWidth = Math.max(1, Math.floor(next.width / sections));
+  const step = tick % (next.height * sections);
+  const section = Math.floor(step / next.height);
+  const y = step % next.height;
+  const firstX = section * sectionWidth;
+  const out: Array<{ x: number; y: number; kind: CellTriggerKind }> = [];
+  for (let dx = 0; dx < sectionWidth && firstX + dx < next.width; dx += 1) {
+    const x = firstX + dx;
+    out.push({ x, y, kind: next.cells[y * next.width + x] ? "scanned" : "scanned_empty" });
+  }
+  return out;
+}
+
+function sectionCount(value: number | undefined, size: number): number {
+  if (value === 2 || value === 4 || value === 8) return Math.min(value, size);
+  return 1;
 }
 
 function computeDegree(gridHeight: number, x: number, y: number, profile: InterpretationProfile): number {

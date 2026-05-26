@@ -8,6 +8,8 @@ type PressDeps<TState> = {
   menuTree: (state: PlatformState<TState>) => MenuNode;
   handleAction: (state: PlatformState<TState>, action: any, effects: PlatformEffect[]) => PlatformState<TState>;
   readAnyValue: (state: PlatformState<TState>, key: string) => unknown;
+  writeAnyValue: (state: PlatformState<TState>, key: string, value: unknown) => PlatformState<TState>;
+  reinitBehaviorState: (state: PlatformState<TState>, key: string) => PlatformState<TState>;
   formatTimestamp: (nowMs: number) => string;
   extractConfigPayload: (state: PlatformState<TState>) => any;
 };
@@ -19,9 +21,17 @@ export function pressMenuInput<TState>(state: PlatformState<TState>, effects: Pl
   if (selected.kind === "spacer") return state;
 
   if (selected.kind === "group") {
+    const label = selected.label ?? "";
+    const partMatch = /^P(\d+):/.exec(label);
+    if (partMatch) {
+      const partIdx = parseInt(partMatch[1], 10) - 1;
+      let nextState = deps.writeAnyValue(state, "activePartIndex", partIdx);
+      nextState = deps.reinitBehaviorState(nextState, "activePartIndex");
+      const nextMenu = { ...nextState.menu, stack: [...nextState.menu.stack, nextState.menu.cursor], cursor: 0 };
+      return { ...nextState, menu: nextMenu };
+    }
     const nextMenu = { ...state.menu, stack: [...state.menu.stack, state.menu.cursor], cursor: 0 };
     let nextState: PlatformState<TState> = { ...state, menu: nextMenu };
-    const label = selected.label ?? "";
     if (label === "Presets" || label === "Load" || label === "Delete" || label === "Rename") effects.push({ type: "store_list_presets" });
     if (label === "MIDI Out") effects.push({ type: "midi_list_outputs_request" });
     if (label === "MIDI In") effects.push({ type: "midi_list_inputs_request" });

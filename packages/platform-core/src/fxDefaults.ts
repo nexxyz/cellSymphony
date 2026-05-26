@@ -6,19 +6,19 @@ export const FX_SLOT_TYPES: FxBusEffectType[] = [
   "reverb",
   "delay",
   "tremolo",
-  "vibrato",
-  "auto_pan",
   "chorus",
   "flanger",
-  "wah",
+  "vibrato",
+  "auto_pan",
   "filter_lfo",
+  "wah",
+  "eq",
+  "compressor",
   "duck",
-  "bitcrusher",
   "saturator",
   "distortion",
-  "glitch",
-  "compressor",
-  "eq"
+  "bitcrusher",
+  "glitch"
 ];
 
 const FX_DEFAULT_PARAMS: Record<FxBusEffectType, Record<string, string | number>> = {

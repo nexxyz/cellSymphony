@@ -7,8 +7,9 @@ import { clamp } from "./coreUtils";
 import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
 import type { PlatformEffect, PlatformState, RuntimeConfig } from "./index";
 import { toGridSnapshot } from "./runtimeHelpers";
-import { applyModulation } from "./musicTransforms";
+import { applyModulation, applyNoteBehavior, withScaleSteps } from "./musicTransforms";
 import { makeToast } from "./toast";
+import type { TouchMode } from "./platformTypes";
 
 type Deps<TState> = {
   isMainEncoderInput: (id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined) => boolean;
@@ -33,6 +34,32 @@ type Deps<TState> = {
   spawnActionTypeForBehavior: (behaviorId: string) => string | null;
   executeConfirmed: (state: PlatformState<TState>, action: any, effects: PlatformEffect[], behavior: BehaviorEngine<TState, unknown>) => PlatformState<TState>;
 };
+
+const TOUCH_PAGES: TouchMode[] = ["mix", "pan", "fx"];
+
+function touchPageFromRow(y: number, current: TouchMode): TouchMode {
+  const direct = TOUCH_PAGES[Math.floor(y)];
+  if (direct) return direct;
+  const idx = TOUCH_PAGES.indexOf(current);
+  return TOUCH_PAGES[(idx + 1) % TOUCH_PAGES.length] ?? "mix";
+}
+
+function handleTouchGridPress<TState>(state: PlatformState<TState>, input: Extract<DeviceInput, { type: "grid_press" }>, deps: Deps<TState>): PlatformState<TState> {
+  if (input.x === GRID_WIDTH - 1) {
+    return { ...state, system: { ...state.system, touchMode: touchPageFromRow(input.y, state.system.touchMode) } };
+  }
+  if (state.system.touchMode === "mix") {
+    const inst = clamp(Math.floor(input.x), 0, Math.min(PLATFORM_CAPS.instrumentCount, GRID_WIDTH) - 1);
+    const volume = Math.round(clamp(Math.floor(input.y), 0, GRID_HEIGHT - 1) / (GRID_HEIGHT - 1) * 100);
+    return deps.writeAnyValue(state, `instruments.${inst}.mixer.volume`, volume);
+  }
+  if (state.system.touchMode === "pan") {
+    const inst = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.instrumentCount, GRID_HEIGHT) - 1);
+    const panPos = clamp(Math.floor(input.x), 0, GRID_WIDTH - 1);
+    return deps.writeAnyValue(state, `instruments.${inst}.mixer.panPos`, panPos);
+  }
+  return state;
+}
 
 export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: DeviceInput, behavior: BehaviorEngine<TState, unknown>, deps: Deps<TState>): { state: PlatformState<TState>; events: MusicalEvent[]; effects: PlatformEffect[] } {
   const events: MusicalEvent[] = [];
@@ -84,8 +111,8 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     return { state: nextState, events, effects };
   }
 
-  if (input.type === "button_shift") nextState.system = { ...nextState.system, shiftHeld: pressed(input) };
-  if (input.type === "button_fn") nextState.system = { ...nextState.system, fnHeld: pressed(input) };
+  if (input.type === "button_shift") nextState.system = { ...nextState.system, shiftHeld: pressed(input), pendingCloneSource: pressed(input) ? nextState.system.pendingCloneSource : null };
+  if (input.type === "button_fn") nextState.system = { ...nextState.system, fnHeld: pressed(input), pendingCloneSource: pressed(input) ? nextState.system.pendingCloneSource : null };
 
   if (nextState.system.sampleAssign) {
     if (input.type === "button_a" && pressed(input)) {
@@ -143,11 +170,42 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     return { state: nextState, events, effects };
   }
 
+  if (input.type === "grid_press" && nextState.system.fnHeld && nextState.system.shiftHeld && input.x === GRID_WIDTH - 1) {
+    const srcIdx = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.partCount, GRID_HEIGHT) - 1);
+    nextState.system = { ...nextState.system, pendingCloneSource: srcIdx, toast: makeToast(`Clone P${srcIdx + 1} → select target`) };
+    return { state: nextState, events, effects };
+  }
+
+  if (input.type === "grid_press" && nextState.system.fnHeld && !nextState.system.shiftHeld && input.x === GRID_WIDTH - 1) {
+    nextState.system = { ...nextState.system, touchMode: nextState.system.touchMode === "none" ? "mix" : nextState.system.touchMode, toast: makeToast("Touch") };
+    nextState.menu = { stack: [3], cursor: 0, editing: false };
+    return { state: nextState, events, effects };
+  }
+
+  if (nextState.system.touchMode !== "none" && !nextState.system.fnHeld && !nextState.system.shiftHeld && input.type === "grid_press") {
+    nextState = handleTouchGridPress(nextState, input, deps);
+    deps.autoSaveEffect(nextState, effects);
+    return { state: nextState, events, effects };
+  }
+
+  if (nextState.system.touchMode !== "none" && !nextState.system.fnHeld && !nextState.system.shiftHeld && input.type === "grid_release") {
+    return { state: nextState, events, effects };
+  }
+
   if (input.type === "grid_press" && nextState.system.fnHeld && input.x === 0) {
     const idx = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.partCount, GRID_HEIGHT) - 1);
+    const pending = nextState.system.pendingCloneSource;
+    if (pending !== null && pending !== idx) {
+      const parts = Array.isArray((nextState.runtimeConfig as any).parts) ? [...((nextState.runtimeConfig as any).parts as any[])] : [];
+      parts[idx] = structuredClone(parts[pending]);
+      nextState = { ...nextState, runtimeConfig: { ...(nextState.runtimeConfig as any), parts } as any };
+      const partStates = Array.isArray((nextState as any).partStates) ? [...(nextState as any).partStates] : [];
+      if (partStates[pending] !== undefined) partStates[idx] = structuredClone(partStates[pending]);
+      (nextState as any).partStates = partStates;
+    }
     nextState = deps.writeAnyValue(nextState, "activePartIndex", idx);
     nextState = deps.reinitBehaviorState(nextState, "activePartIndex");
-    nextState.system = { ...nextState.system, toast: makeToast(`Part ${idx + 1}`) };
+    nextState.system = { ...nextState.system, pendingCloneSource: null, toast: makeToast(pending !== null && pending !== idx ? `Cloned P${pending + 1} → P${idx + 1}` : `Part ${idx + 1}`) };
     return { state: nextState, events, effects };
   }
 
@@ -201,7 +259,26 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
         const next = raw.slice(0, cursor - 1) + raw.slice(cursor);
         nextState = { ...nextState, system: { ...nextState.system, draftName: next, nameCursor: cursor - 1 } };
       }
-    } else if (nextState.system.shiftHeld) {
+    } else if (nextState.system.fnHeld && nextState.system.shiftHeld) {
+      const activePart = clampPartIndex((nextState.runtimeConfig as any).activePartIndex ?? 0);
+      const parts = Array.isArray((nextState.runtimeConfig as any).parts) ? [...((nextState.runtimeConfig as any).parts as any[])] : [];
+      const partStates = Array.isArray((nextState as any).partStates) ? [...(nextState as any).partStates] : [];
+      const noneId = "none";
+      const noneEngine = deps.resolveBehavior(noneId);
+      const emptyCfg: any = {};
+      if (noneEngine.configMenu) for (const item of noneEngine.configMenu(noneEngine.init({}))) { const val = emptyCfg[item.key]; if (val !== undefined) emptyCfg[item.key] = val; }
+      parts[activePart] = {
+        ...parts[activePart],
+        l1: { stepRate: "1/4", behaviorId: noneId, behaviorConfig: emptyCfg, saveGridState: true },
+        l2: { scanMode: "immediate", scanAxis: "columns", scanUnit: "1/8", scanDirection: "forward", eventEnabled: false, stateEnabled: false, pitch: { startingNote: 60, lowestNote: 36, highestNote: 83, outOfRange: "clamp", scale: "chromatic", root: "C" }, x: { pitch: { enabled: false, steps: 1 }, velocity: { enabled: false, steps: 8 } }, y: { pitch: { enabled: false, steps: 1 }, velocity: { enabled: false, steps: 8 } }, mapping: { activate: { action: "none", slot: 0 }, stable: { action: "none", slot: 0 }, deactivate: { action: "none", slot: 0 }, scanned: { action: "none", slot: 0 }, scanned_empty: { action: "none", slot: 0 } } },
+        autoName: true,
+        name: "none"
+      };
+      partStates[activePart] = noneEngine.init(emptyCfg);
+      nextState = { ...nextState, runtimeConfig: { ...(nextState.runtimeConfig as any), parts } as any, behaviorState: noneEngine.init(emptyCfg), activeBehavior: noneId } as any;
+      (nextState as any).partStates = partStates;
+      nextState.system = { ...nextState.system, toast: makeToast(`P${activePart + 1} reset`) };
+    } else if (nextState.system.shiftHeld && !nextState.system.fnHeld) {
       const activePart = clampPartIndex((nextState.runtimeConfig as any).activePartIndex ?? 0);
       const part: any = (nextState.runtimeConfig as any).parts?.[activePart];
       const behaviorId = String(part?.l1?.behaviorId ?? nextState.runtimeConfig.activeBehavior);
@@ -272,9 +349,10 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       const profile = inputTransitionProfile(nextState.runtimeConfig);
       const intents = interpretGrid(beforeInputGrid, afterInputGrid, nextState.transport.tick, profile);
       if (intents.length > 0) {
-        const mapped = mapIntentsToMusicalEvents(intents, inputScaleSteps(nextState.mappingConfig, nextState.runtimeConfig));
+        const mapped = mapIntentsToMusicalEvents(intents, withScaleSteps(nextState.mappingConfig, nextState.runtimeConfig));
         const modulated = applyModulation(intents, mapped, nextState.runtimeConfig);
-        const shaped = inputNoteBehavior(modulated, nextState.runtimeConfig, 0, nextState.system.heldNotes);
+        const instruments: any[] = Array.isArray((nextState.runtimeConfig as any).instruments) ? ((nextState.runtimeConfig as any).instruments as any[]) : [];
+        const shaped = applyNoteBehavior(modulated, instruments, 0, nextState.system.heldNotes);
         nextState.system = { ...nextState.system, heldNotes: shaped.heldNotes };
         events.push(...shaped.events);
       }
@@ -305,47 +383,14 @@ function inputTransitionProfile(cfg: RuntimeConfig): InterpretationProfile {
   };
 }
 
-function inputScaleSteps(mapping: any, cfg: RuntimeConfig): any {
-  return {
-    ...mapping,
-    rowStepDegrees: cfg.y.pitch.enabled ? Math.abs(cfg.y.pitch.steps) : 0,
-    columnStepDegrees: cfg.x.pitch.enabled ? Math.abs(cfg.x.pitch.steps) : 0
-  };
-}
-
 function inputNoteBehavior(
   events: MusicalEvent[],
   runtimeConfig: RuntimeConfig,
   partIdx: number,
   initialHeld: string[]
 ): { events: MusicalEvent[]; heldNotes: string[] } {
-  const held = new Set(initialHeld);
-  const out: MusicalEvent[] = [];
   const instruments: any[] = Array.isArray((runtimeConfig as any).instruments) ? ((runtimeConfig as any).instruments as any[]) : [];
-  for (const e of events) {
-    if (e.type === "note_on") {
-      const key = `${partIdx}:${e.channel}:${e.note}`;
-      const noteBehavior = instruments[e.channel]?.noteBehavior === "hold" ? "hold" : "oneshot";
-      if (noteBehavior === "hold" && held.has(key)) continue;
-      if (noteBehavior === "hold") {
-        held.add(key);
-        out.push({ ...e, durationMs: undefined });
-      } else {
-        out.push(e);
-      }
-    } else if (e.type === "note_off") {
-      const key = `${partIdx}:${e.channel}:${e.note}`;
-      if (!held.has(key)) {
-        out.push(e);
-        continue;
-      }
-      held.delete(key);
-      out.push(e);
-    } else {
-      out.push(e);
-    }
-  }
-  return { events: out, heldNotes: [...held] };
+  return applyNoteBehavior(events, instruments, partIdx, initialHeld);
 }
 
 function applySampleAssignment<TState>(

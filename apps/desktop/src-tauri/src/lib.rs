@@ -18,6 +18,7 @@ use realtime_engine::synth::INSTRUMENT_SLOT_COUNT;
 use rodio::{OutputStream, OutputStreamHandle, Sink};
 use serde::Deserialize;
 use std::collections::HashMap;
+use tauri::Emitter;
 
 #[derive(Deserialize)]
 #[serde(tag = "type")]
@@ -45,6 +46,13 @@ enum MusicalEventPayload {
 struct AudioRuntime {
     _stream: OutputStream,
     handle: OutputStreamHandle,
+}
+
+#[derive(Clone, Copy, serde::Serialize)]
+struct AudioLoadPayload {
+    ratio: f32,
+    #[serde(rename = "voiceSteal")]
+    voice_steal: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -87,8 +95,12 @@ impl AudioRuntime {
         })
     }
 
-    fn start_engine(&self, control_rx: Receiver<EngineEvent>) -> Result<(), String> {
-        let source = EngineSource::new(control_rx, 48_000);
+    fn start_engine(
+        &self,
+        control_rx: Receiver<EngineEvent>,
+        load_tx: Sender<realtime_engine::synth::AudioLoadStatus>,
+    ) -> Result<(), String> {
+        let source = EngineSource::with_load_status_tx(control_rx, 48_000, Some(load_tx));
         let sink = Sink::try_new(&self.handle).map_err(|e| format!("sink create failed: {e}"))?;
         sink.append(source);
         sink.play();
@@ -254,6 +266,7 @@ fn audio_set_runtime_policy(
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let (trigger_tx, trigger_rx) = mpsc::channel::<QueuedAudioEvent>();
+    let (load_tx, load_rx) = mpsc::channel::<realtime_engine::synth::AudioLoadStatus>();
 
     thread::spawn(move || {
         let (engine_tx, engine_rx) = mpsc::channel::<EngineEvent>();
@@ -265,7 +278,7 @@ pub fn run() {
             }
         };
 
-        if let Err(error) = audio.start_engine(engine_rx) {
+        if let Err(error) = audio.start_engine(engine_rx, load_tx) {
             eprintln!("audio engine start failed: {error}");
             return;
         }
@@ -326,6 +339,21 @@ pub fn run() {
     });
 
     tauri::Builder::default()
+        .setup(move |app| {
+            let app_handle = app.handle().clone();
+            thread::spawn(move || {
+                while let Ok(status) = load_rx.recv() {
+                    let _ = app_handle.emit(
+                        "audio_load",
+                        AudioLoadPayload {
+                            ratio: status.ratio,
+                            voice_steal: status.voice_steal,
+                        },
+                    );
+                }
+            });
+            Ok(())
+        })
         .manage(AppState {
             trigger_tx,
             synth_slots: Mutex::new([true; INSTRUMENT_SLOT_COUNT]),

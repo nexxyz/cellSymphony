@@ -1,6 +1,7 @@
 import { GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import type { RootName, RuntimeConfig, ScaleId, ValueLaneConfig } from "./platformTypes";
+import { DEFAULT_VELOCITY_HIGH, DEFAULT_VELOCITY_MEDIUM, DEFAULT_VELOCITY_LOW, DEFAULT_NOTE_LENGTH_MS } from "./runtimeDefaults";
 
 export function applyModulation(intents: { x: number; y: number; degree: number; kind: any }[], events: MusicalEvent[], cfg: RuntimeConfig): MusicalEvent[] {
   const out: MusicalEvent[] = [];
@@ -66,9 +67,9 @@ function resolveSampleAssignedNote(
 function sampleBaseVelocity(inst: any, level: "high" | "medium" | "low" | undefined): number {
   const sample = inst.sample ?? {};
   if (sample.velocityLevelsEnabled === true) {
-    if (level === "high") return clamp(Math.round(Number(sample.velocityLevels?.high ?? 120)), 1, 127);
-    if (level === "medium") return clamp(Math.round(Number(sample.velocityLevels?.medium ?? 85)), 1, 127);
-    return clamp(Math.round(Number(sample.velocityLevels?.low ?? 45)), 1, 127);
+    if (level === "high") return clamp(Math.round(Number(sample.velocityLevels?.high ?? DEFAULT_VELOCITY_HIGH)), 1, 127);
+    if (level === "medium") return clamp(Math.round(Number(sample.velocityLevels?.medium ?? DEFAULT_VELOCITY_MEDIUM)), 1, 127);
+    return clamp(Math.round(Number(sample.velocityLevels?.low ?? DEFAULT_VELOCITY_LOW)), 1, 127);
   }
   return clamp(Math.round(Number(sample.baseVelocity ?? 100)), 1, 127);
 }
@@ -82,7 +83,7 @@ export function applyGlobalSound(events: MusicalEvent[], cfg: RuntimeConfig): Mu
   const sound = (cfg as any).sound;
   const scale = Math.max(0, Math.min(2, Number(sound?.velocityScalePct ?? 100) / 100));
   const curve: "linear" | "soft" | "hard" = sound?.velocityCurve ?? "linear";
-  const noteLen = Math.max(1, Math.min(10_000, Number(sound?.noteLengthMs ?? 120)));
+  const noteLen = Math.max(1, Math.min(10_000, Number(sound?.noteLengthMs ?? DEFAULT_NOTE_LENGTH_MS)));
 
   return events.map((e) => {
     if (e.type !== "note_on") return e;
@@ -95,8 +96,9 @@ export function applyGlobalSound(events: MusicalEvent[], cfg: RuntimeConfig): Mu
 }
 
 export function pitchFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig, fallbackNote: number): number {
-  const xNorm = normalizedAxis(intent.x, GRID_WIDTH, 0);
-  const yNorm = normalizedAxis(intent.y, GRID_HEIGHT, 0);
+  const pitchPos = sectionPitchPosition(intent, cfg);
+  const xNorm = normalizedAxis(pitchPos.x, GRID_WIDTH, 0);
+  const yNorm = normalizedAxis(pitchPos.y, GRID_HEIGHT, 0);
   const xPos = Math.round(xNorm * (GRID_WIDTH - 1));
   const yPos = Math.round(yNorm * (GRID_HEIGHT - 1));
   const xDelta = cfg.x.pitch.enabled ? xPos * cfg.x.pitch.steps : 0;
@@ -114,6 +116,20 @@ export function pitchFromIntent(intent: { x: number; y: number }, cfg: RuntimeCo
     targetIndex = mod(targetIndex, scaleNotes.length);
   }
   return scaleNotes[targetIndex] ?? clamp(fallbackNote, low, high);
+}
+
+function sectionPitchPosition(intent: { x: number; y: number }, cfg: RuntimeConfig): { x: number; y: number } {
+  const sections = cfg.scanSections === "2" ? 2 : cfg.scanSections === "4" ? 4 : cfg.scanSections === "8" ? 8 : 1;
+  if (cfg.scanMode !== "scanning" || sections <= 1) return intent;
+  if (cfg.scanAxis === "rows" && cfg.y.pitch.restartEachSection) {
+    const sectionHeight = Math.max(1, Math.floor(GRID_HEIGHT / sections));
+    return { x: intent.x, y: intent.y % sectionHeight };
+  }
+  if (cfg.scanAxis === "columns" && cfg.x.pitch.restartEachSection) {
+    const sectionWidth = Math.max(1, Math.floor(GRID_WIDTH / sections));
+    return { x: intent.x % sectionWidth, y: intent.y };
+  }
+  return intent;
 }
 
 function velocityFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig): number | null {
@@ -209,6 +225,45 @@ function scaleIntervals(scale: ScaleId): number[] {
       return [0, 2, 3, 5, 7, 8, 11];
   }
   return [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
+}
+
+export function applyNoteBehavior(
+  events: MusicalEvent[],
+  instruments: any[],
+  partIdx: number,
+  initialHeld: string[]
+): { events: MusicalEvent[]; heldNotes: string[] } {
+  const held = new Set(initialHeld);
+  const out: MusicalEvent[] = [];
+  for (const e of events) {
+    if (e.type === "note_on") {
+      const key = `${partIdx}:${e.channel}:${e.note}`;
+      const behavior = instruments[e.channel]?.noteBehavior === "hold" ? "hold" : "oneshot";
+      if (behavior === "hold" && held.has(key)) continue;
+      if (behavior === "hold") {
+        held.add(key);
+        out.push({ ...e, durationMs: undefined });
+      } else {
+        out.push(e);
+      }
+    } else if (e.type === "note_off") {
+      const key = `${partIdx}:${e.channel}:${e.note}`;
+      if (!held.has(key)) { out.push(e); continue; }
+      held.delete(key);
+      out.push(e);
+    } else {
+      out.push(e);
+    }
+  }
+  return { events: out, heldNotes: [...held] };
+}
+
+export function withScaleSteps(mapping: any, cfg: RuntimeConfig): any {
+  return {
+    ...mapping,
+    rowStepDegrees: cfg.y.pitch.enabled ? Math.abs(cfg.y.pitch.steps) : 0,
+    columnStepDegrees: cfg.x.pitch.enabled ? Math.abs(cfg.x.pitch.steps) : 0
+  };
 }
 
 function clamp(value: number, min: number, max: number): number {

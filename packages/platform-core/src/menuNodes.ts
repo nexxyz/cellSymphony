@@ -59,7 +59,8 @@ export function axisGroup(label: string, prefix: string, _defaultStep: number): 
         label: "Pitch Steps",
         children: [
           { kind: "bool", label: "Enabled", key: `${prefix}.pitch.enabled` },
-          { kind: "number", label: "Steps", key: `${prefix}.pitch.steps`, min: -16, max: 16, step: 1, visible: (c) => readValue(c, `${prefix}.pitch.enabled`) === true }
+          { kind: "number", label: "Steps", key: `${prefix}.pitch.steps`, min: -16, max: 16, step: 1, visible: (c) => readValue(c, `${prefix}.pitch.enabled`) === true },
+          { kind: "bool", label: "Restart Section", key: `${prefix}.pitch.restartEachSection`, visible: (c) => readValue(c, `${prefix}.pitch.enabled`) === true }
         ]
       },
       laneGroup("Velocity", `${prefix}.velocity`, offsetLimit),

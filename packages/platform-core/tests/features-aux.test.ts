@@ -72,7 +72,7 @@ test("aux encoder bind while editing param", () => {
   // Navigate to Master Vol and start editing
   state = selectLabel(state, "System");
   state = press(state).state;
-  state = selectLabel(state, "Audio");
+  state = selectLabel(state, "Sound");
   state = press(state).state;
   state = press(state).state; // enter edit mode for Master Vol
 
@@ -91,7 +91,7 @@ test("aux encoder unbind when pressing same param again", () => {
 
   state = selectLabel(state, "System");
   state = press(state).state;
-  state = selectLabel(state, "Audio");
+  state = selectLabel(state, "Sound");
   state = press(state).state;
   state = press(state).state;
 
@@ -180,6 +180,8 @@ test("spawn action label shows shared marker in menu", () => {
 
   state = selectLabel(state, "L1: Life");
   state = press(state).state;
+  state = selectLabel(state, "P1: mock");
+  state = press(state).state;
   state = selectLabel(state, "Spawn Random");
 
   const frame = toSimulatorFrame(state, mockBehavior);
@@ -193,6 +195,8 @@ test("binding spawn action stores shared route", () => {
   state.runtimeConfig.activeBehavior = "life";
 
   state = selectLabel(state, "L1: Life");
+  state = press(state).state;
+  state = selectLabel(state, "P1: mock");
   state = press(state).state;
   state = selectLabel(state, "Spawn Random");
   state.system.shiftHeld = true;
@@ -255,9 +259,11 @@ test("aux press spawn action remaps on behavior switch", () => {
 
   state = selectLabel(state, "L1: Life");
   state = press(state).state;
+  state = selectLabel(state, "P1: mock");
+  state = press(state).state;
   state = selectLabel(state, "Behavior");
   state = press(state).state;
-  state = turn(state, 1).state;
+  state = turn(state, 3).state;
 
   assert.equal(state.runtimeConfig.activeBehavior, "brain");
   assert.equal(state.system.auxBindings["aux1"]?.press?.actionType, "seedRandom");
@@ -273,9 +279,11 @@ test("aux press spawn action clears on switch to sequencer", () => {
 
   state = selectLabel(state, "L1: Life");
   state = press(state).state;
+  state = selectLabel(state, "P1: mock");
+  state = press(state).state;
   state = selectLabel(state, "Behavior");
   state = press(state).state;
-  state = turn(state, -1).state;
+  state = turn(state, 1).state;
 
   assert.equal(state.runtimeConfig.activeBehavior, "sequencer");
   assert.equal(state.system.auxBindings["aux1"], null);

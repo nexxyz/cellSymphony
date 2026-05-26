@@ -15,7 +15,7 @@
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 1 |
 | **Priority** | high |
 | **Scope** | tiny |
@@ -30,13 +30,15 @@ Prevent selecting the current FX bus as its own duck source to avoid cyclic rout
 - When editing duck source on an FX bus, the bus itself is not listed as an option (or selecting it is rejected).
 - Existing cyclic configs remain in data but produce no routing / no audio feedback loop.
 
+**Implementation:** `fxBusMenu.ts:duckSourceOptions(busIdx)` filters out `B${busIdx+1}` from bus options. Call site passes `busIdx`.
+
 ---
 
 ### REQ-12 — "none" Options + Naming Standardization
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 1 |
 | **Priority** | high |
 | **Scope** | small |
@@ -52,13 +54,19 @@ Add "none" instrument type. Add "none" for all no-op selectable elements where n
 - Every enum/dropdown with a no-op uses label `"none"` (not `"no scan"`, `"off"`, `"disabled"` etc.).
 - Existing `"no scan"` (and similar) values are migrated to `"none"`.
 
+**Implementation:**
+- TS: `platformTypes.ts`, `menuTree.ts`, `storeRuntime.ts`, `coreUtils.ts` updated to handle `"none"` type.
+- Rust: `engine.rs` — added `InstrumentKind::None`, `parse_instrument_kind("none")`, early returns in `note_on`/`note_off`/`cc`.
+- Display: scan mode `"no scan"` → `"none"` in `coreUtils.ts:formatDisplayValue`, help TSV, lint alias, generated help, `menu-and-controls-spec.md`.
+- Help text: instrument type enum help updated with "none" description.
+
 ---
 
 ### REQ-16 — Parameter Range Standardization
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 1 |
 | **Priority** | medium |
 | **Scope** | medium |
@@ -78,13 +86,18 @@ Replace unusable raw technical values with reasonable editor ranges. Remap displ
 - Abstract/dimensionless parameters migrated to 0–255.
 - Encoder acceleration + shift+turn for coarse adjust across all numeric params.
 
+**Implementation (Phase 1 pass):**
+- Filter cutoff: menu range changed to 0–255 (logarithmic Hz mapping: 80–16000 Hz). `coreUtils.ts`: added `cutoffDisplayToHz`/`cutoffHzToDisplay`. `coalescedAudioConfig.ts`: auto-converts 0-255 → Hz before engine send. `storeRuntime.ts`: auto-migrates old Hz values (>255) to 0-255 on load.
+- Filter resonance: menu range changed 0–100 → 0–255.
+- `cutoffDisplayToHz` exported from platform-core package.
+
 ---
 
 ### REQ-11 — Quality Pass
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 1 |
 | **Priority** | high |
 | **Scope** | medium-large |
@@ -121,6 +134,18 @@ Code quality improvement pass across the codebase. Both targeted hotspot cleanup
 - Code smells addressed (long parameter lists, mutable shared state, etc.).
 - Pragmatic design patterns applied where they reduce complexity.
 
+**Implementation:**
+- `storeRuntime.ts`: `sanitizeInstruments`/`sanitizeMixer` extracted as module-level functions; mapping 5-way → `overrideFromPart`/`preferMapping` helpers.
+- `inputRouter.ts`: `inputNoteBehavior` delegates to shared `applyNoteBehavior`; `inputScaleSteps` → shared `withScaleSteps`.
+- `stateHelpers.ts`: `applyAutoName` 10 manual branches → data-driven rule tables; `syncLegacy`/`syncActive` use `overrideFromPart`/`preferMapping`.
+- `transportRuntime.ts`: `toRuntimeConfigForPart` mapping 5-line ternary → single `mergeMapping` call; old `withScaleSteps`/`applyNoteBehavior` removed.
+- `coreUtils.ts`: `formatDisplayValue` 18-branch if/else chain → `FORMAT_MAP` lookup table (regex+string entries); mapping helpers added.
+- `initialState.ts`: ~20 magic numbers → `runtimeDefaults.ts` constants.
+- `runtimeDefaults.ts`: extracted velocity defaults, BPM, note length, brightness, master volume, screen sleep, pitch defaults, velocity levels, MIDI engine defaults.
+- `musicTransforms.ts`: `applyNoteBehavior`/`withScaleSteps` extracted, shared by `inputRouter.ts` and `transportRuntime.ts`.
+- `storeRuntime.ts`: `BUS_EFFECT_TYPES` extracted to module-level `Set` constant.
+- All 129 tests and 13 desktop tests pass. Lint passes (menu-help + quality checks).
+
 ---
 
 ## Phase 2: Menu, Navigation & Defaults
@@ -133,7 +158,7 @@ Code quality improvement pass across the codebase. Both targeted hotspot cleanup
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 2 |
 | **Priority** | high |
 | **Scope** | medium |
@@ -148,13 +173,33 @@ Consistent, well-ordered menus.
 - Bus names are displayed in the bus selection list (not just "Bus 1"–"Bus 4").
 - Name setting lives inside the bus config, not outside it.
 
+**Implementation (REQ-13c — list-based part selection):**
+- `menuTree.ts`: Removed `l1PartNodes()` flat enum; replaced with `l1PartGroup()`/`l2PartGroup()` returning group nodes per part with label `P${idx+1}: ${name}`.
+- `menuInput.ts`: `pressMenuInput` now calls `deps.writeAnyValue("activePartIndex", idx)` + `deps.reinitBehaviorState` to select the active part when entering a part group.
+- `index.ts`: `pressMenu` passes `writeAnyValue` and `reinitBehaviorState` to `pressMenuInput`.
+- Bus names now displayed as `B${idx+1}: ${name}` via `fxBusLabel()` in `fxBusMenu.ts`.
+- Name setting lives inside bus config.
+- Tests updated to navigate through part groups.
+
+**Implementation (REQ-13 — parameter ordering):**
+- Behavior registration order: `none → life → sequencer → keys → brain → ant → bounce → shapes → raindrops → dla → glider`
+- L1 part group: Behavior → Step Rate → (behavior config) → Save Grid State → Auto Name → Part Name
+- L2 part group: Note Mapping moved before X/Y Axis. Note Mapping internal: Lowest→Highest→Starting→Scale→Root→Out of Range
+- Instrument children: Type → Note Behavior → engine → Mixer → Clone/Reset → MIDI → Auto Name → Name
+- Synth internal: Oscillator → Filter (flattened) → Volume; Osc params: Wave→Octave→Level→Detune→PW
+- Sample: Filter group before Volume
+- Audio+Sound merged into Sound; system groups: Presets → Sound → MIDI → UI Settings
+- FX bus config: Slot 1 → Slot 2 → Pan Pos → Auto Name → Name
+- FX_SLOT_TYPES reordered by category: reverb/delay→time, tremolo→modulation, eq→compressor→dynamics, saturator→drive, bitcrusher→glitch
+- Docs updated (`menu-and-controls-spec.md`, `menu-help-texts.tsv`)
+
 ---
 
 ### REQ-01 — Clone/Reset Part
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 2 |
 | **Priority** | medium |
 | **Scope** | small |
@@ -164,7 +209,7 @@ Consistent, well-ordered menus.
 Clone a part (duplicate its behaviour, mapping, triggers) or delete/reset it, via grid interaction. All 8 (or max) part slots always exist.
 
 **Interaction:**
-- **Clone:** FN+SHIFT+rightmost column of source part → release → press target part's column. Target part receives a copy of source's full config (behaviour, grid, mapping, triggers).
+- **Clone:** FN+SHIFT+rightmost column of source part → press target part's left column. Target part receives a copy of source's full config (behaviour, grid, mapping, triggers).
 - **Delete/Reset:** FN+SHIFT+BACK (back button) on the selected part → sets it to no-op defaults (grid cleared, behaviour "none", sense "none", no mappings).
 
 **Acceptance:**
@@ -172,13 +217,17 @@ Clone a part (duplicate its behaviour, mapping, triggers) or delete/reset it, vi
 - Delete/Reset sets part to complete no-op defaults (no grid state, behaviour "none", no triggers).
 - All parts remain in the parts list; no slot creation or removal.
 
+**Implementation:**
+- `inputRouter.ts`: Added `pendingCloneSource` to `SystemState`. FN+SHIFT+grid_press at x=7 stores source part index with toast. FN+grid_press at x=0 with pendingCloneSource copies part config/state. FN+SHIFT+BACK handler resets active part to "none" behavior with no-op sense/mapping defaults.
+- `index.ts`: `pendingCloneSource` added to `SystemState` type and initial state.
+
 ---
 
 ### REQ-02 — Clone/Reset Instrument
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 2 |
 | **Priority** | medium |
 | **Scope** | small |
@@ -192,13 +241,17 @@ Clone an instrument (duplicate its type, preset, FX routing) or reset it to defa
 - Instrument config menu has "Reset" action — restores instrument to factory defaults (type "none", no routing).
 - "Clone" appends to the instruments list (uses the first available "none" slot, or adds if all full).
 
+**Implementation:**
+- `menuTree.ts`: Clone/Reset actions added to each instrument group (lines 336-337).
+- `actions.ts`: `"instrument_clone"` handler deep-clones source into first "none" slot; `"instrument_reset"` handler sets type "none" with defaults.
+
 ---
 
 ### REQ-14 — Factory Reset Defaults
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 2 |
 | **Priority** | medium |
 | **Scope** | small |
@@ -216,13 +269,23 @@ On factory reset: 2 active parts, rest "none".
 
 **P2/I2 details:** Use current default preset content for sequencer cell pattern, sample assignments, and drum mappings.
 
+**Implementation:**
+- `stateHelpers.ts:factoryPayload()`: Modified to produce a ConfigPayload matching REQ-14 spec. Overrides parts/instruments/mixer after initial state creation.
+- P1: life with randomCellsPerTick=12, activate→I1, routed→fx_bus_1 (delay 280ms + duck sourcing I2).
+- P2: sequencer with horizontal scan (rows), scanned→I2, routed direct.
+- P3–P8: behaviour "none", no triggers.
+- I1: synth with "soft pad" preset (SYNTH_PRESETS[1]).
+- I2: synth with "perc hit" preset (SYNTH_PRESETS[7]) as drum kit, routed direct.
+- I3–I8: type "none".
+- FX Bus 1: slot1=delay (timeMs:280, feedback:38%, mix:45%), slot2=duck (source:I2). All other buses: no effects.
+
 ---
 
 ### REQ-10 — Audio Load Indicator
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 2 |
 | **Priority** | low |
 | **Scope** | small |
@@ -240,6 +303,13 @@ Audio DSP load / voice-steal indicator in top-right corner of OLED display.
 - Red indicator when load heavy.
 - Nothing displayed when idle.
 
+**Implementation:**
+- `realtime-engine`: `SynthEngine::audio_load_status()` reports smoothed DSP load and clears a recent voice-steal flag. Voice stealing is flagged when synth/sample voices are reused or global voice budget enforcement drops voices.
+- `rodio-engine-source`: `EngineSource::with_load_status_tx()` emits throttled load status updates at ~10 Hz after audio block refills.
+- `apps/desktop/src-tauri`: audio thread forwards status over an `audio_load` Tauri event with `{ ratio, voiceSteal }`, following the existing MIDI event pattern.
+- `apps/desktop`: runtime listens for `audio_load`, stores the latest status in snapshots, and passes it into platform-core frame rendering.
+- `platform-core`: OLED renderer draws a top-right indicator. Hidden below 0.60 load when no voice steal occurred, yellow at 0.60+ or recent voice steal, red at 0.85+.
+
 ---
 
 ## Phase 3: Grid & Scan
@@ -252,7 +322,7 @@ Audio DSP load / voice-steal indicator in top-right corner of OLED display.
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 3 |
 | **Priority** | medium |
 | **Scope** | small-medium |
@@ -266,30 +336,44 @@ Show dimmed/ghosted cells from inactive parts on the grid, toggleable.
 - Toggle in runtime config to enable/disable ghost cells.
 - Off by default (clarity first).
 
+**Implementation:**
+- Added `runtimeConfig.ghostCells`, default `false`, with `System > UI Settings > Ghost Cells` toggle.
+- `toSimulatorFrame()` collects inactive part cells from each part's behavior state and passes a ghost overlay to LED rendering.
+- Active part cells, scan cursor, Fn indicators, and sample assignment overlays retain priority over ghost cells.
+- Tests cover default-off behavior and active-cell override.
+
 ---
 
 ### REQ-04 — Section Scan Mode
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 3 |
 | **Priority** | medium |
 | **Scope** | medium |
 | **Depends on** | — |
 | **Source** | lines 11–16 |
 
-Add "Section Size" parameter (1, 2, 4, 8) to scan behaviour. Scan ray is `n` cells wide, moves along axis, steps by `n` on wrap. When last section reached, reset to origin. Stop resets to origin.
+Add `Sections` parameter (1, 2, 4, 8) to scan behaviour. `Sections=1` preserves current scan behavior; higher values split the perpendicular axis into lanes and scan each lane in sequence. When last section reached, reset to origin. Stop resets to origin.
 
 Also add per-section note mapping: restart note mapping from "First note" after each section boundary (configurable per axis), enabling longer melodies with limited note range.
 
-**Worked example:** 8×8 grid, horizontal scan, section size 4 → 2 lanes of 4×8. Lane 1 scans rows 0–3 left-to-right (8 steps), then lane 2 scans rows 4–7 left-to-right (8 steps). Total: 16 scan steps. Note mapping restarts from First Note at each lane boundary — same 8 notes play in each lane, but on different grid rows.
+**Worked example:** 8×8 grid, horizontal/row scan, sections=2 → 2 lanes of 4×8. Lane 1 scans rows 0–3 left-to-right (8 steps), then lane 2 scans rows 4–7 left-to-right (8 steps). Total: 16 scan steps. Note mapping can restart from First Note at each lane boundary — same 8 notes play in each lane, but on different grid rows.
 
 **Acceptance:**
-- Scan behaviour has Section Size parameter (powers of 2, default 1 = current behaviour).
-- Scanning progresses in lanes of width n, covering all cells sequentially.
+- Scan behaviour has Sections parameter (powers of 2, default 1 = current behaviour).
+- Scanning progresses through the configured number of lanes, covering all cells sequentially.
 - Stop resets scan to origin.
 - Note mapping can restart per section (configurable toggle per axis).
+
+**Implementation:**
+- Added per-part `l2.scanSections` enum (`1`, `2`, `4`, `8`), default `1`, exposed as `L2: Sense > Part > Sections` when scanning.
+- Extended interpretation scan strategies with optional `sections`, preserving current full-row/full-column behavior at `1`.
+- Sectioned row scans sweep horizontal lanes; sectioned column scans sweep vertical lanes. Runtime scan index span expands to `gridWidth * sections` or `gridHeight * sections`.
+- Existing stop/emergency reset paths reset sectioned scan to origin via `partScanIndex = 0`.
+- Added per-axis `Restart Section` toggles under Pitch Steps. X restart applies to column sections; Y restart applies to row sections.
+- Tests cover section lane interpretation, wrapping/reverse scan index behavior, and local pitch restart.
 
 ---
 
@@ -303,7 +387,7 @@ Also add per-section note mapping: restart note mapping from "First note" after 
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 4 |
 | **Priority** | high |
 | **Scope** | medium |
@@ -331,6 +415,8 @@ New L4 layer: "Touch" / "Performance". Contains grid-mode pages (switched via ri
 - BPM parameter exists in Touch menu section.
 - FN+rightmost column jumps to Touch from any layer.
 - Aux encoder mappings work consistently across all Touch pages.
+
+**Implemented:** `L4: Touch` menu with Touch Page and BPM, Fn+rightmost jump, rightmost-column page selection, Mix volume/mute grid, Pan grid, FX placeholder grid, and Touch LED overlay rendering.
 
 ---
 

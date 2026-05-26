@@ -23,6 +23,7 @@ pub struct SynthEngine {
     pan_positions: usize,
     voice_stealing_mode: VoiceStealingMode,
     smoothed_load_ratio: f32,
+    voice_steal_since_status: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -30,6 +31,7 @@ enum InstrumentKind {
     Synth,
     Sample,
     Midi,
+    None,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -74,6 +76,7 @@ impl SynthEngine {
             pan_positions: DEFAULT_PAN_POSITIONS,
             voice_stealing_mode: VoiceStealingMode::Balanced,
             smoothed_load_ratio: 0.0,
+            voice_steal_since_status: false,
         }
     }
 
@@ -84,6 +87,15 @@ impl SynthEngine {
     pub fn set_runtime_load_ratio(&mut self, ratio: f32) {
         let r = ratio.clamp(0.0, 2.0);
         self.smoothed_load_ratio = 0.9 * self.smoothed_load_ratio + 0.1 * r;
+    }
+
+    pub fn audio_load_status(&mut self) -> AudioLoadStatus {
+        let status = AudioLoadStatus {
+            ratio: self.smoothed_load_ratio,
+            voice_steal: self.voice_steal_since_status,
+        };
+        self.voice_steal_since_status = false;
+        status
     }
 
     pub fn set_instruments(&mut self, cfg: InstrumentsConfig) {
@@ -170,7 +182,13 @@ impl SynthEngine {
                 break;
             }
         }
-        let i = voice_index.unwrap_or_else(|| Self::steal_voice_index(pool));
+        let i = match voice_index {
+            Some(i) => i,
+            None => {
+                self.voice_steal_since_status = true;
+                Self::steal_voice_index(pool)
+            }
+        };
 
         let cfg = self.instruments[slot];
         let amp_env = EnvState::note_on(cfg.amp_env, self.sample_rate);
@@ -195,6 +213,9 @@ impl SynthEngine {
 
     pub fn cc(&mut self, instrument_slot: u8, controller: u8, value: u8) {
         let slot = (instrument_slot as usize).min(INSTRUMENT_SLOT_COUNT - 1);
+        if self.slot_kind[slot] == InstrumentKind::None {
+            return;
+        }
         if controller == 74 {
             self.mods[slot].cutoff_cc = (value as f32 / 127.0).clamp(0.0, 1.0);
         } else if controller == 71 {
@@ -206,6 +227,9 @@ impl SynthEngine {
 
     pub fn note_off(&mut self, instrument_slot: u8, midi_note: u8) {
         let slot = (instrument_slot as usize).min(INSTRUMENT_SLOT_COUNT - 1);
+        if self.slot_kind[slot] == InstrumentKind::None {
+            return;
+        }
         if self.slot_kind[slot] == InstrumentKind::Sample {
             let sample_slot = sample_slot_for_note(midi_note);
             for voice in self.sample_voices[slot].iter_mut() {
@@ -391,7 +415,13 @@ impl SynthEngine {
         let pitch = 2.0_f32.powf(bank.tune_semis / 12.0);
         let step = pitch * buffer.sample_rate as f32 / self.sample_rate as f32;
         let pool = &mut self.sample_voices[slot];
-        let voice_index = pool.iter().position(|voice| !voice.active).unwrap_or(0);
+        let voice_index = match pool.iter().position(|voice| !voice.active) {
+            Some(i) => i,
+            None => {
+                self.voice_steal_since_status = true;
+                0
+            }
+        };
         pool[voice_index] = SampleVoice {
             active: true,
             sample_slot,
@@ -484,6 +514,7 @@ impl SynthEngine {
                 break;
             };
             self.voices[slot][idx].active = false;
+            self.voice_steal_since_status = true;
         }
     }
 
@@ -554,6 +585,7 @@ fn parse_instrument_kind(kind: &str) -> InstrumentKind {
     match kind {
         "sample" => InstrumentKind::Sample,
         "midi" => InstrumentKind::Midi,
+        "none" => InstrumentKind::None,
         _ => InstrumentKind::Synth,
     }
 }

@@ -1,10 +1,11 @@
-use realtime_engine::synth::{InstrumentsConfig, SampleBankConfig, SynthEngine, VoiceStealingMode};
-use std::sync::mpsc::Receiver;
-use std::time::Instant;
+use realtime_engine::synth::{AudioLoadStatus, InstrumentsConfig, SampleBankConfig, SynthEngine, VoiceStealingMode};
+use std::sync::mpsc::{Receiver, Sender};
+use std::time::{Duration, Instant};
 
 const DEFAULT_BLOCK_FRAMES: usize = 128;
 const MIN_BLOCK_FRAMES: usize = 32;
 const MAX_BLOCK_FRAMES: usize = 2048;
+const LOAD_REPORT_INTERVAL: Duration = Duration::from_millis(100);
 
 pub struct EngineSource {
     engine: SynthEngine,
@@ -13,6 +14,8 @@ pub struct EngineSource {
     block_frames: usize,
     buf: Vec<f32>,
     idx: usize,
+    load_tx: Option<Sender<AudioLoadStatus>>,
+    last_load_report: Instant,
 }
 
 pub enum EngineEvent {
@@ -38,6 +41,14 @@ pub enum EngineEvent {
 
 impl EngineSource {
     pub fn new(control_rx: Receiver<EngineEvent>, sample_rate: u32) -> Self {
+        Self::with_load_status_tx(control_rx, sample_rate, None)
+    }
+
+    pub fn with_load_status_tx(
+        control_rx: Receiver<EngineEvent>,
+        sample_rate: u32,
+        load_tx: Option<Sender<AudioLoadStatus>>,
+    ) -> Self {
         let block_frames = audio_block_frames();
         Self {
             engine: SynthEngine::new(sample_rate),
@@ -46,6 +57,8 @@ impl EngineSource {
             block_frames,
             buf: Vec::with_capacity(block_frames * 2),
             idx: 0,
+            load_tx,
+            last_load_report: Instant::now(),
         }
     }
 
@@ -67,6 +80,21 @@ impl EngineSource {
             0.0
         };
         self.engine.set_runtime_load_ratio(ratio);
+        self.report_load_status();
+    }
+
+    fn report_load_status(&mut self) {
+        if self.load_tx.is_none() {
+            return;
+        }
+        if self.last_load_report.elapsed() < LOAD_REPORT_INTERVAL {
+            return;
+        }
+        self.last_load_report = Instant::now();
+        let status = self.engine.audio_load_status();
+        if let Some(load_tx) = &self.load_tx {
+            let _ = load_tx.send(status);
+        }
     }
 
     fn drain_control_events(&mut self) {

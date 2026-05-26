@@ -3,9 +3,9 @@ import { getBehavior } from "@cellsymphony/behavior-api";
 import { interpretGrid, type AxisStrategy, type InterpretationProfile, type TickStrategy } from "@cellsymphony/interpretation-core";
 import { mapIntentsToMusicalEvents } from "@cellsymphony/mapping-core";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
-import { applyModulation } from "./musicTransforms";
+import { applyModulation, applyNoteBehavior, withScaleSteps } from "./musicTransforms";
 import { dedupeSimultaneousNotes, toGridSnapshot } from "./runtimeHelpers";
-import { mod } from "./coreUtils";
+import { mod, mergeMapping } from "./coreUtils";
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { PlatformState, RuntimeConfig, Direction, NoteUnit } from "./platformTypes";
 import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
@@ -94,7 +94,7 @@ function advanceEngineByPulses<TState>(state: PlatformState<TState>, behavior: B
       const scanStepPulses = noteUnitToPulses(partCfg.scanUnit);
       while (partScanPulseAccumulator[partIdx] >= scanStepPulses) {
         partScanPulseAccumulator[partIdx] -= scanStepPulses;
-        partScanIndex[partIdx] = advanceScanIndex(partScanIndex[partIdx], partCfg.scanDirection, partCfg.scanAxis === "columns" ? GRID_WIDTH : GRID_HEIGHT);
+        partScanIndex[partIdx] = advanceScanIndex(partScanIndex[partIdx], partCfg.scanDirection, scanIndexSpan(partCfg));
         scanAdvanced = true;
       }
     }
@@ -112,7 +112,8 @@ function advanceEngineByPulses<TState>(state: PlatformState<TState>, behavior: B
     const intents = interpretGrid(beforeGrid, afterGrid, interpretationTick, profile);
     const mapped = mapIntentsToMusicalEvents(intents, withScaleSteps(partCfg.mappingConfig as any, partCfg));
     const modulated = applyModulation(intents, mapped, partCfg);
-    const shaped = applyNoteBehavior(modulated, next, partIdx, heldNotes);
+    const instruments: any[] = Array.isArray((next.runtimeConfig as any).instruments) ? ((next.runtimeConfig as any).instruments as any[]) : [];
+    const shaped = applyNoteBehavior(modulated, instruments, partIdx, heldNotes);
     heldNotes = shaped.heldNotes;
     events.push(...shaped.events);
   }
@@ -172,18 +173,20 @@ function advanceScanIndex(current: number, direction: Direction, size: number): 
   return mod(current + delta, size);
 }
 
-function withScaleSteps(mapping: any, cfg: RuntimeConfig): any {
-  return {
-    ...mapping,
-    rowStepDegrees: cfg.y.pitch.enabled ? Math.abs(cfg.y.pitch.steps) : 0,
-    columnStepDegrees: cfg.x.pitch.enabled ? Math.abs(cfg.x.pitch.steps) : 0
-  };
+function scanIndexSpan(cfg: RuntimeConfig): number {
+  const sections = sectionCount(cfg.scanSections);
+  if (sections <= 1) return cfg.scanAxis === "columns" ? GRID_WIDTH : GRID_HEIGHT;
+  return cfg.scanAxis === "columns" ? GRID_HEIGHT * sections : GRID_WIDTH * sections;
+}
+
+function sectionCount(value: unknown): number {
+  return value === "2" ? 2 : value === "4" ? 4 : value === "8" ? 8 : 1;
 }
 
 function profileFromConfig(cfg: RuntimeConfig): InterpretationProfile {
   const tick: TickStrategy = cfg.scanMode === "immediate"
     ? { mode: "whole_grid_transitions" }
-    : { mode: cfg.scanAxis === "columns" ? "scan_column_active" : "scan_row_active" };
+    : { mode: cfg.scanAxis === "columns" ? "scan_column_active" : "scan_row_active", sections: sectionCount(cfg.scanSections) };
   const axisX: AxisStrategy = cfg.x.pitch.enabled ? { mode: "scale_step", step: Math.abs(cfg.x.pitch.steps) } : { mode: "timing_only" };
   const axisY: AxisStrategy = cfg.y.pitch.enabled ? { mode: "scale_step", step: Math.abs(cfg.y.pitch.steps) } : { mode: "timing_only" };
   return {
@@ -193,37 +196,6 @@ function profileFromConfig(cfg: RuntimeConfig): InterpretationProfile {
     x: axisX,
     y: axisY
   };
-}
-
-function applyNoteBehavior<TState>(events: MusicalEvent[], state: PlatformState<TState>, partIdx: number, initialHeld: string[]): { events: MusicalEvent[]; heldNotes: string[] } {
-  const held = new Set(initialHeld ?? state.system.heldNotes ?? []);
-  const out: MusicalEvent[] = [];
-  const instruments: any[] = Array.isArray((state.runtimeConfig as any).instruments) ? ((state.runtimeConfig as any).instruments as any[]) : [];
-  for (const e of events) {
-    if (e.type === "note_on") {
-      const key = `${partIdx}:${e.channel}:${e.note}`;
-      const behavior = instruments[e.channel]?.noteBehavior === "hold" ? "hold" : "oneshot";
-      if (behavior === "hold" && held.has(key)) {
-        continue;
-      }
-      if (behavior === "hold") {
-        held.add(key);
-        out.push({ ...e, durationMs: undefined });
-      } else {
-        out.push(e);
-      }
-      continue;
-    }
-    if (e.type === "note_off") {
-      const key = `${partIdx}:${e.channel}:${e.note}`;
-      if (!held.has(key)) continue;
-      held.delete(key);
-      out.push(e);
-      continue;
-    }
-    out.push(e);
-  }
-  return { events: out, heldNotes: [...held] };
 }
 
 function toRuntimeConfigForPart(base: RuntimeConfig, mapping: any, part: any, fallbackBehaviorId: string, preferBase: boolean): RuntimeConfig & { mappingConfig: any } {
@@ -240,19 +212,13 @@ function toRuntimeConfigForPart(base: RuntimeConfig, mapping: any, part: any, fa
     scanAxis: preferBase ? base.scanAxis : (part?.l2?.scanAxis ?? base.scanAxis),
     scanUnit: preferBase ? base.scanUnit : (part?.l2?.scanUnit ?? base.scanUnit),
     scanDirection: preferBase ? base.scanDirection : (part?.l2?.scanDirection ?? base.scanDirection),
+    scanSections: preferBase ? base.scanSections : (part?.l2?.scanSections ?? base.scanSections),
     eventEnabled: preferBase ? base.eventEnabled : (part?.l2?.eventEnabled ?? base.eventEnabled),
     stateEnabled: preferBase ? base.stateEnabled : (part?.l2?.stateEnabled ?? base.stateEnabled),
     pitch: preferBase ? base.pitch : (part?.l2?.pitch ? structuredClone(part.l2.pitch) : base.pitch),
     x: preferBase ? base.x : (part?.l2?.x ? structuredClone(part.l2.x) : base.x),
     y: preferBase ? base.y : (part?.l2?.y ? structuredClone(part.l2.y) : base.y)
   } as RuntimeConfig;
-  const mappingConfig = {
-    ...mapping,
-    activate: { ...mapping.activate, action: preferBase ? (mapping.activate?.action ?? part?.l2?.mapping?.activate?.action) : (part?.l2?.mapping?.activate?.action ?? mapping.activate?.action), channel: Number(preferBase ? (mapping.activate?.channel ?? part?.l2?.mapping?.activate?.slot ?? 0) : (part?.l2?.mapping?.activate?.slot ?? mapping.activate?.channel ?? 0)) },
-    stable: { ...mapping.stable, action: preferBase ? (mapping.stable?.action ?? part?.l2?.mapping?.stable?.action) : (part?.l2?.mapping?.stable?.action ?? mapping.stable?.action), channel: Number(preferBase ? (mapping.stable?.channel ?? part?.l2?.mapping?.stable?.slot ?? 0) : (part?.l2?.mapping?.stable?.slot ?? mapping.stable?.channel ?? 0)) },
-    deactivate: { ...mapping.deactivate, action: preferBase ? (mapping.deactivate?.action ?? part?.l2?.mapping?.deactivate?.action) : (part?.l2?.mapping?.deactivate?.action ?? mapping.deactivate?.action), channel: Number(preferBase ? (mapping.deactivate?.channel ?? part?.l2?.mapping?.deactivate?.slot ?? 0) : (part?.l2?.mapping?.deactivate?.slot ?? mapping.deactivate?.channel ?? 0)) },
-    scanned: { ...mapping.scanned, action: preferBase ? (mapping.scanned?.action ?? part?.l2?.mapping?.scanned?.action) : (part?.l2?.mapping?.scanned?.action ?? mapping.scanned?.action), channel: Number(preferBase ? (mapping.scanned?.channel ?? part?.l2?.mapping?.scanned?.slot ?? 0) : (part?.l2?.mapping?.scanned?.slot ?? mapping.scanned?.channel ?? 0)) },
-    scanned_empty: { ...mapping.scanned_empty, action: preferBase ? (mapping.scanned_empty?.action ?? part?.l2?.mapping?.scanned_empty?.action) : (part?.l2?.mapping?.scanned_empty?.action ?? mapping.scanned_empty?.action), channel: Number(preferBase ? (mapping.scanned_empty?.channel ?? part?.l2?.mapping?.scanned_empty?.slot ?? 0) : (part?.l2?.mapping?.scanned_empty?.slot ?? mapping.scanned_empty?.channel ?? 0)) }
-  };
+  const mappingConfig = mergeMapping(mapping, part, preferBase);
   return { ...partCfg, mappingConfig };
 }
