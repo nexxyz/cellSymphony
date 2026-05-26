@@ -10,7 +10,7 @@ export type AudioLoadService = {
 
 export class TauriAudioLoadService implements AudioLoadService {
   async listenAudioLoad(handler: (status: AudioLoadStatus) => void): Promise<() => void> {
-    if (!("__TAURI_INTERNALS__" in window)) return () => {};
+    if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return () => {};
     const unlisten = await listen<AudioLoadPayload>("audio_load", (evt) => {
       const ratio = Number(evt.payload?.ratio ?? 0);
       handler({ ratio: Number.isFinite(ratio) ? ratio : 0, voiceSteal: evt.payload?.voiceSteal === true });

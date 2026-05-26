@@ -9,20 +9,20 @@ export interface NativeAudioBridge {
 
 class TauriNativeAudioBridge implements NativeAudioBridge {
   async trigger(event: MusicalEvent): Promise<void> {
-    const isTauri = "__TAURI_INTERNALS__" in window;
+    const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
     if (!isTauri) return;
     await invoke("trigger_musical_event", { event });
   }
 
   async setInstruments(config: { instruments: unknown[]; mixer: unknown; panPositions: number }): Promise<void> {
-    const isTauri = "__TAURI_INTERNALS__" in window;
+    const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
     if (!isTauri) return;
     const payload = config ?? { instruments: [], mixer: { buses: [] }, panPositions: 8 };
     await invoke("audio_set_instruments", { config: payload });
   }
 
   async setRuntimePolicy(policy: { voiceStealingMode: "off" | "lenient" | "balanced" | "aggressive" }): Promise<void> {
-    const isTauri = "__TAURI_INTERNALS__" in window;
+    const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
     if (!isTauri) return;
     await invoke("audio_set_runtime_policy", { policy });
   }

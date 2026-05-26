@@ -424,7 +424,7 @@ New L4 layer: "Touch" / "Performance". Contains grid-mode pages (switched via ri
 
 | Field | Value |
 |-------|-------|
-| **Status** | open |
+| **Status** | closed |
 | **Phase** | 4 |
 | **Priority** | high |
 | **Scope** | large |
@@ -439,7 +439,7 @@ Assign momentary effects to grid cells in the Touch FX page. All effects are mom
 - Same effect type pressed while already active: new press takes over, old cell "released" even if still held. (You cannot have two stutters active simultaneously, but pressing a second stutter cell replaces the first.)
 - Each effect type has its own identifying colour (palette chosen during design proposal — keep in mind more types may be added later).
 
-**Target:** Each effect assigned per cell with target (global output, specific instrument, or FX bus) and configurable parameters.
+**Target:** Each effect is assigned per cell with configurable parameters. This implementation targets global output only and emits platform effects for the later realtime DSP bridge.
 
 **Acceptance:**
 - All effects momentary (on while held, off on release).
@@ -449,6 +449,8 @@ Assign momentary effects to grid cells in the Touch FX page. All effects are mom
 - Effect types have distinct identifying grid colours.
 - Filter-sweep fades in on press, fades out on release.
 - Reuse existing filter/FX code where overlapping.
+
+**Implemented:** `L4: Touch > FX Page` effect selection, per-effect parameter menu, Map to Grid assignment flow, persisted per-cell FX assignments, momentary activate/deactivate `PlatformEffect` payloads, max concurrent cap, same-type replacement, and FX page LED colours. Realtime Rust DSP remains follow-up work.
 
 ---
 

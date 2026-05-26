@@ -1,71 +1,95 @@
 # Cell Symphony
 
-A device (with a 1:1 simulator app) that turns cellular automata into a playable, performable synthesizer. Inspired by the Tenori-On, it combines 10 generative algorithms with real-time music generation.
+Cell Symphony is a desktop-first hardware-instrument prototype that turns cellular automata into music. The Tauri desktop app is a 1:1 simulator for the planned hardware control surface, not a separate product UX.
 
-> **Work in Progress.** This is an active hobby project. Things change, break, and improve rapidly.
+> **Work in progress.** This is an active hobby project. Interfaces and behavior can change quickly, but the README should reflect the current implemented state.
 
 ---
 
 ## What It Is
 
-Cell Symphony combines a pluggable generative algorithm engine with a musical interpretation layer:
+Cell Symphony combines a pluggable cellular-behavior engine, a hardware-parity menu/control layer, and a realtime synth/sample backend:
 
-- An **8×8 grid** evolves according to one of 10 algorithms (Conway, Brian's Brain, Langton's Ant, Bounce, Shapes, Raindrops, DLA, Glider, or manual Sequencer)
-- A **musical interpretation layer** turns cell events (activate/stable/deactivate/scanned) into MIDI notes and internal synth sounds
-- A **hardware-style control surface**: 5 rotary encoders, 4 NeoKey buttons, and the grid itself
-- A **desktop app** (Tauri + React) that acts as a simulator and development harness
-- All algorithms are pluggable `BehaviorEngine` packages with a shared API
-
----
-
-## Status & Roadmap
-
-### Done / Functional
-- [x] **10 generative algorithms** (pluggable via `BehaviorEngine` interface)
-- [x] **4 trigger types** (`activate` / `stable` / `deactivate` / `scanned`)
-- [x] Musical interpretation & mapping
-- [x] Internal synth (rodio + realtime-engine)
-- [x] Desktop simulator (Tauri + React)
-- [x] MIDI output (Tauri/midir)
-- [x] MIDI input & external sync
-- [x] Preset storage (save/load/rename/delete)
-- [x] OLED 128×128 display (simulated)
-- [x] Grid LED feedback (NeoKey-style, color-coded by trigger type)
-- [x] Transport (Play / Pause / Stop)
-- [x] Menu system (encoder-driven, 4-level deep)
-- [x] Scale-based note mapping (9 scales, 12 roots)
-- [x] Modulation lanes (velocity, filter cutoff/resonance, pitch steps)
-- [x] Auxiliary encoder binding (bind any menu param to aux1-4)
-- [x] Auto-save (persist config on every change)
-- [x] Shift+Backspace grid clear
-- [x] 84 passing tests across all packages
-- [x] Coverage reporting (c8)
-
-### In Progress
-- [ ] Hardware prototype (Raspberry Pi + custom PCB) — design in `hardware/KiCAD/`
-
-### Next on the Roadmap
-- [ ] Multi-layer architecture (8 independent layers)
-- [ ] Effects suite (reverb, delay, chorus, more filter types)
-- [ ] Sample management, mapping and triggering
-- [ ] More playful UI animations
-- [ ] More versatile synth engines
+- An **8x8 grid** runs one of 10 pluggable algorithms via the shared `BehaviorEngine` API.
+- A **sense/mapping layer** turns cell transitions (`activate`, `stable`, `deactivate`, `scanned`) into musical events.
+- A **voice layer** manages instruments, synth/sample/MIDI slots, mixer routing, FX buses, and sample-grid assignments.
+- A **Touch performance layer** provides grid pages for mix, pan, and mapped momentary FX.
+- A **desktop simulator** mirrors the hardware interface, including OLED, grid LEDs, encoders, buttons, transport, MIDI, and audio bridge behavior.
 
 ---
 
-## Controls (Hardware Parity)
+## Current Status
 
-| Control | Simulator Key | Function |
+Implemented and functional:
+
+- 10 behaviors: none, sequencer, keys, Conway Life, Brian's Brain, Langton's Ant, Bounce, Shapes, Raindrops, DLA, and Glider.
+- Multi-part L1/L2 architecture with per-part behavior, scan/sense settings, mapping, names, and saved grid state.
+- Scanning modes, sectioned scanning, scan direction, state/event triggers, and pitch/velocity/filter modulation lanes.
+- Internal synth, sample slots, MIDI output/input, external sync, voice stealing policy, and audio load indicators.
+- L3 Voice instruments with synth/sample/MIDI types, mixer volume/pan/route, FX buses, and sample assignment mode.
+- L4 Touch performance layer with Mix, Pan, and FX pages.
+- Touch FX mapping: select effect type/params, Map to Grid, press cells for momentary activate/release effects.
+- Preset/default storage, factory/default load/save, auto-save, contextual help, OLED rendering, toast feedback, and aux encoder bindings.
+- CI-style TypeScript/Rust lint, typecheck, test, and build scripts.
+
+Planned/follow-up:
+
+- Realtime Rust DSP implementation for Touch momentary FX payloads.
+- Global/master FX workflow refinements.
+- Aux mapping enhancements for the Touch context.
+- Hardware prototype on Raspberry Pi Zero 2 W with NeoTrellis/NeoKeys/OLED/audio DAC.
+
+---
+
+## Controls
+
+| Hardware Control | Simulator Key | Function |
 |---|---|---|
-| Main encoder turn | ← → | Move cursor / adjust values |
-| Main encoder press | Enter | Enter group / toggle / enter/exit edit |
-| Back button | Backspace | Go back / exit edit |
-| Space button | Space | Play / Pause |
-| Shift + Space | Shift+Space | Emergency stop (panic + reset) |
-| Shift + Backspace | Shift+Backspace | Clear grid |
-| Aux encoder 1-4 turn | (simulated) | Adjust bound parameter |
-| Aux encoder 1-4 press | (simulated) | Bind/unbind current menu item |
-| Shift + aux press | Shift+(simulated) | Show current binding |
+| Main encoder turn | Left / Right | Move cursor or adjust edited value |
+| Main encoder press | Enter | Enter group, toggle/edit value, confirm action |
+| Back | Backspace | Back/exit edit/exit assignment mode |
+| Space | Space | Play / pause |
+| Shift + Space | Shift + Space | Emergency stop / panic |
+| Shift + Back | Shift + Backspace | Clear active part grid |
+| Fn + left grid column | Ctrl/Fn + left column | Select active part |
+| Fn + right grid column | Ctrl/Fn + right column | Toggle Touch layer on/off |
+| Touch right grid column | right column, no Fn | Select Touch page: mix, pan, fx |
+| Aux encoder press | simulator aux control | Bind/unbind current menu item |
+| Aux encoder turn | simulator aux control | Adjust bound parameter |
+
+When Fn is held, the left grid column shows part options and the right grid column shows Touch page options. The active part/page is highlighted.
+
+---
+
+## Menu Overview
+
+The authoritative menu/control spec lives in `docs/menu-and-controls-spec.md`.
+
+- **L1: Life** — per-part behavior, step rate, behavior config, saved grid state, part naming.
+- **L2: Sense** — per-part scan mode, scan axis/unit/direction/sections, trigger routing, note mapping, modulation lanes.
+- **L3: Voice** — instruments, synth/sample/MIDI settings, sample assignment, mixer volume/pan/route, FX buses.
+- **L4: Touch** — Touch Page, BPM, Touch FX type/params, Map to Grid, Max Concurrent.
+- **Playback** — BPM.
+- **System** — presets/defaults/factory, sound settings, MIDI, UI settings, contextual help.
+
+---
+
+## Touch Layer
+
+`Fn + rightmost grid column` toggles Touch on/off from anywhere.
+
+- **mix**: columns are instruments, y=0 mutes and y=7 sets 100% volume.
+- **pan**: rows are instruments, x=0 is hard left and x=7 is hard right.
+- **fx**: assigned cells trigger momentary effects while held.
+
+Touch FX currently emits platform effects for later DSP wiring:
+
+- `stutter`
+- `freeze`
+- `filter_sweep`
+- `pitch_shift`
+
+To map FX, go to `L4: Touch > FX Page`, select an effect type and parameters, choose `Map to Grid`, then press a grid cell. `Max Concurrent` limits simultaneous held effects; same effect type presses replace the existing active cell.
 
 ---
 
@@ -73,114 +97,112 @@ Cell Symphony combines a pluggable generative algorithm engine with a musical in
 
 | Algorithm | Package | Description |
 |---|---|---|
-| Sequencer | `behaviors-sequencer` | Manual grid toggle — cells on/off via grid press |
-| Conway+ | `behaviors-life` | Game of Life (B3/S23) with optional random seeding |
-| Brian's Brain | `behaviors-brain` | 3-state CA: alive→dying→dead |
-| Langton's Ant | `behaviors-ant` | Ant moves, flips cells, wraps edges |
-| Bounce | `behaviors-bounce` | Balls bounce at 45° off grid edges |
-| Shapes | `behaviors-pulse` | Expanding wavefront: ring/heart/star/plus/x |
-| Raindrops | `behaviors-raindrops` | Drops fall, splash into expanding rings |
-| DLA | `behaviors-dla` | Diffusion-limited aggregation |
-| Glider | `behaviors-glider` | Spawns Conway gliders at intervals |
+| none | `@cellsymphony/behaviors-none` | Empty/no-op behavior |
+| sequencer | `@cellsymphony/behaviors-sequencer` | Manual grid toggle |
+| keys | `@cellsymphony/behaviors-keys` | Momentary key grid |
+| life | `@cellsymphony/behaviors-life` | Conway's Game of Life with optional spawning |
+| brain | `@cellsymphony/behaviors-brain` | Brian's Brain 3-state automaton |
+| ant | `@cellsymphony/behaviors-ant` | Langton's Ant |
+| bounce | `@cellsymphony/behaviors-bounce` | Bouncing particles |
+| shapes | `@cellsymphony/behaviors-pulse` | Expanding ring/shape pulses |
+| raindrops | `@cellsymphony/behaviors-raindrops` | Falling drops and splash rings |
+| dla | `@cellsymphony/behaviors-dla` | Diffusion-limited aggregation |
+| glider | `@cellsymphony/behaviors-glider` | Conway glider spawning |
 
 ---
 
-## Menu Overview
-
-Navigate with the encoder, press to enter/edit, Back to exit.
-
-- **L1: Behaviors** — Active algorithm, step rate, per-behavior config
-- **L2: Sense** — Scan mode/axis/unit/direction, event triggers, X/Y axis modulation (pitch/velocity/filter cutoff/resonance)
-- **L3: Voice** — Note mapping (scale/root/range), activate/stable/deactivate/scanned MIDI targets, X/Y axis modulation
-- **Playback** — BPM
-- **System** — Audio (master volume), presets (save/load/rename/delete/default/auto-save), MIDI config, sound (note length/velocity), UI settings (brightness/screen sleep)
-
-See `docs/menu-and-controls-spec.md` for the full authoritative spec.
-
-## Sample Library Attribution
-
-- The repository `samples/` content is sourced from the Stargate sample pack:
-  `https://github.com/stargatedaw/stargate-sample-pack`
-
----
-
-## Installation (Developer Preview)
+## Development
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) 20+
-- [pnpm](https://pnpm.io/) (`npm install -g pnpm`)
-- [Rust](https://www.rust-lang.org/tools/install) (stable)
-- [Tauri](https://tauri.app/v2/guides/getting-started/prerequisites/) prerequisites
+- Node.js 20+
+- pnpm 9.12.0 (`corepack enable` recommended)
+- Rust stable
+- Tauri v2 prerequisites for desktop development
 
-### Build & Run
+### Install
 
 ```bash
-# Install dependencies
 pnpm install
+```
 
-# Start the desktop app (simulator mode)
+### Run Desktop Simulator
+
+```bash
 pnpm --filter @cellsymphony/desktop tauri:dev
+```
 
-# Or alternatively run the .bat file after installing the dependencies
+On Windows you can also use:
+
+```bash
 cellSymphony.bat
 ```
 
----
-
-## Testing
+### Verify
 
 ```bash
-# Run all TypeScript tests (84 tests across all packages)
-pnpm -r test
-
-# Run tests with coverage
-pnpm -r test:coverage
-
-# Run individual behavior tests
-pnpm --filter @cellsymphony/behaviors-life test
-pnpm --filter @cellsymphony/behaviors-ant test
-
-# Run Rust tests
-cargo test --workspace
+pnpm run build
+pnpm run lint
+pnpm run typecheck
+pnpm run test
+pnpm run test:coverage
+cargo fmt --all --check
+cargo clippy --workspace --exclude cellsymphony-pi --exclude cellsymphony-desktop --exclude midi-io-sidecar --exclude rodio-engine-source --all-targets -- -D warnings
+cargo test --workspace --exclude cellsymphony-pi --exclude cellsymphony-desktop --exclude midi-io-sidecar --exclude rodio-engine-source
 ```
+
+Run focused package tests with:
+
+```bash
+pnpm --filter @cellsymphony/platform-core test
+pnpm --filter @cellsymphony/desktop test
+```
+
+The current platform-core suite has 144 tests after the Touch FX and section-order coverage additions.
 
 ---
 
 ## Project Structure
 
-```
+```text
 cellSymphony/
-├── apps/desktop/              # Tauri desktop app (simulator + future hardware harness)
+├── apps/desktop/                  # Tauri desktop simulator and audio bridge
 ├── packages/
-│   ├── platform-core/         # Core state, transport, menu system, behavior orchestration
-│   ├── behavior-api/          # BehaviorEngine interface + registry
-│   ├── interpretation-core/   # Grid → musical intent
-│   ├── mapping-core/          # Intent → MIDI events
-│   ├── musical-events/        # Event type definitions
-│   ├── device-contracts/      # Shared TypeScript contracts
-│   ├── midi-headless-runner/  # Headless MIDI integration tests
-│   ├── behaviors-sequencer/   # Manual grid sequencer
-│   ├── behaviors-life/        # Conway's Game of Life
-│   ├── behaviors-brain/       # Brian's Brain
-│   ├── behaviors-ant/         # Langton's Ant
-│   ├── behaviors-bounce/      # Bouncing balls
-│   ├── behaviors-pulse/       # Expanding shapes wavefront
-│   ├── behaviors-raindrops/   # Raindrop simulation
-│   ├── behaviors-dla/         # Diffusion-limited aggregation
-│   └── behaviors-glider/      # Glider spawner
+│   ├── platform-core/             # Core runtime, menu, transport, input routing, simulator frames
+│   ├── behavior-api/              # BehaviorEngine interface and registry
+│   ├── device-contracts/          # Shared device/display/grid contracts
+│   ├── interpretation-core/       # Grid transitions and scan interpretation
+│   ├── mapping-core/              # Musical intent to event mapping
+│   ├── musical-events/            # Musical event contracts
+│   ├── behaviors-*/               # Pluggable behavior packages
+│   └── midi-headless-runner/      # Headless MIDI integration support
 ├── crates/
-│   └── realtime-engine/       # Rust synth engine (rodio)
-├── tools/
-│   └── midi-io-sidecar/       # Rust MIDI I/O helper for testing
-└── docs/
-    ├── menu-and-controls-spec.md           # Authoritative control spec
-    ├── implementation-plan-10-algorithms.md # Original plan (superseded)
-    ├── implementation-done.md              # Final architecture summary
-    ├── runtime-boundaries.md               # Architecture overview
-    ├── principles.md                       # Product & architecture principles
-    └── engineering-quality-requirements.md # CI, test, and coverage requirements
+│   ├── realtime-engine/           # Rust realtime synth/sample/FX engine
+│   ├── rodio-engine-source/       # Rodio source wrapper
+│   ├── cellsymphony-hal/          # Hardware abstraction layer
+│   └── cellsymphony-pi/           # Raspberry Pi app target
+├── docs/                          # Specs, backlog, architecture, quality docs
+├── hardware/                      # Hardware prototype resources
+└── tools/                         # Auxiliary tools
 ```
+
+---
+
+## Documentation
+
+- `docs/menu-and-controls-spec.md` — source of truth for menu/control behavior.
+- `docs/backlog.md` — requirement status and phase planning.
+- `docs/runtime-boundaries.md` — layer responsibilities.
+- `docs/engineering-quality-requirements.md` — CI, coverage, and quality gates.
+- `docs/implementation-done.md` — implementation summary for the initial 10-algorithm phase.
+
+---
+
+## Sample Library Attribution
+
+The repository `samples/` content is sourced from the Stargate sample pack:
+
+`https://github.com/stargatedaw/stargate-sample-pack`
 
 ---
 
@@ -188,14 +210,14 @@ cellSymphony/
 
 The long-term goal is a standalone hardware device:
 
-- **Compute**: Raspberry Pi Zero 2 W
-- **Display**: 128×128 OLED (RGB565) via Adafruit 128x128 OLED Breakout Board
-- **Controls**: 5 clickable rotary encoders (4 freely mappable), 4 dedicated buttons via Adafruit NeoKeys
-- **Grid**: 8×8 LED matrix with pushbuttons via Adafruit NeoTrellis
-- **DAC**: High-quality audio out via Adafruit PCM5102 I2S DAC
-- **Power**: USB-C via Adafruit USB Type C Breakout Board
-- **Sound generation**: Native synth & sample engine (no computer needed)
-- **I/O**: MIDI in/out (via RPi MicroUSB)
+- Raspberry Pi Zero 2 W
+- 128x128 OLED display
+- 5 clickable rotary encoders
+- 4 NeoKey buttons
+- 8x8 NeoTrellis grid
+- PCM5102 I2S audio DAC
+- USB-C power
+- MIDI in/out where practical
 
 ---
 

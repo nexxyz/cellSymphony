@@ -10,6 +10,7 @@ export type Curve = "linear" | "curve";
 export type VoiceStealingMode = "off" | "lenient" | "balanced" | "aggressive";
 export type NumericDisplayMode = "bar" | "numbers" | "bar+numbers";
 export type TouchMode = "none" | "mix" | "pan" | "fx";
+export type MomentaryFxType = "none" | "stutter" | "freeze" | "filter_sweep" | "pitch_shift";
 export type BarValue = { frac: number; numChars: number };
 export type ScaleId = "chromatic" | "major" | "natural_minor" | "dorian" | "mixolydian" | "major_pentatonic" | "minor_pentatonic" | "harmonic_minor";
 export type RootName = "C" | "C#" | "D" | "D#" | "E" | "F" | "F#" | "G" | "G#" | "A" | "A#" | "B";
@@ -108,6 +109,10 @@ export type FxBusConfig = {
   name: string;
 };
 
+export type MomentaryFxConfig = { fxType: MomentaryFxType; params: Record<string, unknown> };
+export type FxCellConfig = { x: number; y: number; config: MomentaryFxConfig };
+export type ActiveFx = { cellX: number; cellY: number; fxType: MomentaryFxType; config: MomentaryFxConfig; activatedAtMs: number };
+
 export type PartSenseConfig = {
   scanMode: ScanMode;
   scanAxis: ScanAxis;
@@ -151,6 +156,7 @@ export type RuntimeConfig = {
   activePartIndex: number; parts: PartConfig[]; numericDisplayMode: NumericDisplayMode; ghostCells: boolean;
   instruments: InstrumentSlotConfig[];
   mixer?: { buses: FxBusConfig[] };
+  touchFx?: { selected: MomentaryFxConfig; assignments: FxCellConfig[]; maxConcurrent: number };
 };
 
 export type ActionSpec =
@@ -165,6 +171,8 @@ export type ActionSpec =
   | { type: "sample_pick"; path: string }
   | { type: "sample_assign_enter"; instrumentSlot: number; sampleSlot: number }
   | { type: "sample_assign_exit" }
+  | { type: "fx_assign_enter"; config: MomentaryFxConfig }
+  | { type: "fx_assign_exit" }
   | { type: "midi_select_output"; id: string | null } | { type: "midi_select_input"; id: string | null }
   | { type: "midi_panic" } | { type: "behavior_action"; behaviorId: string; actionType: string }
   | { type: "instrument_clone"; slot: number } | { type: "instrument_reset"; slot: number };
@@ -196,6 +204,8 @@ export type SystemState = {
   pendingCloneSource: number | null;
   sampleAssign: { instrumentSlot: number; sampleSlot: number } | null;
   sampleAssignLastPress: { x: number; y: number; atMs: number } | null;
+  fxAssignMode: { config: MomentaryFxConfig } | null;
+  activeFx: ActiveFx[];
   sampleBrowser: {
     instrumentSlot: number;
     sampleSlot: number;
@@ -214,7 +224,10 @@ export type MidiEffect =
 export type SampleEffect =
   | { type: "sample_list_request"; instrumentSlot: number; sampleSlot: number; dir: string }
   | { type: "sample_preview_request"; path: string };
-export type PlatformEffect = PlatformEffectBase | MidiEffect | SampleEffect;
+export type MomentaryFxEffect =
+  | { type: "fx_momentary_activate"; fxType: MomentaryFxType; params: Record<string, unknown>; cellX: number; cellY: number }
+  | { type: "fx_momentary_deactivate"; cellX: number; cellY: number };
+export type PlatformEffect = PlatformEffectBase | MidiEffect | SampleEffect | MomentaryFxEffect;
 export type StoreResultBase =
   | { type: "list_presets_result"; names: string[] } | { type: "load_preset_result"; name: string; payload: ConfigPayload | null }
   | { type: "save_preset_result"; name: string; outcome: "created" | "overwritten" } | { type: "delete_preset_result"; name: string; ok: boolean }

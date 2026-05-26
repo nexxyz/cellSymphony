@@ -82,10 +82,10 @@ test("whole-grid-active emits only active scanned cells", () => {
 });
 
 test("sectioned row scan sweeps horizontal lanes", () => {
-  const grid: GridSnapshot = { width: 8, height: 8, cells: Array.from({ length: 64 }, (_, i) => i === 1 || i === 9 || i === 33) };
+  const grid: GridSnapshot = { width: 8, height: 8, cells: Array.from({ length: 64 }, (_, i) => i === 33 || i === 49 || i === 57) };
   const firstLane = interpretGrid(grid, grid, 1, { id: "sections", event: { enabled: false }, state: { enabled: true, tick: { mode: "scan_row_active", sections: 2 } }, x: { mode: "ignore" }, y: { mode: "ignore" } });
   const secondLane = interpretGrid(grid, grid, 9, { id: "sections", event: { enabled: false }, state: { enabled: true, tick: { mode: "scan_row_active", sections: 2 } }, x: { mode: "ignore" }, y: { mode: "ignore" } });
 
-  assert.deepEqual(firstLane.map((i) => [i.x, i.y]), [[1, 0], [1, 1], [1, 2], [1, 3]]);
-  assert.deepEqual(secondLane.map((i) => [i.x, i.y]), [[1, 4], [1, 5], [1, 6], [1, 7]]);
+  assert.deepEqual(firstLane.map((i) => [i.x, i.y]), [[1, 4], [1, 5], [1, 6], [1, 7]]);
+  assert.deepEqual(secondLane.map((i) => [i.x, i.y]), [[1, 0], [1, 1], [1, 2], [1, 3]]);
 });

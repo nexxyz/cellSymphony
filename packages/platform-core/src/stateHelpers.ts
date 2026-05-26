@@ -3,6 +3,7 @@ import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { TransportFrame } from "@cellsymphony/device-contracts";
 import { clamp, mod, readNestedValue, readValue, writeNestedValue, writeValue, deriveBusAutoName, derivePartAutoName, deriveInstAutoName, overrideFromPart, preferMapping } from "./coreUtils";
 import { defaultFxParam, defaultFxParams, isBusEffectType } from "./fxDefaults";
+import { defaultMomentaryFxParams, isMomentaryFxType } from "./momentaryFx";
 import type { ConfigPayload, MenuNode, PlatformState, SystemState } from "./platformTypes";
 import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
 import { SYNTH_PRESETS } from "./synthPresets";
@@ -288,6 +289,10 @@ function applyAutoName<TState>(state: PlatformState<TState>, rc: any, key: strin
 }
 
 export function writeAnyValue<TState>(state: PlatformState<TState>, key: string, value: unknown): PlatformState<TState> {
+  if (key === "touchFx.selected.fxType") {
+    const fxType = isMomentaryFxType(value) ? value : "none";
+    return { ...state, runtimeConfig: writeValue(state.runtimeConfig, "touchFx.selected", { fxType, params: defaultMomentaryFxParams(fxType) }) };
+  }
   const fxTypeMatch = /^mixer\.buses\.(\d+)\.(slot[12])\.type$/.exec(key);
   if (fxTypeMatch) {
     const type = isBusEffectType(value) ? value : "none";

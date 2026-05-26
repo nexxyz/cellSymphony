@@ -2185,7 +2185,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "kind": "group",
     "title": "Touch Layer",
     "line1": "Performance grid layer for live mix, pan, and FX pages.",
-    "line2": "Fn plus the rightmost grid column jumps here from any layer."
+    "line2": "Fn plus the rightmost grid column toggles Touch from any layer."
   },
   {
     "id": "touch_page",
@@ -2193,8 +2193,8 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "key:system.touchMode",
     "kind": "enum",
     "title": "Touch Page",
-    "line1": "Options: none, mix, pan, fx. none returns the grid to the active behavior; mix edits instrument volume; pan edits pan position; fx is a placeholder for the FX performance page.",
-    "line2": "Rightmost grid-column rows select pages while Touch is enabled."
+    "line1": "Options: none, mix, pan, fx. none returns the grid to the active behavior; mix edits instrument volume; pan edits pan position; fx triggers mapped momentary effects.",
+    "line2": "Rightmost grid-column rows select pages while Touch is enabled; Fn plus the rightmost column toggles Touch on or off."
   },
   {
     "id": "touch_bpm",
@@ -2204,5 +2204,104 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "title": "BPM",
     "line1": "Sets master tempo in beats per minute from the Touch layer.",
     "line2": "This mirrors the Playback BPM setting for performance access."
+  },
+  {
+    "id": "touch_fx_section",
+    "path": "Menu > L4: Touch > FX Page",
+    "key": "",
+    "kind": "group",
+    "title": "FX Page",
+    "line1": "Configures momentary effects for the Touch FX grid page.",
+    "line2": "Select an effect type and parameters, then use Map to Grid and press a cell to store that config."
+  },
+  {
+    "id": "touch_fx_type",
+    "path": "Menu > L4: Touch > FX Page > FX Type",
+    "key": "key:touchFx.selected.fxType",
+    "kind": "enum",
+    "title": "FX Type",
+    "line1": "Options: none, stutter, freeze, filter_sweep, pitch_shift. none clears mapped cells; stutter repeats/gates; freeze holds audio; filter_sweep moves cutoff and resonance; pitch_shift shifts pitch.",
+    "line2": "Changing the type seeds that effect's default parameters."
+  },
+  {
+    "id": "touch_fx_rate",
+    "path": "Menu > L4: Touch > FX Page > Rate Hz",
+    "key": "key:touchFx.selected.params.rateHz",
+    "kind": "number",
+    "title": "Rate Hz",
+    "line1": "Sets stutter repeat rate in Hertz for the config being mapped.",
+    "line2": "Stored per grid cell when Map to Grid is used."
+  },
+  {
+    "id": "touch_fx_depth",
+    "path": "Menu > L4: Touch > FX Page > Depth",
+    "key": "key:touchFx.selected.params.depthPct",
+    "kind": "number",
+    "title": "Depth",
+    "line1": "Sets stutter depth from 0 to 100 for the config being mapped.",
+    "line2": "Stored per grid cell when Map to Grid is used."
+  },
+  {
+    "id": "touch_fx_decay",
+    "path": "Menu > L4: Touch > FX Page > Decay",
+    "key": "key:touchFx.selected.params.decayMs",
+    "kind": "number",
+    "title": "Decay",
+    "line1": "Sets freeze decay time in milliseconds for the config being mapped.",
+    "line2": "Stored per grid cell when Map to Grid is used."
+  },
+  {
+    "id": "touch_fx_mix",
+    "path": "Menu > L4: Touch > FX Page > Mix",
+    "key": "key:touchFx.selected.params.mixPct",
+    "kind": "number",
+    "title": "Mix",
+    "line1": "Sets wet mix from 0 to 100 for freeze or pitch_shift configs being mapped.",
+    "line2": "Stored per grid cell when Map to Grid is used."
+  },
+  {
+    "id": "touch_fx_cutoff",
+    "path": "Menu > L4: Touch > FX Page > Cutoff",
+    "key": "key:touchFx.selected.params.cutoffPct",
+    "kind": "number",
+    "title": "Cutoff",
+    "line1": "Sets filter_sweep cutoff amount from 0 to 100 for the config being mapped.",
+    "line2": "Stored per grid cell when Map to Grid is used."
+  },
+  {
+    "id": "touch_fx_res",
+    "path": "Menu > L4: Touch > FX Page > Res",
+    "key": "key:touchFx.selected.params.resonancePct",
+    "kind": "number",
+    "title": "Res",
+    "line1": "Sets filter_sweep resonance amount from 0 to 100 for the config being mapped.",
+    "line2": "Stored per grid cell when Map to Grid is used."
+  },
+  {
+    "id": "touch_fx_semitones",
+    "path": "Menu > L4: Touch > FX Page > Semitones",
+    "key": "key:touchFx.selected.params.semitones",
+    "kind": "number",
+    "title": "Semitones",
+    "line1": "Sets pitch_shift offset in semitones for the config being mapped.",
+    "line2": "Stored per grid cell when Map to Grid is used."
+  },
+  {
+    "id": "touch_fx_map",
+    "path": "Menu > L4: Touch > FX Page > Map to Grid",
+    "key": "",
+    "kind": "action",
+    "title": "Map to Grid",
+    "line1": "Enters FX assignment mode using the current effect type and parameter values.",
+    "line2": "Press a grid cell to store the config on that cell; press Back to exit assignment mode."
+  },
+  {
+    "id": "touch_fx_max",
+    "path": "Menu > L4: Touch > FX Page > Max Concurrent",
+    "key": "key:touchFx.maxConcurrent",
+    "kind": "number",
+    "title": "Max Concurrent",
+    "line1": "Limits how many momentary FX cells can be active at once.",
+    "line2": "When the limit is full, other assigned cells gray out until a held effect is released."
   }
 ];

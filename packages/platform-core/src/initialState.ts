@@ -20,6 +20,7 @@ import {
   DEFAULT_PAN_POS,
   DEFAULT_VOLUME
 } from "./runtimeDefaults";
+import { defaultMomentaryFxParams } from "./momentaryFx";
 
 export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
   const defaultMapping = loadDefaultMappingConfig();
@@ -100,6 +101,11 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
         autoName: true,
         name: "(none)"
       }))
+    },
+    touchFx: {
+      selected: { fxType: "stutter", params: defaultMomentaryFxParams("stutter") },
+      assignments: [],
+      maxConcurrent: 4
     }
   };
   const makePart = (idx: number): PartConfig => ({
@@ -180,6 +186,8 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       auxBindings: {},
       heldNotes: [],
       sampleAssign: null,
+      fxAssignMode: null,
+      activeFx: [],
       pendingCloneSource: null,
       sampleAssignLastPress: null,
       sampleBrowser: null,

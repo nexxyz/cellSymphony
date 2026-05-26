@@ -132,6 +132,8 @@ export function applyConfigPayload<TState>(
     sampleAssign: null,
     sampleAssignLastPress: null,
     sampleBrowser: null,
+    fxAssignMode: null,
+    activeFx: [],
     touchMode: "none"
   };
   return next as PlatformState<TState>;

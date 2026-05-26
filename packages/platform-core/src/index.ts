@@ -111,7 +111,7 @@ export {
   OLED_TEXT_LINES,
   OLED_WIDTH
 } from "./platformTypes";
-export type { ActionSpec, BarValue, ConfigPayload, MenuNode, NumericDisplayMode, PlatformEffect, PlatformState, RuntimeConfig, StoreResult, TouchMode } from "./platformTypes";
+export type { ActionSpec, ActiveFx, BarValue, ConfigPayload, FxCellConfig, MenuNode, MomentaryFxConfig, MomentaryFxType, NumericDisplayMode, PlatformEffect, PlatformState, RuntimeConfig, StoreResult, TouchMode } from "./platformTypes";
 
 export function createInitialState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
   return createInitialPlatformState(behavior);

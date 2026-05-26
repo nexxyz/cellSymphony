@@ -4,6 +4,7 @@ import { instrumentLabel, partLabel } from "./coreUtils";
 import { SYNTH_PRESETS } from "./synthPresets";
 import { clampSampleSlotIndex, instrumentIndexOptions, PLATFORM_CAPS, sampleSlotOptions } from "./platformCaps";
 import { fxBusesMenuNode } from "./fxBusMenu";
+import { defaultMomentaryFxParams, MOMENTARY_FX_TYPES } from "./momentaryFx";
 
 type MenuTreeDeps<TState> = {
   resolveBehavior: (id: string) => BehaviorEngine<any, any>;
@@ -109,6 +110,9 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
 
   const partCount = PLATFORM_CAPS.partCount;
   const instLabel = (idx: number): string => instrumentLabel(state, idx);
+  const selectedFxType = ((state.runtimeConfig as any).touchFx?.selected?.fxType ?? "stutter") as any;
+  const selectedFxParams = (state.runtimeConfig as any).touchFx?.selected?.params ?? defaultMomentaryFxParams(selectedFxType);
+  const selectedFxConfig = { fxType: selectedFxType, params: structuredClone(selectedFxParams) };
 
   return {
     kind: "group",
@@ -345,7 +349,23 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
         label: "L4: Touch",
         children: [
           { kind: "enum", label: "Touch Page", key: "system.touchMode", options: ["none", "mix", "pan", "fx"] },
-          { kind: "number", label: "BPM", key: "transport.bpm", min: 40, max: 240, step: 1 }
+          { kind: "number", label: "BPM", key: "transport.bpm", min: 40, max: 240, step: 1 },
+          {
+            kind: "group",
+            label: "FX Page",
+            children: [
+              { kind: "enum", label: "FX Type", key: "touchFx.selected.fxType", options: MOMENTARY_FX_TYPES },
+              { kind: "number", label: "Rate Hz", key: "touchFx.selected.params.rateHz", min: 1, max: 32, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "stutter" },
+              { kind: "number", label: "Depth", key: "touchFx.selected.params.depthPct", min: 0, max: 100, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "stutter" },
+              { kind: "number", label: "Decay", key: "touchFx.selected.params.decayMs", min: 100, max: 5000, step: 100, visible: (c: any) => c.touchFx?.selected?.fxType === "freeze" },
+              { kind: "number", label: "Mix", key: "touchFx.selected.params.mixPct", min: 0, max: 100, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "freeze" || c.touchFx?.selected?.fxType === "pitch_shift" },
+              { kind: "number", label: "Cutoff", key: "touchFx.selected.params.cutoffPct", min: 0, max: 100, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "filter_sweep" },
+              { kind: "number", label: "Res", key: "touchFx.selected.params.resonancePct", min: 0, max: 100, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "filter_sweep" },
+              { kind: "number", label: "Semitones", key: "touchFx.selected.params.semitones", min: -24, max: 24, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "pitch_shift" },
+              { kind: "action", label: "Map to Grid", action: { type: "fx_assign_enter", config: selectedFxConfig } },
+              { kind: "number", label: "Max Concurrent", key: "touchFx.maxConcurrent", min: 1, max: 8, step: 1 }
+            ]
+          }
         ]
       },
       { kind: "spacer" },

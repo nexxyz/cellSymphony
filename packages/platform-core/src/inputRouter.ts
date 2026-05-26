@@ -10,6 +10,7 @@ import { toGridSnapshot } from "./runtimeHelpers";
 import { applyModulation, applyNoteBehavior, withScaleSteps } from "./musicTransforms";
 import { makeToast } from "./toast";
 import type { TouchMode } from "./platformTypes";
+import { activateMomentaryFx, applyFxAssignment, releaseMomentaryFx } from "./touchFxRuntime";
 
 type Deps<TState> = {
   isMainEncoderInput: (id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined) => boolean;
@@ -44,7 +45,7 @@ function touchPageFromRow(y: number, current: TouchMode): TouchMode {
   return TOUCH_PAGES[(idx + 1) % TOUCH_PAGES.length] ?? "mix";
 }
 
-function handleTouchGridPress<TState>(state: PlatformState<TState>, input: Extract<DeviceInput, { type: "grid_press" }>, deps: Deps<TState>): PlatformState<TState> {
+function handleTouchGridPress<TState>(state: PlatformState<TState>, input: Extract<DeviceInput, { type: "grid_press" }>, effects: PlatformEffect[], deps: Deps<TState>): PlatformState<TState> {
   if (input.x === GRID_WIDTH - 1) {
     return { ...state, system: { ...state.system, touchMode: touchPageFromRow(input.y, state.system.touchMode) } };
   }
@@ -57,6 +58,9 @@ function handleTouchGridPress<TState>(state: PlatformState<TState>, input: Extra
     const inst = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.instrumentCount, GRID_HEIGHT) - 1);
     const panPos = clamp(Math.floor(input.x), 0, GRID_WIDTH - 1);
     return deps.writeAnyValue(state, `instruments.${inst}.mixer.panPos`, panPos);
+  }
+  if (state.system.touchMode === "fx") {
+    return activateMomentaryFx(state, input.x, input.y, effects);
   }
   return state;
 }
@@ -176,19 +180,33 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     return { state: nextState, events, effects };
   }
 
+  if (nextState.system.fxAssignMode) {
+    if (input.type === "button_a" && pressed(input)) {
+      nextState.system = { ...nextState.system, fxAssignMode: null, toast: makeToast("Assign mode off") };
+      return { state: nextState, events, effects };
+    }
+    if (input.type === "grid_press") {
+      nextState = applyFxAssignment(nextState, input.x, input.y);
+      deps.autoSaveEffect(nextState, effects);
+      return { state: nextState, events, effects };
+    }
+  }
+
   if (input.type === "grid_press" && nextState.system.fnHeld && !nextState.system.shiftHeld && input.x === GRID_WIDTH - 1) {
-    nextState.system = { ...nextState.system, touchMode: nextState.system.touchMode === "none" ? "mix" : nextState.system.touchMode, toast: makeToast("Touch") };
+    const touchMode = nextState.system.touchMode === "none" ? "mix" : "none";
+    nextState.system = { ...nextState.system, touchMode, toast: makeToast(touchMode === "none" ? "Touch off" : "Touch") };
     nextState.menu = { stack: [3], cursor: 0, editing: false };
     return { state: nextState, events, effects };
   }
 
   if (nextState.system.touchMode !== "none" && !nextState.system.fnHeld && !nextState.system.shiftHeld && input.type === "grid_press") {
-    nextState = handleTouchGridPress(nextState, input, deps);
+    nextState = handleTouchGridPress(nextState, input, effects, deps);
     deps.autoSaveEffect(nextState, effects);
     return { state: nextState, events, effects };
   }
 
   if (nextState.system.touchMode !== "none" && !nextState.system.fnHeld && !nextState.system.shiftHeld && input.type === "grid_release") {
+    nextState = releaseMomentaryFx(nextState, input.x, input.y, effects);
     return { state: nextState, events, effects };
   }
 

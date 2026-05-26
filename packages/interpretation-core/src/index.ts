@@ -137,7 +137,7 @@ function scanRowSections(next: GridSnapshot, tick: number, sections: number): Ar
   const step = tick % (next.width * sections);
   const section = Math.floor(step / next.width);
   const x = step % next.width;
-  const firstY = section * sectionHeight;
+  const firstY = next.height - (section + 1) * sectionHeight;
   const out: Array<{ x: number; y: number; kind: CellTriggerKind }> = [];
   for (let dy = 0; dy < sectionHeight && firstY + dy < next.height; dy += 1) {
     const y = firstY + dy;

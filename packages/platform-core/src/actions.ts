@@ -72,6 +72,22 @@ export function handleMenuAction<TState>(state: PlatformState<TState>, action: a
       system: { ...state.system, sampleAssign: null, sampleAssignLastPress: null }
     };
   }
+  if (action.type === "fx_assign_enter") {
+    return {
+      ...state,
+      system: {
+        ...state.system,
+        fxAssignMode: { config: structuredClone(action.config) },
+        toast: makeToast(`Map FX: ${action.config.fxType}`)
+      }
+    };
+  }
+  if (action.type === "fx_assign_exit") {
+    return {
+      ...state,
+      system: { ...state.system, fxAssignMode: null }
+    };
+  }
   if (action.type === "sample_browse_open") {
     const dir = action.dir ?? "";
     effects.push({ type: "sample_list_request", instrumentSlot: action.instrumentSlot, sampleSlot: action.sampleSlot, dir });

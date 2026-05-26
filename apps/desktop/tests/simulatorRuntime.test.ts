@@ -159,7 +159,7 @@ test("auto-save default debounces repeated config edits", async () => {
   back();
   selectLabel("System");
   press();
-  selectLabel("Audio");
+  selectLabel("Sound");
   press();
   press();
   turn(1);

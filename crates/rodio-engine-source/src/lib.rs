@@ -1,4 +1,6 @@
-use realtime_engine::synth::{AudioLoadStatus, InstrumentsConfig, SampleBankConfig, SynthEngine, VoiceStealingMode};
+use realtime_engine::synth::{
+    AudioLoadStatus, InstrumentsConfig, SampleBankConfig, SynthEngine, VoiceStealingMode,
+};
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
 

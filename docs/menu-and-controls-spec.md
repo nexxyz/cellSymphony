@@ -14,7 +14,7 @@ Context-help copy source: `packages/platform-core/resources/menu-help-texts.tsv`
 | Shift + Fn + Main press | Context help | Opens help for highlighted menu entry.
 | Fn + leftmost grid column | Select active part (1..8) | Mirrors `L1: Life > Part`.
 | Fn held + leftmost column LEDs | Layer indicators | Gray = available layers, green = current active layer.
-| Fn + rightmost grid column | Jump to Touch | Opens `L4: Touch` and enables Touch page if currently off.
+| Fn + rightmost grid column | Toggle Touch | Opens `L4: Touch` and enables Touch page if currently off; exits Touch if already active.
 | Sample assign + Shift + cell | Row assign step | Applies current selected-cell assign step to the whole row.
 | Sample assign + Shift + double cell | Column assign step | Applies current selected-cell assign step to the whole column.
 | Shift + Aux press | Bind/unbind aux mapping | Opens bind/unbind flow for focused item.
@@ -34,7 +34,7 @@ Context-help copy source: `packages/platform-core/resources/menu-help-texts.tsv`
 | Shift + Aux encoder press | Shift + (simulated) | Bind current item / open unbind confirm |
 | Shift + Fn + Main press | Shift+Ctrl+Enter | Context help for highlighted entry |
 | Fn + leftmost grid column | Ctrl + leftmost grid column | Select active part (1..8); indicators show only while Fn is held (gray=available, green=active) |
-| Fn + rightmost grid column | Ctrl + rightmost grid column | Jump to L4 Touch performance layer |
+| Fn + rightmost grid column | Ctrl + rightmost grid column | Toggle L4 Touch performance layer |
 | Sample assign mode + Shift + cell press | Shift + cell | Apply current assign toggle/level step to entire row |
 | Sample assign mode + Shift + double cell press | Shift + double cell | Apply current assign toggle/level step to entire column |
 
@@ -259,17 +259,28 @@ Part runtime behavior:
 ```
 L4: Touch
 ├── Touch Page: [none | mix | pan | fx]
-└── BPM: [40..240] step 1  default 120
+├── BPM: [40..240] step 1  default 120
+└── FX Page (group)
+    ├── FX Type: [none | stutter | freeze | filter_sweep | pitch_shift]
+    ├── effect parameters (visible by FX Type)
+    ├── Map to Grid (action)
+    └── Max Concurrent: [1..8] step 1  default 4
 ```
 
 Touch layer behavior:
 
-- Fn + rightmost grid column jumps to `L4: Touch` from any layer and enables `mix` if Touch Page is `none`.
+- Fn + rightmost grid column toggles `L4: Touch` from any layer: if Touch Page is `none`, it enables `mix`; otherwise it exits Touch by setting Touch Page to `none`.
+- When Fn is held, the left grid column shows part-selection options and the right grid column shows Touch page options. The active part and selected Touch page are highlighted.
 - With Touch enabled, rightmost grid column selects pages by row: row 0 = mix, row 1 = pan, row 2 = fx; lower rows cycle to the next page.
 - `mix`: each column is an instrument; y=0 mutes, y=7 sets 100%, intermediate rows quantize per-slot `Mixer > Volume`.
 - `mix` LEDs show the current volume marker: green for direct-routed instruments and purple for FX-bus-routed instruments.
 - `pan`: each row is an instrument; x=0 is hard left and x=7 is hard right, setting per-slot `Mixer > Pan Pos`.
-- `fx`: placeholder grid for the FX performance page planned in REQ-06; presses do not change configuration yet.
+- `fx`: grid cells trigger mapped momentary effects. Press starts the mapped effect and release stops it.
+- FX cells are mapped from `L4: Touch > FX Page`: select an `FX Type`, edit its visible parameters, then select `Map to Grid` and press a grid cell. The effect type and current parameter values are stored on that cell. Mapping `none` clears a cell.
+- FX assignments are global-output targets in this platform-core implementation. The emitted `PlatformEffect` payloads are placeholders for the follow-up realtime DSP implementation.
+- FX concurrency is limited by `Max Concurrent` (default 4). When all slots are active, additional assigned cells gray out and do not respond until a slot frees.
+- Pressing a second cell with the same effect type replaces the existing active cell of that type and emits a release for the old cell before activating the new one.
+- FX LED colours are yellow for stutter, cyan for freeze, orange for filter_sweep, and magenta for pitch_shift. Assigned inactive cells are dim, active cells are bright, and limit-blocked cells are gray.
 - Grid releases in Touch mode are consumed by the Touch layer and do not reach the active behavior engine.
 - Aux encoder bindings continue to target whichever menu item they were bound to; Touch page switching does not alter bindings.
 
