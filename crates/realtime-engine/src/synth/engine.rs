@@ -10,6 +10,7 @@ use std::f32::consts::PI;
 
 pub(super) const PITCH_BLOCK_FRAMES: usize = 64;
 pub(super) const FREEZE_INJECT_MS: u32 = 120;
+pub(super) const DRY_HISTORY_FRAMES: usize = 2048;
 
 pub struct SynthEngine {
     sample_rate: u32,
@@ -32,6 +33,8 @@ pub struct SynthEngine {
     smoothed_load_ratio: f32,
     voice_steal_since_status: bool,
     momentary_fx: Vec<MomentaryFxState>,
+    dry_history: Vec<f32>,
+    dry_history_pos: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -75,6 +78,8 @@ struct MomentaryFxState {
     pitch_iptr: usize,
     pitch_optr: usize,
     pitch_owritten: usize,
+    pitch_ramp_pos: u32,
+    pitch_ramp_len: u32,
     stutter_l: Vec<f32>,
     stutter_r: Vec<f32>,
     stutter_write: usize,
@@ -96,6 +101,7 @@ impl MomentaryFxState {
         sample_rate: u32,
     ) -> Self {
         let ramp_samples = ((sample_rate as f32 * 0.002) as usize).max(1);
+        let pitch_ramp_len = ((sample_rate as f32 * 0.015) as u32).max(1);
         let block_samples = PITCH_BLOCK_FRAMES * 2;
         let stretch = Stretch::preset_default(2, sample_rate);
         const DELAY_LENS: [usize; 4] = [1557, 1617, 1491, 1422];
@@ -118,6 +124,8 @@ impl MomentaryFxState {
             pitch_iptr: 0,
             pitch_optr: 0,
             pitch_owritten: 0,
+            pitch_ramp_pos: 0,
+            pitch_ramp_len,
             stutter_l: Vec::new(),
             stutter_r: Vec::new(),
             stutter_write: 0,
@@ -169,6 +177,8 @@ impl SynthEngine {
             smoothed_load_ratio: 0.0,
             voice_steal_since_status: false,
             momentary_fx: Vec::new(),
+            dry_history: vec![0.0; DRY_HISTORY_FRAMES * 2],
+            dry_history_pos: 0,
         }
     }
 
@@ -184,6 +194,20 @@ impl SynthEngine {
         self.momentary_fx.retain(|fx| fx.id != id);
         self.momentary_fx
             .push(MomentaryFxState::new(id, kind, params, self.sample_rate));
+
+        if kind == MomentaryFxKind::PitchShift {
+            if let Some(fx) = self.momentary_fx.last_mut() {
+                let mut history = Vec::with_capacity(self.dry_history.len());
+                let pos = self.dry_history_pos;
+                if pos < self.dry_history.len() {
+                    history.extend_from_slice(&self.dry_history[pos..]);
+                }
+                if pos > 0 {
+                    history.extend_from_slice(&self.dry_history[..pos]);
+                }
+                fx.pitch_stretch.seek(&history, 1.0);
+            }
+        }
     }
 
     pub fn momentary_fx_stop(&mut self, id: &str) {
@@ -527,6 +551,13 @@ impl SynthEngine {
             right += processed * gr;
         }
 
+        self.dry_history[self.dry_history_pos] = left;
+        self.dry_history[self.dry_history_pos + 1] = right;
+        self.dry_history_pos += 2;
+        if self.dry_history_pos >= self.dry_history.len() {
+            self.dry_history_pos = 0;
+        }
+
         let (left, right) = self.process_momentary_fx(left, right);
         self.sample_clock = self.sample_clock.saturating_add(1);
         (left.clamp(-1.0, 1.0), right.clamp(-1.0, 1.0))
@@ -706,8 +737,16 @@ impl SynthEngine {
                         let wet_l = fx.pitch_obuf[fx.pitch_optr];
                         let wet_r = fx.pitch_obuf[fx.pitch_optr + 1];
                         fx.pitch_optr += 2;
-                        l = l * (1.0 - mix) + wet_l * mix;
-                        r = r * (1.0 - mix) + wet_r * mix;
+                        let ramp = if fx.pitch_ramp_pos < fx.pitch_ramp_len {
+                            let r = fx.pitch_ramp_pos as f32 / fx.pitch_ramp_len as f32;
+                            fx.pitch_ramp_pos += 1;
+                            r
+                        } else {
+                            1.0
+                        };
+                        let wet_mix = mix * ramp;
+                        l = l * (1.0 - wet_mix) + wet_l * wet_mix;
+                        r = r * (1.0 - wet_mix) + wet_r * wet_mix;
                     }
                 }
             }

@@ -658,6 +658,63 @@ fn momentary_pitch_shift_stop_immediately_removes() {
 }
 
 #[test]
+fn momentary_pitch_shift_no_gap_on_activation() {
+    let mut engine = SynthEngine::new(48_000);
+    engine.note_on(0, 60, 120, 1_000);
+
+    for _ in 0..1024 {
+        engine.next_sample();
+    }
+
+    let mut pre_energy = 0.0_f32;
+    for _ in 0..128 {
+        pre_energy += engine.next_sample().abs();
+    }
+    pre_energy /= 128.0;
+    assert!(
+        pre_energy > 0.001,
+        "pre-activation energy should be non-trivial: {pre_energy}"
+    );
+
+    engine.momentary_fx_start(
+        "ps".to_string(),
+        "pitch_shift".to_string(),
+        BTreeMap::from([
+            ("semitones".to_string(), json!(7.0)),
+            ("mixPct".to_string(), json!(100.0)),
+        ]),
+    );
+
+    let mut buf = Vec::with_capacity(512);
+    for _ in 0..512 {
+        buf.push(engine.next_sample().abs());
+    }
+
+    let post_sum: f32 = buf.iter().sum();
+    let expected_min = pre_energy * 512.0 * 0.25;
+    assert!(
+        post_sum > expected_min,
+        "pitch shift activation should maintain overall energy: {post_sum} vs {expected_min}"
+    );
+
+    let threshold = pre_energy * 0.02;
+    let mut max_quiet_run = 0usize;
+    let mut quiet_run = 0usize;
+    for s in &buf {
+        if *s < threshold {
+            quiet_run += 1;
+            max_quiet_run = max_quiet_run.max(quiet_run);
+        } else {
+            quiet_run = 0;
+        }
+    }
+    assert!(
+        max_quiet_run < 48,
+        "pitch shift activation produced a {max_quiet_run}-sample near-silent run"
+    );
+}
+
+#[test]
 fn momentary_filter_sweep_envelope_changes_cutoff_over_time() {
     let mut engine = SynthEngine::new(48_000);
     engine.note_on(0, 60, 120, 1_000);
