@@ -5,9 +5,9 @@ export const MOMENTARY_FX_TYPES: MomentaryFxType[] = ["none", "stutter", "freeze
 
 export function defaultMomentaryFxParams(fxType: MomentaryFxType): Record<string, unknown> {
   if (fxType === "stutter") return { rateHz: 8, depthPct: 100 };
-  if (fxType === "freeze") return { decayMs: 1200, mixPct: 100 };
-  if (fxType === "filter_sweep") return { cutoffPct: 35, resonancePct: 70 };
-  if (fxType === "pitch_shift") return { semitones: 7, mixPct: 100 };
+  if (fxType === "freeze") return { releaseMs: 500, mixPct: 100 };
+  if (fxType === "filter_sweep") return { cutoffPct: 35, resonancePct: 70, sweepInMs: 200, sweepOutMs: 500 };
+  if (fxType === "pitch_shift") return { semitones: 7, cents: 0, mixPct: 100 };
   return {};
 }
 

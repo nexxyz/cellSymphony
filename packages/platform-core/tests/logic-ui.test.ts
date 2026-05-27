@@ -148,6 +148,40 @@ test("Fn+rightmost grid column selects Touch pages", () => {
   assert.equal(state.system.touchMode, "pan");
 });
 
+test("Fn+rightmost column FX page selects fx touch mode", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+
+  state = routeInput(state, { type: "button_fn", pressed: true }, mockBehavior).state;
+  state = routeInput(state, { type: "grid_press", x: GRID_WIDTH - 1, y: 2 }, mockBehavior).state;
+
+  assert.equal(state.system.touchMode, "fx");
+  assert.deepEqual(state.menu.stack, [3]);
+  assert.equal(toSimulatorFrame(state, mockBehavior).display.page, "L4: Touch");
+});
+
+test("Fn overlay dims FX grid cells when touchMode is fx", () => {
+  const state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.system.fnHeld = true;
+  state.system.touchMode = "fx";
+
+  const cells = toSimulatorFrame(state, mockBehavior).leds.cells;
+  const midCell = cells[GRID_DOMAIN.toDisplayIndex({ x: 2, y: 2 })]!;
+  // middle cells dimmed: default FX blue (20,20,60) * 0.75 brightness * 0.25 dim = (4,4,11)
+  assert.ok(midCell.r < 20 && midCell.g < 20 && midCell.b < 20);
+
+  // right column FX page indicator should be cyan scaled by 0.75 brightness: g≈158
+  const fxPage = cells[GRID_DOMAIN.toDisplayIndex({ x: GRID_WIDTH - 1, y: 2 })]!;
+  assert.ok(fxPage.g > 100 && fxPage.g < 200, `fx page green should be ~158, got ${fxPage.g}`);
+  assert.ok(fxPage.r < 50);
+  assert.ok(fxPage.b > 100);
+
+  // left column part indicator should still be bright
+  const partCell = cells[GRID_DOMAIN.toDisplayIndex({ x: 0, y: 0 })]!;
+  assert.ok(partCell.g > 100);
+});
+
 test("Fn grid overlay shows active parts and Touch page options", () => {
   const state = createInitialState(mockBehavior);
   state.system.oledMode = "normal";
@@ -366,7 +400,7 @@ test("Touch FX enforces fixed capability limit and same-type replacement", () =>
   state.system.touchMode = "fx";
   (state.runtimeConfig as any).touchFx.assignments = [
     { x: 0, y: 0, config: { fxType: "stutter", params: { rateHz: 6 } } },
-    { x: 1, y: 0, config: { fxType: "freeze", params: { decayMs: 900 } } },
+    { x: 1, y: 0, config: { fxType: "freeze", params: { releaseMs: 500 } } },
     { x: 2, y: 0, config: { fxType: "filter_sweep", params: { cutoffPct: 40 } } },
     { x: 3, y: 0, config: { fxType: "pitch_shift", params: { semitones: 7 } } },
     { x: 4, y: 0, config: { fxType: "stutter", params: { rateHz: 16 } } }

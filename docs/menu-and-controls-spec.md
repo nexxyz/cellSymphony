@@ -262,7 +262,21 @@ L4: Touch
 ├── BPM: [40..240] step 1  default 120
 └── FX Page (group)
     ├── FX Type: [none | stutter | freeze | filter_sweep | pitch_shift]
-    ├── effect parameters (visible by FX Type)
+    ├── Stutter params (visible when FX Type = stutter)
+    │   ├── Rate Hz: [1..32]
+    │   └── Depth: [0..100] (% wet mix)
+    ├── Freeze params (visible when FX Type = freeze)
+    │   ├── Release Ms: [10..5000]  (release fade duration)
+    │   └── Mix: [0..100] (% wet mix)
+    ├── Filter Sweep params (visible when FX Type = filter_sweep)
+    │   ├── Cutoff: [0..100]  (target cutoff amount)
+    │   ├── Res: [0..100]
+    │   ├── Sweep In: [10..3000] ms  (sweep to target on press)
+    │   └── Sweep Out: [10..3000] ms  (sweep back to open on release)
+    ├── Pitch Shift params (visible when FX Type = pitch_shift)
+    │   ├── Semitones: [-24..24]
+    │   ├── Cents: [-100..100] (fine detune, added to semitones)
+    │   └── Mix: [0..100] (% wet mix)
     └── Map to Grid (action)
 ```
 
@@ -281,6 +295,9 @@ Touch layer behavior:
 - FX assignments are global-output targets. Platform-core resolves grid semantics into audio commands; desktop forwards those commands without interpreting Touch/grid meaning; Rust applies the realtime DSP.
 - FX concurrency is fixed by platform capability at 4. When all slots are active, additional assigned cells gray out and do not respond until a slot frees.
 - Pressing a second cell with the same effect type replaces the existing active cell of that type and emits a release for the old cell before activating the new one.
+- Stutter captures a short audio segment on press and loops it repeatedly; `Rate Hz` sets segment length (longer at lower rates) and `Depth` controls wet mix. An ease-in ramp (~2ms) and loop-wrap crossfade prevent clicks.
+- Freeze captures the early sound burst into an infinite reverb tail on press (injection window ~120ms). The tail sustains while held with no new input after the window closes. On release, the tail fades out over `Release Ms` and the effect is then removed. `Mix` controls the wet/dry blend.
+- Filter Sweep starts with the filter fully open (~20kHz, no audible effect) and sweeps toward the target lowpass cutoff over `Sweep In` on press. On release, it sweeps back to fully open over `Sweep Out` and removes the effect when complete. `Cutoff` sets the target position between 20kHz (0) and the lowest cutoff (100). `Res` controls resonance.
 - FX LED colours are yellow for stutter, cyan for freeze, orange for filter_sweep, and magenta for pitch_shift. Assigned inactive cells are dim, active cells are bright, and limit-blocked cells are gray.
 - Grid releases in Touch mode are consumed by the Touch layer and do not reach the active behavior engine.
 - Aux encoder bindings continue to target whichever menu item they were bound to; Touch page switching does not alter bindings.

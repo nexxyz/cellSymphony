@@ -357,11 +357,14 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
               { kind: "enum", label: "FX Type", key: "touchFx.selected.fxType", options: MOMENTARY_FX_TYPES },
               { kind: "number", label: "Rate Hz", key: "touchFx.selected.params.rateHz", min: 1, max: 32, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "stutter" },
               { kind: "number", label: "Depth", key: "touchFx.selected.params.depthPct", min: 0, max: 100, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "stutter" },
-              { kind: "number", label: "Decay", key: "touchFx.selected.params.decayMs", min: 100, max: 5000, step: 100, visible: (c: any) => c.touchFx?.selected?.fxType === "freeze" },
+              { kind: "number", label: "Release Ms", key: "touchFx.selected.params.releaseMs", min: 10, max: 5000, step: 10, visible: (c: any) => c.touchFx?.selected?.fxType === "freeze" },
               { kind: "number", label: "Mix", key: "touchFx.selected.params.mixPct", min: 0, max: 100, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "freeze" || c.touchFx?.selected?.fxType === "pitch_shift" },
               { kind: "number", label: "Cutoff", key: "touchFx.selected.params.cutoffPct", min: 0, max: 100, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "filter_sweep" },
               { kind: "number", label: "Res", key: "touchFx.selected.params.resonancePct", min: 0, max: 100, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "filter_sweep" },
+              { kind: "number", label: "Sweep In", key: "touchFx.selected.params.sweepInMs", min: 10, max: 3000, step: 10, visible: (c: any) => c.touchFx?.selected?.fxType === "filter_sweep" },
+              { kind: "number", label: "Sweep Out", key: "touchFx.selected.params.sweepOutMs", min: 10, max: 3000, step: 10, visible: (c: any) => c.touchFx?.selected?.fxType === "filter_sweep" },
               { kind: "number", label: "Semitones", key: "touchFx.selected.params.semitones", min: -24, max: 24, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "pitch_shift" },
+              { kind: "number", label: "Cents", key: "touchFx.selected.params.cents", min: -100, max: 100, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "pitch_shift" },
               { kind: "action", label: "Map to Grid", action: { type: "fx_assign_enter", config: selectedFxConfig } }
             ]
           }

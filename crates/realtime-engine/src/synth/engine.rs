@@ -4,10 +4,12 @@ use super::fx::{
 use super::fx_params::{compile_fx_bus_params, FxBusParams};
 use super::types::*;
 use serde_json::Value;
+use signalsmith_stretch::Stretch;
 use std::collections::BTreeMap;
 use std::f32::consts::PI;
 
-const PITCH_BUFFER_LEN: usize = 4096;
+pub(super) const PITCH_BLOCK_FRAMES: usize = 64;
+pub(super) const FREEZE_INJECT_MS: u32 = 120;
 
 pub struct SynthEngine {
     sample_rate: u32,
@@ -57,39 +59,76 @@ enum MomentaryFxKind {
     PitchShift,
 }
 
-#[derive(Debug)]
 struct MomentaryFxState {
     id: String,
     kind: MomentaryFxKind,
     params: BTreeMap<String, Value>,
-    phase: f32,
-    freeze_l: f32,
-    freeze_r: f32,
-    freeze_set: bool,
+    releasing: bool,
+    release_pos: u32,
+    release_len: u32,
+    sweep_pos: f32,
     filt_l: BiquadState,
     filt_r: BiquadState,
-    pitch_l: Vec<f32>,
-    pitch_r: Vec<f32>,
-    pitch_write: usize,
-    pitch_read: f32,
+    pitch_stretch: Stretch,
+    pitch_ibuf: Vec<f32>,
+    pitch_obuf: Vec<f32>,
+    pitch_iptr: usize,
+    pitch_optr: usize,
+    pitch_owritten: usize,
+    stutter_l: Vec<f32>,
+    stutter_r: Vec<f32>,
+    stutter_write: usize,
+    stutter_ready: bool,
+    stutter_ramp_len: usize,
+    stutter_ramp_pos: usize,
+    freeze_bufs: [Vec<f32>; 4],
+    freeze_idxs: [usize; 4],
+    freeze_lp: [f32; 4],
+    freeze_inject_pos: u32,
+    freeze_inject_len: u32,
 }
 
 impl MomentaryFxState {
-    fn new(id: String, kind: MomentaryFxKind, params: BTreeMap<String, Value>) -> Self {
+    fn new(
+        id: String,
+        kind: MomentaryFxKind,
+        params: BTreeMap<String, Value>,
+        sample_rate: u32,
+    ) -> Self {
+        let ramp_samples = ((sample_rate as f32 * 0.002) as usize).max(1);
+        let block_samples = PITCH_BLOCK_FRAMES * 2;
+        let stretch = Stretch::preset_default(2, sample_rate);
+        const DELAY_LENS: [usize; 4] = [1557, 1617, 1491, 1422];
+        let freeze_bufs: [Vec<f32>; 4] =
+            DELAY_LENS.map(|n| vec![0.0; (n * sample_rate as usize / 44_100).max(1)]);
+        let freeze_inject_len = (sample_rate * FREEZE_INJECT_MS / 1000).max(1);
         Self {
             id,
             kind,
             params,
-            phase: 0.0,
-            freeze_l: 0.0,
-            freeze_r: 0.0,
-            freeze_set: false,
+            releasing: false,
+            release_pos: 0,
+            release_len: 0,
+            sweep_pos: 0.0,
             filt_l: BiquadState::new(),
             filt_r: BiquadState::new(),
-            pitch_l: vec![0.0; PITCH_BUFFER_LEN],
-            pitch_r: vec![0.0; PITCH_BUFFER_LEN],
-            pitch_write: 0,
-            pitch_read: 0.0,
+            pitch_stretch: stretch,
+            pitch_ibuf: vec![0.0; block_samples],
+            pitch_obuf: vec![0.0; block_samples],
+            pitch_iptr: 0,
+            pitch_optr: 0,
+            pitch_owritten: 0,
+            stutter_l: Vec::new(),
+            stutter_r: Vec::new(),
+            stutter_write: 0,
+            stutter_ready: false,
+            stutter_ramp_len: ramp_samples,
+            stutter_ramp_pos: 0,
+            freeze_bufs,
+            freeze_idxs: [0; 4],
+            freeze_lp: [0.0; 4],
+            freeze_inject_pos: 0,
+            freeze_inject_len,
         }
     }
 }
@@ -144,11 +183,31 @@ impl SynthEngine {
         };
         self.momentary_fx.retain(|fx| fx.id != id);
         self.momentary_fx
-            .push(MomentaryFxState::new(id, kind, params));
+            .push(MomentaryFxState::new(id, kind, params, self.sample_rate));
     }
 
     pub fn momentary_fx_stop(&mut self, id: &str) {
-        self.momentary_fx.retain(|fx| fx.id != id);
+        let should_remove = self
+            .momentary_fx
+            .iter()
+            .find(|fx| fx.id == id)
+            .map(|fx| {
+                matches!(
+                    fx.kind,
+                    MomentaryFxKind::Stutter | MomentaryFxKind::PitchShift
+                )
+            })
+            .unwrap_or(true);
+        if should_remove {
+            self.momentary_fx.retain(|fx| fx.id != id);
+        } else if let Some(fx) = self.momentary_fx.iter_mut().find(|fx| fx.id == id) {
+            fx.releasing = true;
+            fx.release_pos = 0;
+            if fx.kind == MomentaryFxKind::Freeze {
+                let ms = param_f32(&fx.params, "releaseMs", 500.0);
+                fx.release_len = ms_to_samples(ms, self.sample_rate).max(1);
+            }
+        }
     }
 
     pub fn set_voice_stealing_mode(&mut self, mode: VoiceStealingMode) {
@@ -474,6 +533,7 @@ impl SynthEngine {
     }
 
     fn process_momentary_fx(&mut self, left: f32, right: f32) -> (f32, f32) {
+        let sample_rate = self.sample_rate;
         let mut l = left;
         let mut r = right;
         for fx in self.momentary_fx.iter_mut() {
@@ -481,51 +541,193 @@ impl SynthEngine {
                 MomentaryFxKind::Stutter => {
                     let rate = param_f32(&fx.params, "rateHz", 8.0).clamp(1.0, 32.0);
                     let depth = (param_f32(&fx.params, "depthPct", 100.0) / 100.0).clamp(0.0, 1.0);
-                    fx.phase = (fx.phase + rate / self.sample_rate as f32).fract();
-                    let gate = if fx.phase < 0.5 { 1.0 } else { 1.0 - depth };
-                    l *= gate;
-                    r *= gate;
+                    let segment_len =
+                        ((sample_rate as f32 / rate) as usize).clamp(48, sample_rate as usize);
+                    let ramp_len = fx.stutter_ramp_len.min(segment_len / 4).max(1);
+
+                    if fx.stutter_l.len() != segment_len {
+                        fx.stutter_l = vec![0.0; segment_len];
+                        fx.stutter_r = vec![0.0; segment_len];
+                        fx.stutter_write = 0;
+                        fx.stutter_ready = false;
+                        fx.stutter_ramp_pos = 0;
+                    }
+
+                    if !fx.stutter_ready {
+                        fx.stutter_l[fx.stutter_write] = l;
+                        fx.stutter_r[fx.stutter_write] = r;
+                        fx.stutter_write += 1;
+                        if fx.stutter_write >= segment_len {
+                            fx.stutter_ready = true;
+                            fx.stutter_write = 0;
+                            fx.stutter_ramp_pos = 0;
+                        }
+                    } else {
+                        let read = fx.stutter_write;
+                        let mut wet_l = fx.stutter_l[read];
+                        let mut wet_r = fx.stutter_r[read];
+
+                        let eff_wet = if fx.stutter_ramp_pos < ramp_len {
+                            let ramp = fx.stutter_ramp_pos as f32 / ramp_len as f32;
+                            fx.stutter_ramp_pos += 1;
+                            depth * ramp
+                        } else {
+                            depth
+                        };
+
+                        if read < ramp_len {
+                            let fade_in = read as f32 / ramp_len as f32;
+                            let end_read = segment_len - ramp_len + read;
+                            wet_l = wet_l * fade_in + fx.stutter_l[end_read] * (1.0 - fade_in);
+                            wet_r = wet_r * fade_in + fx.stutter_r[end_read] * (1.0 - fade_in);
+                        }
+
+                        l = l * (1.0 - eff_wet) + wet_l * eff_wet;
+                        r = r * (1.0 - eff_wet) + wet_r * eff_wet;
+
+                        fx.stutter_write += 1;
+                        if fx.stutter_write >= segment_len {
+                            fx.stutter_write = 0;
+                        }
+                    }
                 }
                 MomentaryFxKind::Freeze => {
-                    if !fx.freeze_set {
-                        fx.freeze_l = l;
-                        fx.freeze_r = r;
-                        fx.freeze_set = true;
-                    }
                     let mix = (param_f32(&fx.params, "mixPct", 100.0) / 100.0).clamp(0.0, 1.0);
-                    l = l * (1.0 - mix) + fx.freeze_l * mix;
-                    r = r * (1.0 - mix) + fx.freeze_r * mix;
+                    let feedback = 0.997_f32;
+                    let damp = 0.35_f32;
+
+                    if fx.releasing {
+                        let total = fx.release_len.max(1) as f32;
+                        let fade = 1.0 - (fx.release_pos as f32 / total);
+                        fx.release_pos += 1;
+
+                        let mut wet_l = 0.0_f32;
+                        let mut wet_r = 0.0_f32;
+                        for i in 0..4 {
+                            let delayed = fx.freeze_bufs[i][fx.freeze_idxs[i]];
+                            fx.freeze_lp[i] = delayed * (1.0 - damp) + fx.freeze_lp[i] * damp;
+                            fx.freeze_bufs[i][fx.freeze_idxs[i]] = fx.freeze_lp[i] * feedback;
+                            fx.freeze_idxs[i] = (fx.freeze_idxs[i] + 1) % fx.freeze_bufs[i].len();
+                            if i < 2 {
+                                wet_l += delayed;
+                            } else {
+                                wet_r += delayed;
+                            }
+                        }
+                        wet_l *= 0.5;
+                        wet_r *= 0.5;
+                        l = l * (1.0 - mix * fade) + wet_l * mix;
+                        r = r * (1.0 - mix * fade) + wet_r * mix;
+                    } else {
+                        let injecting = fx.freeze_inject_pos < fx.freeze_inject_len;
+                        let inject_gain = if injecting { 1.0 } else { 0.0 };
+                        if injecting {
+                            fx.freeze_inject_pos += 1;
+                        }
+
+                        let mut wet_l = 0.0_f32;
+                        let mut wet_r = 0.0_f32;
+                        for i in 0..4 {
+                            let delayed = fx.freeze_bufs[i][fx.freeze_idxs[i]];
+                            fx.freeze_lp[i] = delayed * (1.0 - damp) + fx.freeze_lp[i] * damp;
+                            let channel_in = if i < 2 { l } else { r };
+                            fx.freeze_bufs[i][fx.freeze_idxs[i]] =
+                                channel_in * inject_gain + fx.freeze_lp[i] * feedback;
+                            fx.freeze_idxs[i] = (fx.freeze_idxs[i] + 1) % fx.freeze_bufs[i].len();
+                            if i < 2 {
+                                wet_l += delayed;
+                            } else {
+                                wet_r += delayed;
+                            }
+                        }
+                        wet_l *= 0.5;
+                        wet_r *= 0.5;
+                        l = l * (1.0 - mix) + wet_l * mix;
+                        r = r * (1.0 - mix) + wet_r * mix;
+                    }
                 }
                 MomentaryFxKind::FilterSweep => {
                     let cutoff_pct =
                         (param_f32(&fx.params, "cutoffPct", 35.0) / 100.0).clamp(0.0, 1.0);
                     let resonance_pct =
                         (param_f32(&fx.params, "resonancePct", 70.0) / 100.0).clamp(0.0, 1.0);
-                    let cutoff = 120.0 + cutoff_pct * 8_000.0;
                     let q = 0.5 + resonance_pct * 11.5;
+                    let target_cutoff = 120.0 + cutoff_pct * 8_000.0;
+
+                    if fx.releasing {
+                        let out_len =
+                            ms_to_samples(param_f32(&fx.params, "sweepOutMs", 500.0), sample_rate)
+                                .max(1) as f32;
+                        fx.sweep_pos -= 1.0 / out_len;
+                        if fx.sweep_pos < 0.0 {
+                            fx.sweep_pos = 0.0;
+                        }
+                    } else {
+                        let in_len =
+                            ms_to_samples(param_f32(&fx.params, "sweepInMs", 200.0), sample_rate)
+                                .max(1) as f32;
+                        fx.sweep_pos += 1.0 / in_len;
+                        if fx.sweep_pos > 1.0 {
+                            fx.sweep_pos = 1.0;
+                        }
+                    }
+
+                    let cutoff = 20_000.0 + (target_cutoff - 20_000.0) * fx.sweep_pos;
                     l = fx
                         .filt_l
-                        .process(l, FilterType::Lowpass, cutoff, q, self.sample_rate);
+                        .process(l, FilterType::Lowpass, cutoff, q, sample_rate);
                     r = fx
                         .filt_r
-                        .process(r, FilterType::Lowpass, cutoff, q, self.sample_rate);
+                        .process(r, FilterType::Lowpass, cutoff, q, sample_rate);
                 }
                 MomentaryFxKind::PitchShift => {
                     let semitones = param_f32(&fx.params, "semitones", 7.0).clamp(-24.0, 24.0);
+                    let cents = param_f32(&fx.params, "cents", 0.0).clamp(-100.0, 100.0);
                     let mix = (param_f32(&fx.params, "mixPct", 100.0) / 100.0).clamp(0.0, 1.0);
-                    fx.pitch_l[fx.pitch_write] = l;
-                    fx.pitch_r[fx.pitch_write] = r;
-                    let read = fx.pitch_read.floor() as usize % PITCH_BUFFER_LEN;
-                    let shifted_l = fx.pitch_l[read];
-                    let shifted_r = fx.pitch_r[read];
-                    fx.pitch_write = (fx.pitch_write + 1) % PITCH_BUFFER_LEN;
-                    fx.pitch_read =
-                        (fx.pitch_read + 2.0_f32.powf(semitones / 12.0)) % PITCH_BUFFER_LEN as f32;
-                    l = l * (1.0 - mix) + shifted_l * mix;
-                    r = r * (1.0 - mix) + shifted_r * mix;
+                    let total_semitones = semitones + cents / 100.0;
+
+                    fx.pitch_stretch
+                        .set_transpose_factor_semitones(total_semitones, None);
+
+                    let idx = fx.pitch_iptr;
+                    fx.pitch_ibuf[idx * 2] = l;
+                    fx.pitch_ibuf[idx * 2 + 1] = r;
+                    fx.pitch_iptr += 1;
+
+                    if fx.pitch_iptr >= PITCH_BLOCK_FRAMES {
+                        fx.pitch_obuf.fill(0.0);
+                        fx.pitch_stretch.process(&fx.pitch_ibuf, &mut fx.pitch_obuf);
+                        fx.pitch_iptr = 0;
+                        fx.pitch_optr = 0;
+                        fx.pitch_owritten = fx.pitch_obuf.len();
+                    }
+
+                    if fx.pitch_optr + 1 < fx.pitch_owritten {
+                        let wet_l = fx.pitch_obuf[fx.pitch_optr];
+                        let wet_r = fx.pitch_obuf[fx.pitch_optr + 1];
+                        fx.pitch_optr += 2;
+                        l = l * (1.0 - mix) + wet_l * mix;
+                        r = r * (1.0 - mix) + wet_r * mix;
+                    }
                 }
             }
         }
+
+        self.momentary_fx.retain(|fx| {
+            if !fx.releasing {
+                return true;
+            }
+            match fx.kind {
+                MomentaryFxKind::FilterSweep => fx.sweep_pos > 0.0,
+                MomentaryFxKind::Freeze => {
+                    let total =
+                        ms_to_samples(param_f32(&fx.params, "releaseMs", 500.0), sample_rate);
+                    fx.release_pos < total
+                }
+                _ => false,
+            }
+        });
+
         (l, r)
     }
 
@@ -692,6 +894,36 @@ impl SynthEngine {
             FxBusState::Delay { buf, idx } => Some((*idx, buf.iter().map(|v| v.abs()).sum())),
             _ => None,
         }
+    }
+
+    #[cfg(test)]
+    pub(super) fn pitch_buf_probe(&self, id: &str) -> Option<(usize, usize, usize)> {
+        for fx in &self.momentary_fx {
+            if fx.id == id && matches!(fx.kind, MomentaryFxKind::PitchShift) {
+                return Some((fx.pitch_iptr, fx.pitch_optr, fx.pitch_owritten));
+            }
+        }
+        None
+    }
+
+    #[cfg(test)]
+    #[allow(clippy::type_complexity)]
+    pub(super) fn stutter_buf_for_id(
+        &self,
+        id: &str,
+    ) -> Option<(Vec<f32>, Vec<f32>, usize, bool, usize)> {
+        for fx in &self.momentary_fx {
+            if fx.id == id && matches!(fx.kind, MomentaryFxKind::Stutter) {
+                return Some((
+                    fx.stutter_l.clone(),
+                    fx.stutter_r.clone(),
+                    fx.stutter_write,
+                    fx.stutter_ready,
+                    fx.stutter_ramp_pos,
+                ));
+            }
+        }
+        None
     }
 }
 
