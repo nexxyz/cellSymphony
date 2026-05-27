@@ -270,10 +270,12 @@ Touch layer behavior:
 
 - Fn + rightmost grid column selects Touch pages by row: row 0 = mix, row 1 = pan, row 2 = fx. Lower rows are unused.
 - Fn + leftmost grid column selects the active displayed part and exits Touch by setting Touch Page to `none`. Menu position is not changed by part selection.
-- When Fn is held, the left grid column shows part-selection options and the right grid column shows Touch page options. The active part and selected Touch page are highlighted; parts whose behavior is not `none` have a dim indicator; `none` parts stay dark.
+- When Fn is held, the left grid column shows part-selection options and the right grid column shows Touch page options. The active part and selected Touch page are highlighted; parts whose behavior is not `none` have a dim indicator; `none` parts stay dark. All other cells (columns 1 through 6) are dimmed to 25% brightness to make the navigation columns unambiguous.
 - `mix`: each column is an instrument; y=0 mutes, y=7 sets 100%, intermediate rows quantize per-slot `Mixer > Volume`.
 - `mix` LEDs show the current volume marker in green.
-- `pan`: each row is an instrument; x=0 is hard left and x=7 is hard right, setting per-slot `Mixer > Pan Pos`. The marker is two cells wide so center positions are visible as the middle pair.
+- `pan`: each row is an instrument; x=0 is hard left and x=7 is hard right. The marker is two cells wide so center positions are visible as the middle pair.
+- `pan` writes the audible pan target: for `Route=direct` instruments it sets `Mixer > Pan Pos`; for bus-routed (`fx_bus_n`) instruments it sets the bus pan (`Mixer > Buses[n] > Pan Pos`) plus the per-instrument pan for state preservation. The marker color reflects the route: white for direct, bus color (purple/cyan/green/amber for bus 1-4) for bus-routed instruments. Multiple instruments on the same bus show synchronized markers at the bus pan position.
+- `pan` uses a **pressed-cell-plus-right-cell** mapping: pressing grid column X stores `panPos = X+1` (clamped to the right edge), and the LED marker lights cells `panPos-1` and `panPos`. Pressing column 3 (0-indexed) stores `panPos=4`, lighting display cells 4 and 5, which represents center.
 - `fx`: grid cells trigger mapped momentary effects. Press starts the mapped effect and release stops it.
 - FX cells are mapped from `L4: Touch > FX Page`: select an `FX Type`, edit its visible parameters, then select `Map to Grid` and press a grid cell. The effect type and current parameter values are stored on that cell. Mapping `none` clears a cell.
 - FX assignments are global-output targets. Platform-core resolves grid semantics into audio commands; desktop forwards those commands without interpreting Touch/grid meaning; Rust applies the realtime DSP.

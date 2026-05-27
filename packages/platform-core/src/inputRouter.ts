@@ -6,7 +6,7 @@ import { mapIntentsToMusicalEvents } from "@cellsymphony/mapping-core";
 import { clamp } from "./coreUtils";
 import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
 import type { PlatformEffect, PlatformState, RuntimeConfig } from "./index";
-import { toGridSnapshot } from "./runtimeHelpers";
+import { resolveTouchPanTarget, toGridSnapshot, touchPanPosFromGridX } from "./runtimeHelpers";
 import { applyModulation, applyNoteBehavior, withScaleSteps } from "./musicTransforms";
 import { makeToast } from "./toast";
 import type { TouchMode } from "./platformTypes";
@@ -52,7 +52,12 @@ function handleTouchGridPress<TState>(state: PlatformState<TState>, input: Extra
   }
   if (state.system.touchMode === "pan") {
     const inst = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.instrumentCount, GRID_HEIGHT) - 1);
-    const panPos = clamp(Math.floor(input.x), 0, GRID_WIDTH - 1);
+    const panPos = touchPanPosFromGridX(input.x);
+    const target = resolveTouchPanTarget(state as PlatformState<unknown>, inst);
+    if (target.route === "bus") {
+      const afterBus = deps.writeAnyValue(state, `mixer.buses.${target.busIndex}.panPos`, panPos);
+      return deps.writeAnyValue(afterBus, `instruments.${inst}.mixer.panPos`, panPos);
+    }
     return deps.writeAnyValue(state, `instruments.${inst}.mixer.panPos`, panPos);
   }
   if (state.system.touchMode === "fx") {

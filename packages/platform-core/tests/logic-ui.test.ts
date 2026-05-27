@@ -7,7 +7,7 @@ import { GRID_DOMAIN, GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contr
 import { keysBehavior } from "@cellsymphony/behaviors-keys";
 import { createInitialState, OLED_TEXT_COLUMNS, PLATFORM_CAPS, routeInput, tick, toOledLines, toSimulatorFrame } from "../src/index";
 import { pitchFromIntent } from "../src/musicTransforms";
-import { cellsToLeds } from "../src/runtimeHelpers";
+import { cellsToLeds, resolveTouchPanTarget, TOUCH_PAN_COLORS } from "../src/runtimeHelpers";
 
 type MockState = {
   cells: boolean[];
@@ -164,11 +164,39 @@ test("Fn grid overlay shows active parts and Touch page options", () => {
   const inactivePage = cells[GRID_DOMAIN.toDisplayIndex({ x: GRID_WIDTH - 1, y: 0 })]!;
   const unusedPage = cells[GRID_DOMAIN.toDisplayIndex({ x: GRID_WIDTH - 1, y: GRID_HEIGHT - 1 })]!;
 
-  assert.ok(activePart.g > activePart.r && activePart.g > activePart.b);
+  // in Touch mode, no part is highlighted as selected; all available parts show green
+  assert.ok(activePart.g > 0 && activePart.r < activePart.g);
   assert.deepEqual(nonePart, { r: 0, g: 0, b: 0 });
-  assert.ok(configuredPart.g > 0 && configuredPart.g < activePart.g);
+  assert.deepEqual(configuredPart, activePart);
   assert.ok(selectedPage.g > inactivePage.g && selectedPage.b > inactivePage.b);
   assert.deepEqual(unusedPage, { r: 0, g: 0, b: 0 });
+
+  // non-navigation middle cells should be dimmed
+  const middleCell = cells[GRID_DOMAIN.toDisplayIndex({ x: 3, y: 3 })]!;
+  // pan marker at row 3 is ~191 channels before dimming; after 0.25 factor should be < 50
+  assert.ok(middleCell.r < 60 && middleCell.g < 60 && middleCell.b < 60);
+  // left-column available part indicator should still be bright
+  assert.ok(activePart.g > 100);
+});
+
+test("Fn grid overlay highlights active part when not in Touch mode", () => {
+  const state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.system.fnHeld = true;
+  state.system.touchMode = "none";
+  state.runtimeConfig.parts[1]!.l1.behaviorId = "none";
+  state.runtimeConfig.parts[2]!.l1.behaviorId = "life";
+
+  const cells = toSimulatorFrame(state, mockBehavior).leds.cells;
+  const activePart = cells[GRID_DOMAIN.toDisplayIndex({ x: 0, y: 0 })]!;
+  const nonePart = cells[GRID_DOMAIN.toDisplayIndex({ x: 0, y: 1 })]!;
+  const configuredPart = cells[GRID_DOMAIN.toDisplayIndex({ x: 0, y: 2 })]!;
+
+  // active part shows blue/cyan
+  assert.ok(activePart.g > 0 && activePart.b > 0 && activePart.g === activePart.b && activePart.r < activePart.g);
+  assert.deepEqual(nonePart, { r: 0, g: 0, b: 0 });
+  // available part shows green, dimmer than active blue
+  assert.ok(configuredPart.g > 0 && configuredPart.g < activePart.g);
 });
 
 test("Touch grid updates mixer volume and pan", () => {
@@ -186,7 +214,7 @@ test("Touch grid updates mixer volume and pan", () => {
   state.system.touchMode = "pan";
 
   state = routeInput(state, { type: "grid_press", x: 2, y: 1 }, mockBehavior).state;
-  assert.equal(state.runtimeConfig.instruments[1]?.mixer?.panPos, 2);
+  assert.equal(state.runtimeConfig.instruments[1]?.mixer?.panPos, 3);
 });
 
 test("Fn+leftmost part selection exits Touch grid mode", () => {
@@ -214,7 +242,7 @@ test("Touch mix LEDs show volume markers", () => {
   assert.ok(fx.g > fx.r && fx.g > fx.b);
 });
 
-test("Touch pan LEDs show a two-cell marker", () => {
+test("Touch pan LEDs show a two-cell white marker for direct route", () => {
   const state = createInitialState(mockBehavior);
   state.system.oledMode = "normal";
   state.system.touchMode = "pan";
@@ -224,8 +252,79 @@ test("Touch pan LEDs show a two-cell marker", () => {
   const leftCenter = cells[GRID_DOMAIN.toDisplayIndex({ x: 3, y: 0 })]!;
   const rightCenter = cells[GRID_DOMAIN.toDisplayIndex({ x: 4, y: 0 })]!;
 
-  assert.ok(leftCenter.r > 100 && leftCenter.g > 80);
-  assert.ok(rightCenter.r > 100 && rightCenter.g > 80);
+  // white {255,255,255} * brightness 0.75 ≈ 191 each channel
+  assert.ok(leftCenter.r > 120 && leftCenter.g > 120 && leftCenter.b > 120);
+  assert.ok(rightCenter.r > 120 && rightCenter.g > 120 && rightCenter.b > 120);
+});
+
+test("Touch pan writes bus pan for bus-routed instrument", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.system.touchMode = "pan";
+  state.runtimeConfig.instruments[0]!.mixer = { route: "fx_bus_1", volume: 100, panPos: 4 };
+  state.runtimeConfig.mixer = state.runtimeConfig.mixer ?? { buses: Array.from({ length: PLATFORM_CAPS.busCount }, () => ({ slot1: { type: "none", params: {} }, slot2: { type: "none", params: {} }, panPos: 4, autoName: true, name: "(none)" })) };
+
+  // press row 0 (instrument 0) at x=2 → panPos = 2+1 = 3
+  state = routeInput(state, { type: "grid_press", x: 2, y: 0 }, mockBehavior).state;
+
+  // bus 0 panPos should update, instrument panPos should also be set for state preservation
+  assert.equal(state.runtimeConfig.mixer!.buses[0].panPos, 3);
+  assert.equal(state.runtimeConfig.instruments[0]!.mixer?.panPos, 3);
+});
+
+test("Touch pan writes instrument pan for direct-routed instrument", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.system.touchMode = "pan";
+  state.runtimeConfig.instruments[0]!.mixer = { route: "direct", volume: 100, panPos: 4 };
+
+  state = routeInput(state, { type: "grid_press", x: 6, y: 0 }, mockBehavior).state;
+
+  assert.equal(state.runtimeConfig.instruments[0]!.mixer?.panPos, 7);
+
+  // edge: leftmost press (x=0) should set panPos=1
+  state.runtimeConfig.instruments[0]!.mixer!.panPos = 4;
+  state = routeInput(state, { type: "grid_press", x: 0, y: 0 }, mockBehavior).state;
+  assert.equal(state.runtimeConfig.instruments[0]!.mixer?.panPos, 1);
+
+  // edge: rightmost press (x=7) should clamp to panPos=7
+  state.runtimeConfig.instruments[0]!.mixer!.panPos = 4;
+  state = routeInput(state, { type: "grid_press", x: 7, y: 0 }, mockBehavior).state;
+  assert.equal(state.runtimeConfig.instruments[0]!.mixer?.panPos, 7);
+});
+
+test("Touch pan LEDs show bus color for bus-routed instrument and synchronized markers", () => {
+  const state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.system.touchMode = "pan";
+  state.runtimeConfig.instruments[0]!.mixer = { route: "fx_bus_1", volume: 100, panPos: 4 };
+  state.runtimeConfig.instruments[1]!.mixer = { route: "fx_bus_1", volume: 100, panPos: 4 };
+  state.runtimeConfig.instruments[2]!.mixer = { route: "fx_bus_2", volume: 100, panPos: 4 };
+  state.runtimeConfig.mixer!.buses[0].panPos = 2;
+  state.runtimeConfig.mixer!.buses[1].panPos = 6;
+
+  const t0 = resolveTouchPanTarget(state, 0);
+  const t1 = resolveTouchPanTarget(state, 1);
+  const t2 = resolveTouchPanTarget(state, 2);
+
+  // both rows on bus 0 target bus pan
+  assert.equal(t0.route, "bus");
+  assert.equal(t1.route, "bus");
+  assert.equal(t0.panPos, 2);
+  assert.equal(t1.panPos, 2);
+  // same bus index 0
+  assert.equal(t0.busIndex, 0);
+  assert.equal(t1.busIndex, 0);
+  // bus 1 color = purple
+  assert.deepEqual(t0.color, TOUCH_PAN_COLORS.fx_bus_1);
+  assert.deepEqual(t1.color, TOUCH_PAN_COLORS.fx_bus_1);
+
+  // row 2 on bus 2 targets bus 1 pan
+  assert.equal(t2.route, "bus");
+  assert.equal(t2.panPos, 6);
+  assert.equal(t2.busIndex, 1);
+  // bus 2 color = cyan
+  assert.deepEqual(t2.color, TOUCH_PAN_COLORS.fx_bus_2);
 });
 
 test("Touch FX assignment stores selected effect config on grid cell", () => {
