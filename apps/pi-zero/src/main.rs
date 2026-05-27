@@ -87,6 +87,7 @@ fn default_pi_instruments() -> InstrumentsConfig {
                 mixer: Some(InstrumentMixerConfig {
                     route: "direct".to_string(),
                     pan_pos: idx.min(DEFAULT_PAN_POSITIONS - 1),
+                    volume: 100.0,
                 }),
             })
             .collect(),
