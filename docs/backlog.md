@@ -24,7 +24,7 @@
 
 Prevent selecting the current FX bus as its own duck source to avoid cyclic routing.
 
-**Decision:** Block new cyclic assignments only. Do not auto-clear existing cyclic configs on load — old configs that happen to be cyclic simply won't route (no audio feedback). No broader routing validation needed.
+**Decision:** Block new cyclic assignments only. Do not auto-clear existing cyclic configs on load — old configs that happen to be cyclic simply won't route (no audio feedback). No broader routi[...]
 
 **Acceptance:**
 - When editing duck source on an FX bus, the bus itself is not listed as an option (or selecting it is rejected).
@@ -76,8 +76,8 @@ Add "none" instrument type. Add "none" for all no-op selectable elements where n
 Replace unusable raw technical values with reasonable editor ranges. Remap display values only — engine keeps internal units. Old saves remain compatible.
 
 **Strategy:**
-- **Unit in the label** for parameters where the unit is meaningful: delay times, envelope attack/decay/release, note length, compressor/duck attack/release, BPM, dB thresholds/gains, screen sleep, MIDI velocity. The value shown is always just a number. No dynamic unit conversion needed.
-- **Abstract 0–255** for parameters where the unit is not meaningful to the user: filter cutoff, resonance, envelope amounts, key tracking, all EQ params (gains mapped to ±12 dB, mid freq mapped logarithmically 40–8000 Hz, Q mapped to 0.25–20), filter LFO center frequency, LFO rates, FX dimensionless values (drive, feedback, Q, threshold, decay, etc.), behaviour tick counts/spawn intervals, L2 modulation values.
+- **Unit in the label** for parameters where the unit is meaningful: delay times, envelope attack/decay/release, note length, compressor/duck attack/release, BPM, dB thresholds/gains, screen sleep[...]
+- **Abstract 0–255** for parameters where the unit is not meaningful to the user: filter cutoff, resonance, envelope amounts, key tracking, all EQ params (gains mapped to ±12 dB, mid freq mappe[...]
 
 **Acceptance:**
 - Filter cutoff uses 0–255 range in menu/encoder; translated to Hz internally.
@@ -87,7 +87,7 @@ Replace unusable raw technical values with reasonable editor ranges. Remap displ
 - Encoder acceleration + shift+turn for coarse adjust across all numeric params.
 
 **Implementation (Phase 1 pass):**
-- Filter cutoff: menu range changed to 0–255 (logarithmic Hz mapping: 80–16000 Hz). `coreUtils.ts`: added `cutoffDisplayToHz`/`cutoffHzToDisplay`. `coalescedAudioConfig.ts`: auto-converts 0-255 → Hz before engine send. `storeRuntime.ts`: auto-migrates old Hz values (>255) to 0-255 on load.
+- Filter cutoff: menu range changed to 0–255 (logarithmic Hz mapping: 80–16000 Hz). `coreUtils.ts`: added `cutoffDisplayToHz`/`cutoffHzToDisplay`. `coalescedAudioConfig.ts`: auto-converts 0-25[...]
 - Filter resonance: menu range changed 0–100 → 0–255.
 - `cutoffDisplayToHz` exported from platform-core package.
 
@@ -169,7 +169,7 @@ Consistent, well-ordered menus.
 
 **Acceptance:**
 - Important parameters first (e.g. Mixer above MIDI in instrument menu). Research typical synth/audio UI ordering and apply.
-- Part selection is list-based (same pattern as instruments and FX buses) — each part shown as a named entry in a submenu. Selecting one in the menu selects that part and enters that part's life/sense config in the menu.
+- Part selection is list-based (same pattern as instruments and FX buses) — each part shown as a named entry in a submenu. Selecting one in the menu selects that part and enters that part's lif[...]
 - Bus names are displayed in the bus selection list (not just "Bus 1"–"Bus 4").
 - Name setting lives inside the bus config, not outside it.
 
@@ -218,7 +218,7 @@ Clone a part (duplicate its behaviour, mapping, triggers) or delete/reset it, vi
 - All parts remain in the parts list; no slot creation or removal.
 
 **Implementation:**
-- `inputRouter.ts`: Added `pendingCloneSource` to `SystemState`. FN+SHIFT+grid_press at x=7 stores source part index with toast. FN+grid_press at x=0 with pendingCloneSource copies part config/state. FN+SHIFT+BACK handler resets active part to "none" behavior with no-op sense/mapping defaults.
+- `inputRouter.ts`: Added `pendingCloneSource` to `SystemState`. FN+SHIFT+grid_press at x=7 stores source part index with toast. FN+grid_press at x=0 with pendingCloneSource copies part config/st[...]
 - `index.ts`: `pendingCloneSource` added to `SystemState` type and initial state.
 
 ---
@@ -304,7 +304,7 @@ Audio DSP load / voice-steal indicator in top-right corner of OLED display.
 - Nothing displayed when idle.
 
 **Implementation:**
-- `realtime-engine`: `SynthEngine::audio_load_status()` reports smoothed DSP load and clears a recent voice-steal flag. Voice stealing is flagged when synth/sample voices are reused or global voice budget enforcement drops voices.
+- `realtime-engine`: `SynthEngine::audio_load_status()` reports smoothed DSP load and clears a recent voice-steal flag. Voice stealing is flagged when synth/sample voices are reused or global voi[...]
 - `rodio-engine-source`: `EngineSource::with_load_status_tx()` emits throttled load status updates at ~10 Hz after audio block refills.
 - `apps/desktop/src-tauri`: audio thread forwards status over an `audio_load` Tauri event with `{ ratio, voiceSteal }`, following the existing MIDI event pattern.
 - `apps/desktop`: runtime listens for `audio_load`, stores the latest status in snapshots, and passes it into platform-core frame rendering.
@@ -355,11 +355,11 @@ Show dimmed/ghosted cells from inactive parts on the grid, toggleable.
 | **Depends on** | — |
 | **Source** | lines 11–16 |
 
-Add `Sections` parameter (1, 2, 4, 8) to scan behaviour. `Sections=1` preserves current scan behavior; higher values split the perpendicular axis into lanes and scan each lane in sequence. When last section reached, reset to origin. Stop resets to origin.
+Add `Sections` parameter (1, 2, 4, 8) to scan behaviour. `Sections=1` preserves current scan behavior; higher values split the perpendicular axis into lanes and scan each lane in sequence. When l[...]
 
 Also add per-section note mapping: restart note mapping from "First note" after each section boundary (configurable per axis), enabling longer melodies with limited note range.
 
-**Worked example:** 8×8 grid, horizontal/row scan, sections=2 → 2 lanes of 4×8. Lane 1 scans rows 0–3 left-to-right (8 steps), then lane 2 scans rows 4–7 left-to-right (8 steps). Total: 16 scan steps. Note mapping can restart from First Note at each lane boundary — same 8 notes play in each lane, but on different grid rows.
+**Worked example:** 8×8 grid, horizontal/row scan, sections=2 → 2 lanes of 4×8. Lane 1 scans rows 0–3 left-to-right (8 steps), then lane 2 scans rows 4–7 left-to-right (8 steps). Total: 1[...]
 
 **Acceptance:**
 - Scan behaviour has Sections parameter (powers of 2, default 1 = current behaviour).
@@ -416,7 +416,7 @@ New L4 layer: "Touch" / "Performance". Contains grid-mode pages (switched via Fn
 - FN+rightmost column jumps to Touch from any layer.
 - Aux encoder mappings work consistently across all Touch pages.
 
-**Implemented:** `L4: Touch` menu with Touch Page and BPM, Fn+rightmost page selection, Fn+leftmost part selection/Touch exit, Mix volume/mute grid, Pan grid, FX grid rendering, and Touch LED overlay rendering.
+**Implemented:** `L4: Touch` menu with Touch Page and BPM, Fn+rightmost page selection, Fn+leftmost part selection/Touch exit, Mix volume/mute grid, Pan grid, FX grid rendering, and Touch LED ove[...]
 
 ---
 
@@ -431,12 +431,12 @@ New L4 layer: "Touch" / "Performance". Contains grid-mode pages (switched via Fn
 | **Depends on** | REQ-07 (L4 structure with FX page) |
 | **Source** | lines 26–35 |
 
-Assign momentary effects to grid cells in the Touch FX page. All effects are momentary (active only while held). Effects: stutter, freeze (floating hold with reverb), filter-sweep (closing filter + resonance fade-in, fade-out on release), pitch shift.
+Assign momentary effects to grid cells in the Touch FX page. All effects are momentary (active only while held). Effects: stutter, freeze (floating hold with reverb), filter-sweep (closing filter[...]
 
 **Concurrency rules:**
 - Max concurrent effects = capability setting (default 4, configurable).
 - When all slots full, remaining active cells gray out and do not respond to press until a slot frees.
-- Same effect type pressed while already active: new press takes over, old cell "released" even if still held. (You cannot have two stutters active simultaneously, but pressing a second stutter cell replaces the first.)
+- Same effect type pressed while already active: new press takes over, old cell "released" even if still held. (You cannot have two stutters active simultaneously, but pressing a second stutter c[...]
 - Each effect type has its own identifying colour (palette chosen during design proposal — keep in mind more types may be added later).
 
 **Target:** Each effect is assigned per cell with configurable parameters. This implementation targets global output only and emits platform effects for the later realtime DSP bridge.
@@ -450,7 +450,7 @@ Assign momentary effects to grid cells in the Touch FX page. All effects are mom
 - Filter-sweep fades in on press, fades out on release.
 - Reuse existing filter/FX code where overlapping.
 
-**Implemented:** `L4: Touch > FX Page` effect selection, per-effect parameter menu, Map to Grid assignment flow, persisted per-cell FX assignments, resolved audio-command emission, max concurrent cap, same-type replacement, FX page LED colours, dumb desktop forwarding, and global-output Rust DSP for stutter, freeze, filter_sweep, and pitch_shift.
+**Implemented:** `L4: Touch > FX Page` effect selection, per-effect parameter menu, Map to Grid assignment flow, persisted per-cell FX assignments, resolved audio-command emission, max concurrent[...]
 
 ---
 
@@ -487,7 +487,7 @@ Add master/global FX section in L3:Voice parallel to Instruments. Post-instrumen
 | **Depends on** | REQ-07 (Performance area exists) + design proposal (see below) |
 | **Source** | lines 42–48 |
 
-Aux encoders auto-map to important numeric values, enum selections, and actions for the current context in Touch area. Show mapping indicators on OLED. Outside Touch area, aux encoders do nothing.
+Aux encoders auto-map to important numeric values, enum selections, and actions for the current context in Touch area. Show mapping indicators on OLED. Outside Touch area, aux encoders do nothing[...]
 
 **Prerequisite:** Write a design proposal/doc covering:
 - How "most important" params are determined per context (menu node metadata? whitelist per node type?)
@@ -520,7 +520,7 @@ OLED graphical display of signal/routing paths: parts → instruments → FX bus
 
 **Layout rules:**
 - Always show only active routes — entities with "none" or no mappings are hidden.
-- When diagram becomes too crowded for the 128×64 OLED, abbreviate names to compact IDs (e.g. "I1" instead of "I1: Drums", "P1" instead of "P1: Atmosphere", "dk" for duck, "rv" for reverb). No scrolling needed — simplify first.
+- When diagram becomes too crowded for the 128×64 OLED, abbreviate names to compact IDs (e.g. "I1" instead of "I1: Drums", "P1" instead of "P1: Atmosphere", "dk" for duck, "rv" for reverb). No s[...]
 - Auto-layout from top to bottom: Parts → Instruments → FX Buses → Output.
 - Navigable: highlight a box via encoder, press to enter that entity's menu.
 
@@ -550,7 +550,7 @@ OLED graphical display of signal/routing paths: parts → instruments → FX bus
 | **Depends on** | REQ-06, REQ-05, stable platform-core engine-event boundary |
 | **Source** | architecture follow-up |
 
-Migrate realtime execution ownership from the desktop JavaScript runtime toward Rust. `platform-core` remains the canonical control/state machine for menu, grid semantics, behavior transitions, and mapping decisions, but Rust should own realtime playback timing and native scheduling.
+Migrate realtime execution ownership from the desktop JavaScript runtime toward Rust. `platform-core` remains the canonical control/state machine for menu, grid semantics, behavior transitions, a[...]
 
 **Target ownership:**
 - Rust owns transport clock timing, BPM timing, PPQN/MIDI clock timing, audio callback timing, MIDI output scheduling, and block/sample-accurate engine event dispatch.
@@ -571,6 +571,58 @@ Migrate realtime execution ownership from the desktop JavaScript runtime toward 
 
 ---
 
+### REQ-19 — Migrate Platform Core to Rust
+
+| Field | Value |
+|-------|-------|
+| **Status** | open |
+| **Phase** | 5 |
+| **Priority** | high |
+| **Scope** | very-large |
+| **Depends on** | Phases 1–4 (stable design baseline) |
+| **Source** | architecture follow-up |
+
+Migrate `platform-core` and `behavior-api` from TypeScript to Rust. This is the single source of truth for all core logic (cellular automaton, behavior algorithms, state machine, grid semantics, menu tree, synthesis dispatch). The Tauri desktop UI becomes a thin wrapper; the Pi Zero device shares the identical Rust binary with custom PCB I/O and OTA updates via reboot.
+
+**Target architecture:**
+- **Rust core:** All behaviors, state machine, menu navigation, grid logic, configuration, serialization (via `serde`).
+- **Desktop (Tauri):** TS UI layer, calls Rust core via IPC to render frames, handles input, forwards audio events and MIDI.
+- **Hardware (Pi Zero):** Same Rust core binary, custom PCB drivers for LED, buttons, encoders, audio I/O instead of Tauri.
+- **Single canonical implementation** everywhere — no divergence between device and desktop.
+
+**Migration steps:**
+
+1. **Scoping & Analysis** (`sub-19-01`): Agents analyze `platform-core` and `behavior-api` packages; document TS semantics, identify Rust equivalents, propose crate structure and module boundaries.
+
+2. **Rust project structure** (`sub-19-02`): Create workspace in `/crates` with sub-crates for core, behaviors, menu, serialization, bridge FFI. Integrate with existing `Cargo.toml`.
+
+3. **Behavior migration** (`sub-19-03`): Translate behavior algorithms (life, sequencer, ant, glider, etc.) to Rust with trait-based composition. Preserve algorithmic correctness via property testing (quickcheck).
+
+4. **State machine & menu** (`sub-19-04`): Rewrite menu tree, state transitions, input routing (from `inputRouter.ts`), and store mutations (from `storeRuntime.ts`) as idiomatic Rust with zero-copy state updates.
+
+5. **Serialization & config** (`sub-19-05`): Implement `serde` schemas for all config types; ensure backward compatibility with existing `.cell` saves. Validate via migration tests.
+
+6. **Desktop bridge** (`sub-19-06`): Create FFI layer; Tauri calls Rust core to process input, request frame renders, receive state snapshots. Desktop remains thin—no business logic.
+
+7. **Testing & validation** (`sub-19-07`): Parity tests (same input produces identical output on TS and Rust), integration tests on both desktop and device, regression test suite for all behaviors.
+
+8. **Optimization** (`sub-19-08`): Profile and optimize hot paths; measure binary size; ensure Pi Zero build is lean (<50 MB including dependencies).
+
+9. **OTA update infrastructure** (`sub-19-09`): Build, sign, and deploy Rust binaries to device; verify checksums; reboot cycle. No hot-reload needed—firmware update model.
+
+10. **Sunset TS core** (`sub-19-10`): Remove old `platform-core` and `behavior-api` TS packages once Rust version is production-ready. Retain Tauri UI bridge only.
+
+**Acceptance:**
+- Rust core compiles cleanly for x86-64 (desktop), ARMv6 (Pi Zero), and other targets.
+- All behaviors execute identically on desktop simulator and hardware device.
+- Existing `.cell` save files load and play back correctly.
+- Tauri UI renders identical OLED frames to desktop simulator.
+- Device OTA updates deploy and boot correctly.
+- No performance regression on Pi Zero audio synthesis (same or better than current).
+- TS/JS minimal and read-only (UI only); no business logic in JavaScript.
+
+---
+
 ### REQ-17 — Hardware Test Harness
 
 | Field | Value |
@@ -582,7 +634,7 @@ Migrate realtime execution ownership from the desktop JavaScript runtime toward 
 | **Depends on** | — |
 | **Source** | line 52 |
 
-Tool launched on Raspberry Pi that guides through testing every button, grid element, encoder, and audio output — to verify hardware assembly per PCB design. *(Placeholder — details to be specified at Phase 5.)*
+Tool launched on Raspberry Pi that guides through testing every button, grid element, encoder, and audio output — to verify hardware assembly per PCB design. *(Placeholder — details to be spe[...]
 
 **Acceptance:**
 - Step-by-step guided tests: "Press button A1", "Turn encoder 1 clockwise", etc.
