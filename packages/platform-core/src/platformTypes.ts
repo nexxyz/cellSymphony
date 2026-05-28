@@ -200,7 +200,9 @@ export type TextEditSession = { key: string; original: string; saveAction?: Acti
 export type ToastState = { message: string; startedAtMs: number; untilMs: number };
 export type MidiPortInfo = { id: string; name: string };
 export type AuxTurnBinding = { key: string; label?: string; kind: "number" | "enum" | "bool"; min?: number; max?: number; step?: number; options?: string[] };
-export type AuxPressBinding = { actionType: string; routeKey?: string; label?: string };
+export type AuxPressBinding =
+  | { kind: "behavior_action"; actionType: string; routeKey?: string; label?: string }
+  | { kind: "menu_action"; action: ActionSpec; label?: string };
 export type AuxBinding = { turn: AuxTurnBinding | null; press: AuxPressBinding | null };
 export type SystemState = {
   shiftHeld: boolean; fnHeld: boolean; presetNames: string[]; selectedPreset: string | null; currentPresetName: string | null; draftName: string; nameCursor: number;

@@ -40,7 +40,7 @@ export function buildSimulatorFrame<TState>(args: Args<TState>): SimulatorFrame 
     colors: menuView.colors
   };
   const oledLines = toOledLines(baseDisplay);
-  const maxBodyLines = OLED_TEXT_LINES - 1;
+  const maxBodyLines = OLED_TEXT_LINES - 2;
   const alignedBarValues: (BarValue | null)[] = [
     null,
     ...menuView.barValues.slice(0, maxBodyLines)

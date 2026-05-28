@@ -7,6 +7,7 @@ import {
   applyConfigPayload,
   createInitialState,
   extractConfigPayload,
+  OLED_TEXT_LINES,
   PLATFORM_CAPS,
   routeInput,
   tick,
@@ -113,8 +114,18 @@ test("shift-hold shows current mapping overlay (custom)", () => {
   state.system.shiftHeldSinceMs = Date.now() - 2500;
 
   const frame = toSimulatorFrame(state, mockBehavior);
-  assert.equal(frame.display.title, "CUSTOM MAPPING");
-  assert.ok(frame.display.lines.some((l) => l.includes("A1:")), "overlay should list aux slots");
+  assert.equal(frame.display.title, "CUSTOM MAP");
+  assert.ok(frame.display.lines.some((l) => l.startsWith("A1 ")), "overlay should list aux slots");
+});
+
+test("shift-hold mapping overlay waits for delay", () => {
+  let state = makeState();
+  state.system.auxBindings["aux1"] = { turn: { key: "masterVolume", label: "Master Vol", kind: "number", min: 0, max: 100, step: 1 }, press: null };
+  state.system.shiftHeld = true;
+  state.system.shiftHeldSinceMs = Date.now() - 1400;
+
+  const frame = toSimulatorFrame(state, mockBehavior);
+  assert.notEqual(frame.display.title, "CUSTOM MAP");
 });
 
 test("shift-hold shows current mapping overlay (auto)", () => {
@@ -128,7 +139,7 @@ test("shift-hold shows current mapping overlay (auto)", () => {
   ] as any;
 
   const frame = toSimulatorFrame(state, mockBehavior);
-  assert.equal(frame.display.title, "AUTO MAPPING");
+  assert.equal(frame.display.title, "AUTO MAP");
   assert.ok(frame.display.lines.join("\n").includes("Rate"));
 });
 
@@ -210,7 +221,7 @@ test("aux encoder press triggers bound behavior action", () => {
   state.system.oledMode = "normal";
   state.system.auxAutoMapEnabled = false;
   state.runtimeConfig.activeBehavior = "life";
-  state.system.auxBindings["aux1"] = { turn: null, press: { actionType: "spawnRandom", label: "Spawn Random" } };
+  state.system.auxBindings["aux1"] = { turn: null, press: { kind: "behavior_action", actionType: "spawnRandom", label: "Spawn Random" } };
 
   const before = state.behaviorState.cells.filter(Boolean).length;
   const r = routeInput(state, { type: "encoder_press", id: "aux1" } as DeviceInput, lifeBehavior);
@@ -250,8 +261,61 @@ test("binding spawn action stores shared route", () => {
   state.system.shiftHeld = true;
   state = routeInput(state, { type: "encoder_press", id: "aux1" } as DeviceInput, mockBehavior).state;
 
-  assert.equal(state.system.auxBindings["aux1"]?.press?.routeKey, "trigger.life.spawn_now");
-  assert.equal(state.system.auxBindings["aux1"]?.press?.label, "Spawn Now");
+  assert.equal((state.system.auxBindings["aux1"]?.press as any)?.routeKey, "trigger.life.spawn_now");
+  assert.equal((state.system.auxBindings["aux1"]?.press as any)?.label, "Spawn Now");
+});
+
+test("menu view reserves bottom line", () => {
+  const state = makeState();
+  const frame = toSimulatorFrame(state, mockBehavior);
+  assert.ok(frame.display.lines.length <= OLED_TEXT_LINES - 2);
+});
+
+test("auto-map works in synth filter", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.system.auxAutoMapEnabled = true;
+  (state.runtimeConfig as any).instruments[0].type = "synth";
+  (state.runtimeConfig as any).instruments[0].synth.filter.cutoffHz = 100;
+
+  state = selectLabel(state, "L3: Voice");
+  state = press(state).state;
+  state = selectLabel(state, "Instruments");
+  state = press(state).state;
+  state = selectLabel(state, "I1:");
+  state = press(state).state;
+  state = selectLabel(state, "Synth");
+  state = press(state).state;
+  state = selectLabel(state, "Filter");
+  state = press(state).state;
+  state = selectLabel(state, "Cutoff");
+
+  const frame = toSimulatorFrame(state, mockBehavior);
+  assert.ok(frame.display.lines.join("\n").includes("1-Cutoff"));
+
+  state = routeInput(state, { type: "encoder_turn", id: "aux1", delta: 1 } as DeviceInput, mockBehavior).state;
+  assert.equal((state.runtimeConfig as any).instruments[0].synth.filter.cutoffHz, 101);
+});
+
+test("auto-map A1 press enters sample assign mode", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.system.auxAutoMapEnabled = true;
+  (state.runtimeConfig as any).instruments[0].type = "sample";
+  (state.runtimeConfig as any).instruments[0].sample.selectedSlot = 0;
+
+  state = selectLabel(state, "L3: Voice");
+  state = press(state).state;
+  state = selectLabel(state, "Instruments");
+  state = press(state).state;
+  state = selectLabel(state, "I1:");
+  state = press(state).state;
+  state = selectLabel(state, "Sample");
+  state = press(state).state;
+  state = selectLabel(state, "Sample Slot");
+
+  state = routeInput(state, { type: "encoder_press", id: "aux1" } as DeviceInput, mockBehavior).state;
+  assert.deepEqual(state.system.sampleAssign, { instrumentSlot: 0, sampleSlot: 0 });
 });
 
 test("shared spawn route shows N/A toast in sequencer", () => {
@@ -259,7 +323,7 @@ test("shared spawn route shows N/A toast in sequencer", () => {
   state.runtimeConfig.activeBehavior = "sequencer";
   state.system.auxBindings["aux1"] = {
     turn: null,
-    press: { actionType: "spawnRandom", routeKey: "trigger.life.spawn_now", label: "Spawn Now" }
+    press: { kind: "behavior_action", actionType: "spawnRandom", routeKey: "trigger.life.spawn_now", label: "Spawn Now" }
   };
 
   state = routeInput(state, { type: "encoder_press", id: "aux1" } as DeviceInput, mockBehavior).state;
@@ -303,7 +367,7 @@ test("aux press spawn action remaps on behavior switch", () => {
   state.system.oledMode = "normal";
   state.runtimeConfig.activeBehavior = "life";
   state.activeBehavior = "life";
-  state.system.auxBindings["aux1"] = { turn: null, press: { actionType: "spawnRandom", label: "Spawn Random" } };
+  state.system.auxBindings["aux1"] = { turn: null, press: { kind: "behavior_action", actionType: "spawnRandom", label: "Spawn Random" } };
 
   state = selectLabel(state, "L1: Life");
   state = press(state).state;
@@ -314,8 +378,8 @@ test("aux press spawn action remaps on behavior switch", () => {
   state = turn(state, 3).state;
 
   assert.equal(state.runtimeConfig.activeBehavior, "brain");
-  assert.equal(state.system.auxBindings["aux1"]?.press?.actionType, "seedRandom");
-  assert.equal(state.system.auxBindings["aux1"]?.press?.label, "Seed Random");
+  assert.equal((state.system.auxBindings["aux1"]?.press as any)?.actionType, "seedRandom");
+  assert.equal((state.system.auxBindings["aux1"]?.press as any)?.label, "Seed Random");
 });
 
 test("aux press spawn action clears on switch to sequencer", () => {
@@ -323,7 +387,7 @@ test("aux press spawn action clears on switch to sequencer", () => {
   state.system.oledMode = "normal";
   state.runtimeConfig.activeBehavior = "life";
   state.activeBehavior = "life";
-  state.system.auxBindings["aux1"] = { turn: null, press: { actionType: "spawnRandom", label: "Spawn Random" } };
+  state.system.auxBindings["aux1"] = { turn: null, press: { kind: "behavior_action", actionType: "spawnRandom", label: "Spawn Random" } };
 
   state = selectLabel(state, "L1: Life");
   state = press(state).state;

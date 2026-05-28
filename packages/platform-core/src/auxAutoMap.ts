@@ -1,7 +1,8 @@
 import type { PlatformState } from "./index";
-import type { AuxBinding, AuxPressBinding, AuxTurnBinding, MomentaryFxType } from "./platformTypes";
+import type { ActionSpec, AuxBinding, AuxPressBinding, AuxTurnBinding, MomentaryFxType } from "./platformTypes";
 import { defaultFxParam } from "./fxDefaults";
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
+import { PLATFORM_CAPS, clampSampleSlotIndex } from "./platformCaps";
 
 export type AuxAutoMap = {
   aux1: AuxBinding | null;
@@ -31,7 +32,75 @@ function turn(key: string, label: string, opts: Omit<AuxTurnBinding, "key" | "la
 }
 
 function press(actionType: string, label: string, routeKey?: string): AuxPressBinding {
-  return routeKey ? { actionType, label, routeKey } : { actionType, label };
+  return routeKey
+    ? { kind: "behavior_action", actionType, label, routeKey }
+    : { kind: "behavior_action", actionType, label };
+}
+
+function menuAction(action: ActionSpec, label: string): AuxPressBinding {
+  return { kind: "menu_action", action, label };
+}
+
+function instIdxFromKey(key: string): number | null {
+  const m = /^instruments\.(\d+)\./.exec(key);
+  return m ? Number(m[1]) : null;
+}
+
+function synthFilterAutoMap(instIdx: number): AuxAutoMap {
+  const p = `instruments.${instIdx}.synth`;
+  return {
+    aux1: { turn: turn(`${p}.filter.cutoffHz`, "Cutoff", { kind: "number", min: 0, max: 255, step: 1 }), press: null },
+    aux2: { turn: turn(`${p}.filter.resonance`, "Res", { kind: "number", min: 0, max: 255, step: 1 }), press: null },
+    aux3: { turn: turn(`${p}.filter.envAmountPct`, "Env", { kind: "number", min: -100, max: 100, step: 1 }), press: null },
+    aux4: { turn: turn(`${p}.filter.keyTrackingPct`, "Key", { kind: "number", min: 0, max: 100, step: 1 }), press: null }
+  };
+}
+
+function sampleFilterAutoMap(instIdx: number): AuxAutoMap {
+  const p = `instruments.${instIdx}.sample`;
+  return {
+    aux1: { turn: turn(`${p}.filter.cutoffHz`, "Cutoff", { kind: "number", min: 0, max: 255, step: 1 }), press: null },
+    aux2: { turn: turn(`${p}.filter.resonance`, "Res", { kind: "number", min: 0, max: 255, step: 1 }), press: null },
+    aux3: { turn: turn(`${p}.filter.envAmountPct`, "Env", { kind: "number", min: -100, max: 100, step: 1 }), press: null },
+    aux4: { turn: turn(`${p}.filter.keyTrackingPct`, "Key", { kind: "number", min: 0, max: 100, step: 1 }), press: null }
+  };
+}
+
+function envAutoMap(prefix: string): AuxAutoMap {
+  return {
+    aux1: { turn: turn(`${prefix}.attackMs`, "Atk", { kind: "number", min: 0, max: 5000, step: 5 }), press: null },
+    aux2: { turn: turn(`${prefix}.decayMs`, "Dec", { kind: "number", min: 0, max: 5000, step: 5 }), press: null },
+    aux3: { turn: turn(`${prefix}.sustainPct`, "Sus", { kind: "number", min: 0, max: 100, step: 1 }), press: null },
+    aux4: { turn: turn(`${prefix}.releaseMs`, "Rel", { kind: "number", min: 0, max: 8000, step: 5 }), press: null }
+  };
+}
+
+function oscAutoMap(prefix: string): AuxAutoMap {
+  return {
+    aux1: { turn: turn(`${prefix}.waveform`, "Wave", { kind: "enum", options: ["sine", "triangle", "saw", "square", "pulse"] }), press: null },
+    aux2: { turn: turn(`${prefix}.levelPct`, "Level", { kind: "number", min: 0, max: 100, step: 1 }), press: null },
+    aux3: { turn: turn(`${prefix}.detuneCents`, "Detune", { kind: "number", min: -50, max: 50, step: 1 }), press: null },
+    aux4: { turn: turn(`${prefix}.pulseWidthPct`, "PW", { kind: "number", min: 5, max: 95, step: 1 }), press: null }
+  };
+}
+
+function ampAutoMap(prefix: string): AuxAutoMap {
+  return {
+    aux1: { turn: turn(`${prefix}.gainPct`, "Gain", { kind: "number", min: 0, max: 100, step: 1 }), press: null },
+    aux2: { turn: turn(`${prefix}.velocitySensitivityPct`, "Vel", { kind: "number", min: 0, max: 100, step: 1 }), press: null },
+    aux3: null,
+    aux4: null
+  };
+}
+
+function instrumentMixerAutoMap(instIdx: number): AuxAutoMap {
+  const p = `instruments.${instIdx}.mixer`;
+  return {
+    aux1: { turn: turn(`${p}.volume`, "Vol", { kind: "number", min: 0, max: 100, step: 1 }), press: null },
+    aux2: { turn: turn(`${p}.panPos`, "Pan", { kind: "number", min: 0, max: PLATFORM_CAPS.gridWidth - 1, step: 1 }), press: null },
+    aux3: { turn: turn(`${p}.route`, "Route", { kind: "enum", options: ["direct", ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, i) => `fx_bus_${i + 1}`)] }), press: null },
+    aux4: null
+  };
 }
 
 function mapFromMomentaryFxType(fxType: MomentaryFxType, keyPrefix: string): AuxAutoMap {
@@ -160,7 +229,7 @@ function isL2Path(path: string): boolean {
 
 export function resolveAuxAutoMap<TState>(
   state: PlatformState<TState>,
-  context: { path: string; selectedKey?: string },
+  context: { path: string; selectedKey?: string; selectedAction?: ActionSpec | null },
   resolveBehavior: (id: string) => BehaviorEngine<any, any>
 ): AuxAutoMap {
   if ((state.system as any).auxAutoMapEnabled === false) return NONE;
@@ -178,11 +247,72 @@ export function resolveAuxAutoMap<TState>(
   // Touch FX Page selected config.
   if (isFxPagePath(path)) {
     const fxType = String((state.runtimeConfig as any).touchFx?.selected?.fxType ?? "none") as MomentaryFxType;
-    return mapFromMomentaryFxType(fxType, "touchFx.selected.params");
+    const params = structuredClone(((state.runtimeConfig as any).touchFx?.selected?.params ?? {}) as Record<string, unknown>);
+    const targetKey = String((state.runtimeConfig as any).touchFx?.selected?.targetKey ?? "master");
+    const base = mapFromMomentaryFxType(fxType, "touchFx.selected.params");
+    const mapPress = menuAction({ type: "fx_assign_enter", config: { fxType, params, targetKey } } as any, "Map");
+    const a1 = base.aux1 ?? { turn: null, press: null };
+    return { ...base, aux1: { turn: a1.turn, press: mapPress } };
   }
 
   // When in Touch/performance area, don't apply generic fallthrough auto maps.
   if (isTouchPath(path)) return NONE;
+
+  // Instrument synth/sample/mixer pages.
+  {
+    const k = String(context.selectedKey ?? "");
+    const instIdx = instIdxFromKey(k);
+    const inSynth = k.includes(".synth.");
+    const inSample = k.includes(".sample.");
+    if (instIdx !== null && inSynth) {
+      if (k.includes(".synth.filterEnv.")) return envAutoMap(`instruments.${instIdx}.synth.filterEnv`);
+      if (k.includes(".synth.ampEnv.")) return envAutoMap(`instruments.${instIdx}.synth.ampEnv`);
+      if (k.includes(".synth.amp.")) return ampAutoMap(`instruments.${instIdx}.synth.amp`);
+      if (k.includes(".synth.filter.")) return synthFilterAutoMap(instIdx);
+      if (k.includes(".synth.osc1.")) return oscAutoMap(`instruments.${instIdx}.synth.osc1`);
+      if (k.includes(".synth.osc2.")) return oscAutoMap(`instruments.${instIdx}.synth.osc2`);
+    }
+    if (instIdx !== null && inSample) {
+      if (k.includes(".sample.filterEnv.")) return envAutoMap(`instruments.${instIdx}.sample.filterEnv`);
+      if (k.includes(".sample.ampEnv.")) return envAutoMap(`instruments.${instIdx}.sample.ampEnv`);
+      if (k.includes(".sample.amp.")) return ampAutoMap(`instruments.${instIdx}.sample.amp`);
+      if (k.includes(".sample.filter.")) return sampleFilterAutoMap(instIdx);
+
+      const samplePrefix = `instruments.${instIdx}.sample`;
+      if (k.startsWith(`${samplePrefix}.`)) {
+        const sampleSlot = clampSampleSlotIndex(((state.runtimeConfig as any).instruments?.[instIdx]?.sample?.selectedSlot ?? 0) as any);
+        return {
+          aux1: {
+            turn: turn(`${samplePrefix}.selectedSlot`, "Slot", { kind: "enum", options: Array.from({ length: PLATFORM_CAPS.sampleSlotCount }, (_, i) => String(i)) }),
+            press: menuAction({ type: "sample_assign_enter", instrumentSlot: instIdx, sampleSlot } as any, "Assign")
+          },
+          aux2: { turn: turn(`${samplePrefix}.baseVelocity`, "Base", { kind: "number", min: 1, max: 127, step: 1 }), press: null },
+          aux3: { turn: turn(`${samplePrefix}.tuneSemis`, "Tune", { kind: "number", min: -24, max: 24, step: 1 }), press: null },
+          aux4: { turn: turn(`${samplePrefix}.velocityLevelsEnabled`, "Levels", { kind: "bool" }), press: null }
+        };
+      }
+    }
+    if (instIdx !== null && k.includes(".mixer.")) {
+      return instrumentMixerAutoMap(instIdx);
+    }
+
+    // Action rows that don't carry a selectedKey.
+    const a = context.selectedAction as any;
+    if (a?.type === "sample_assign_enter") {
+      const instIdx = Number(a.instrumentSlot) | 0;
+      const sampleSlot = clampSampleSlotIndex(Number(a.sampleSlot) | 0);
+      const samplePrefix = `instruments.${instIdx}.sample`;
+      return {
+        aux1: {
+          turn: turn(`${samplePrefix}.selectedSlot`, "Slot", { kind: "enum", options: Array.from({ length: PLATFORM_CAPS.sampleSlotCount }, (_, i) => String(i)) }),
+          press: menuAction({ type: "sample_assign_enter", instrumentSlot: instIdx, sampleSlot } as any, "Assign")
+        },
+        aux2: { turn: turn(`${samplePrefix}.baseVelocity`, "Base", { kind: "number", min: 1, max: 127, step: 1 }), press: null },
+        aux3: { turn: turn(`${samplePrefix}.tuneSemis`, "Tune", { kind: "number", min: -24, max: 24, step: 1 }), press: null },
+        aux4: { turn: turn(`${samplePrefix}.velocityLevelsEnabled`, "Levels", { kind: "bool" }), press: null }
+      };
+    }
+  }
 
   // Bus FX slot params.
   const k = String(context.selectedKey ?? "");
@@ -250,7 +380,7 @@ function effectiveSlot(auto: AuxBinding | null, custom: AuxBinding | null): Effe
 
 export function resolveEffectiveAuxMap<TState>(
   state: PlatformState<TState>,
-  context: { path: string; selectedKey?: string },
+  context: { path: string; selectedKey?: string; selectedAction?: ActionSpec | null },
   resolveBehavior: (id: string) => BehaviorEngine<any, any>
 ): EffectiveAuxMap {
   const auto = resolveAuxAutoMap(state, context, resolveBehavior);

@@ -439,13 +439,14 @@ function remapAuxPressBindingsForBehavior(
   const next: Record<string, any> = { ...bindings };
   for (const id of Object.keys(next)) {
     const binding = next[id];
-    if (binding?.press?.routeKey) continue;
-    if (!binding?.press || binding.press.actionType !== fromAction.actionType) continue;
+    if (binding?.press?.kind !== "behavior_action") continue;
+    if (binding.press.routeKey) continue;
+    if (binding.press.actionType !== fromAction.actionType) continue;
     if (!toAction) {
       next[id] = binding.turn ? { turn: binding.turn, press: null } : null;
       continue;
     }
-    next[id] = { ...binding, press: { actionType: toAction.actionType, label: toAction.label } };
+    next[id] = { ...binding, press: { kind: "behavior_action", actionType: toAction.actionType, label: toAction.label } };
   }
   return next;
 }

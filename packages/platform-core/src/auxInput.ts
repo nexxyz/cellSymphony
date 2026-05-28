@@ -84,10 +84,31 @@ export function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId
     const action = (selected as any).action as any;
     if (action.type === "behavior_action") {
       const nextPress: any = deps.isSpawnActionType(action.actionType)
-        ? { actionType: action.actionType, routeKey: "trigger.life.spawn_now", label: "Spawn Now" }
-        : { actionType: action.actionType, label: (selected as any).label };
-      if (existing?.press && existing.press.actionType === nextPress.actionType && existing.press.routeKey === nextPress.routeKey) {
+        ? { kind: "behavior_action", actionType: action.actionType, routeKey: "trigger.life.spawn_now", label: "Spawn Now" }
+        : { kind: "behavior_action", actionType: action.actionType, label: (selected as any).label };
+      if (existing?.press?.kind === "behavior_action" && existing.press.actionType === nextPress.actionType && existing.press.routeKey === nextPress.routeKey) {
         return openUnbindConfirm(state);
+      }
+      return setAuxToast(
+        {
+          ...state,
+          system: {
+            ...state.system,
+            auxBindings: {
+              ...state.system.auxBindings,
+              [encoderId]: { turn: existing?.turn ?? null, press: nextPress }
+            }
+          }
+        },
+        `${auxInputPrefix("press", encoderId)} Bound click: ${(selected as any).label}`
+      );
+    }
+    if (action.type === "sample_assign_enter" || action.type === "fx_assign_enter") {
+      const nextPress: any = { kind: "menu_action", action, label: (selected as any).label };
+      if (existing?.press?.kind === "menu_action" && existing.press.action?.type === action.type) {
+        if (action.type !== "sample_assign_enter" || existing.press.action.instrumentSlot === action.instrumentSlot) {
+          return openUnbindConfirm(state);
+        }
       }
       return setAuxToast(
         {
@@ -115,12 +136,16 @@ export function pressAuxEncoder<TState>(state: PlatformState<TState>, encoderId:
   if (!binding?.press) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} No binding`);
   const inactiveMsg = inactivePressMessage(state, binding.press, deps);
   if (inactiveMsg) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} ${inactiveMsg}`);
+  if (binding.press.kind === "menu_action") {
+    return pressMenuAction(state, encoderId, binding.press.action, binding.press.label ?? "Action");
+  }
+
   let actionType = binding.press.actionType;
   let label = binding.press.label ?? binding.press.actionType;
   if (binding.press.routeKey === "trigger.life.spawn_now") {
-    label = "Spawn Now";
+    label = binding.press.label ?? "Spawn Now";
     const resolvedAction = deps.spawnActionTypeForBehavior(state.runtimeConfig.activeBehavior);
-    if (!resolvedAction) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} N/A (Spawn Now)`);
+    if (!resolvedAction) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} N/A (${label})`);
     actionType = resolvedAction;
   }
   const behavior = deps.resolveBehavior(state.runtimeConfig.activeBehavior);
@@ -132,13 +157,17 @@ export function pressAuxEncoder<TState>(state: PlatformState<TState>, encoderId:
 export function pressAuxEncoderMapped<TState>(
   state: PlatformState<TState>,
   encoderId: string,
-  bindingPress: { actionType: string; routeKey?: string; label?: string },
+  bindingPress: any,
   _effects: PlatformEffect[],
   emit: (event: MusicalEvent) => void,
   deps: AuxSharedDeps<TState>
 ): PlatformState<TState> {
   const inactiveMsg = inactivePressMessage(state, bindingPress, deps);
   if (inactiveMsg) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} ${inactiveMsg}`);
+  if (bindingPress.kind === "menu_action") {
+    return pressMenuAction(state, encoderId, bindingPress.action, bindingPress.label ?? "Action");
+  }
+
   let actionType = bindingPress.actionType;
   let label = bindingPress.label ?? bindingPress.actionType;
   if (bindingPress.routeKey === "trigger.life.spawn_now") {
@@ -367,11 +396,19 @@ function inactiveTurnMessage<TState>(state: PlatformState<TState>, key: string, 
   return null;
 }
 
-function inactivePressMessage<TState>(state: PlatformState<TState>, bindingPress: { actionType: string; routeKey?: string; label?: string }, deps: AuxSharedDeps<TState>): string | null {
+function inactivePressMessage<TState>(state: PlatformState<TState>, bindingPress: any, deps: AuxSharedDeps<TState>): string | null {
   const activePart = state.runtimeConfig.activePartIndex ?? 0;
   const behaviorId = String(state.runtimeConfig.activeBehavior ?? "");
   const behavior = deps.resolveBehavior(behaviorId);
   const scope = `P${activePart + 1}`;
+
+  if (bindingPress.kind === "menu_action") {
+    if (bindingPress.action?.type === "sample_assign_enter") {
+      const inst = (state.runtimeConfig as any).instruments?.[bindingPress.action.instrumentSlot];
+      if (!inst || inst.type !== "sample") return `${scope} ${bindingPress.label ?? "Assign"} not active`;
+    }
+    return null;
+  }
 
   if (bindingPress.routeKey === "trigger.life.spawn_now") {
     const resolvedAction = deps.spawnActionTypeForBehavior(behaviorId);
@@ -388,4 +425,29 @@ function inactivePressMessage<TState>(state: PlatformState<TState>, bindingPress
     }
   }
   return null;
+}
+
+function pressMenuAction<TState>(state: PlatformState<TState>, encoderId: string, action: any, label: string): PlatformState<TState> {
+  if (action?.type === "sample_assign_enter") {
+    const next = {
+      ...state,
+      system: {
+        ...state.system,
+        sampleAssign: { instrumentSlot: action.instrumentSlot, sampleSlot: action.sampleSlot },
+        sampleAssignLastPress: null
+      }
+    };
+    return setAuxToast(next, `${auxInputPrefix("press", encoderId)} ${label} I${action.instrumentSlot + 1}/S${action.sampleSlot + 1}`);
+  }
+  if (action?.type === "fx_assign_enter") {
+    const next = {
+      ...state,
+      system: {
+        ...state.system,
+        fxAssignMode: { config: structuredClone(action.config) }
+      }
+    };
+    return setAuxToast(next, `${auxInputPrefix("press", encoderId)} ${label} (${action.config.fxType})`);
+  }
+  return setAuxToast(state, `${auxInputPrefix("press", encoderId)} N/A (${label})`);
 }

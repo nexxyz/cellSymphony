@@ -430,15 +430,15 @@ export function toOledLines(display: DisplayFrame): { lines: string[]; colors: n
   const title = fitOledTextToColumns(display.title, OLED_TEXT_COLUMNS);
   const titleColor = getSectionColorFromPath(display.title);
   const body = display.lines
-    .slice(0, OLED_TEXT_LINES - 1)
+    .slice(0, OLED_TEXT_LINES - 2)
     .map((line, idx) => ({
       line: line.trim().length === 0 ? "" : fitOledMenuLineToColumns(line, OLED_TEXT_COLUMNS),
       color: display.colors?.[idx] ?? 0xffff
     }));
   // Keep empty lines - they render as blank spacer lines
   return {
-    lines: [title, ...body.map(b => b.line)].slice(0, OLED_TEXT_LINES),
-    colors: [titleColor, ...body.map(b => b.color)].slice(0, OLED_TEXT_LINES)
+    lines: [title, ...body.map(b => b.line)].slice(0, OLED_TEXT_LINES - 1),
+    colors: [titleColor, ...body.map(b => b.color)].slice(0, OLED_TEXT_LINES - 1)
   };
 }
 

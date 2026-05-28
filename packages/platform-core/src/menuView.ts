@@ -3,7 +3,7 @@ import { clamp } from "./coreUtils";
 import type { BarValue, ConfirmState, MenuNode, MenuState, NumericDisplayMode, PlatformState } from "./platformTypes";
 import { resolveAuxAutoMap, resolveEffectiveAuxMap } from "./auxAutoMap";
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
-import { heldForMs, nowMs } from "./timing";
+import { AUX_MAPPING_OVERLAY_DELAY_MS, heldForMs, nowMs } from "./timing";
 
 export function visibleChildren<TState>(node: MenuNode, state: PlatformState<TState>): MenuNode[] {
   if (node.kind !== "group") return [];
@@ -59,32 +59,34 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
 
   // Shift-hold overlay: show current effective aux mappings after a delay.
   const now = nowMs();
-  if (state.system.shiftHeld && heldForMs(now, state.system.shiftHeldSinceMs, 2000)) {
+  if (state.system.shiftHeld && heldForMs(now, state.system.shiftHeldSinceMs, AUX_MAPPING_OVERLAY_DELAY_MS)) {
     const cursor = clamp(menu.cursor, 0, siblings.length - 1);
     const focused = siblings[cursor] as any;
     const selectedKey = focused && (focused.kind === "number" || focused.kind === "enum" || focused.kind === "bool") ? String(focused.key ?? "") : undefined;
-    const eff = resolveEffectiveAuxMap(state, { path, selectedKey }, resolveBehavior);
+    const selectedAction = focused && focused.kind === "action" ? (focused.action as any) : null;
+    const eff = resolveEffectiveAuxMap(state, { path, selectedKey, selectedAction }, resolveBehavior);
     const slots: Array<[string, typeof eff.aux1]> = [["A1", eff.aux1], ["A2", eff.aux2], ["A3", eff.aux3], ["A4", eff.aux4]];
     const anyAuto = slots.some(([, s]) => s.sourceTurn === "auto" || s.sourcePress === "auto");
     const anyCustom = slots.some(([, s]) => s.sourceTurn === "custom" || s.sourcePress === "custom");
-    const title = anyAuto ? "AUTO MAPPING" : anyCustom ? "CUSTOM MAPPING" : "AUX MAPPING";
+    const title = anyAuto ? "AUTO MAP" : anyCustom ? "CUSTOM MAP" : "AUX MAP";
     const fmt = (name: string, s: any): string => {
       const t = s.turn?.label ?? (s.turn?.key ? String(s.turn.key).split(".").slice(-1)[0] : "");
       const p = s.press?.label ?? "";
-      if (t && p) return `${name}: ${t} / !${p}`;
-      if (t) return `${name}: ${t}`;
-      if (p) return `${name}: !${p}`;
-      return `${name}: -`;
+      if (t && p) return `${name} ${t}/!${p}`;
+      if (t) return `${name} ${t}`;
+      if (p) return `${name} !${p}`;
+      return `${name} -`;
     };
-    const lines = slots.map(([n, s]) => fitOledText(fmt(n, s))).slice(0, oledTextLines - 1);
+    const lines = slots.map(([n, s]) => fitOledText(fmt(n, s))).slice(0, oledTextLines - 2);
     return { path: title, lines, colors: Array(lines.length).fill(0xffff), barValues: Array(lines.length).fill(null) };
   }
 
   const cursor = clamp(menu.cursor, 0, siblings.length - 1);
   const focused = siblings[cursor] as any;
   const selectedKey = focused && (focused.kind === "number" || focused.kind === "enum" || focused.kind === "bool") ? String(focused.key ?? "") : undefined;
-  const auto = resolveAuxAutoMap(state, { path, selectedKey }, resolveBehavior);
-  const bodyBudget = Math.max(1, oledTextLines - 1);
+  const selectedAction = focused && focused.kind === "action" ? (focused.action as any) : null;
+  const auto = resolveAuxAutoMap(state, { path, selectedKey, selectedAction }, resolveBehavior);
+  const bodyBudget = Math.max(1, oledTextLines - 2);
   let start = cursor;
   let end = cursor + 1;
   let rowCount = formatMenuItemLines(siblings[cursor], state, true, menu.editing, fitOledText, readAnyValue, formatDisplayValue).length;
@@ -124,10 +126,19 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
     return null;
   };
 
-  const autoPressPrefixForActionType = (actionType: string): string | null => {
+  const autoPressPrefixForAction = (action: any): string | null => {
     const slots: Array<[string, any]> = [["1", auto.aux1], ["2", auto.aux2], ["3", auto.aux3], ["4", auto.aux4]];
     for (const [n, s] of slots) {
-      if (s?.press?.actionType === actionType) return `${n}!`;
+      const p = s?.press;
+      if (!p) continue;
+      if (p.kind === "behavior_action" && action?.type === "behavior_action" && p.actionType === action.actionType) return `${n}!`;
+      if (p.kind === "menu_action" && action && p.action?.type === action.type) {
+        if (action.type === "sample_assign_enter") {
+          if (p.action.instrumentSlot === action.instrumentSlot) return `${n}!`;
+        } else {
+          return `${n}!`;
+        }
+      }
     }
     return null;
   };
@@ -141,7 +152,10 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
       } else if (item.kind === "action") {
         const a = item.action as any;
         if (a?.type === "behavior_action" && typeof a.actionType === "string") {
-          const p = autoPressPrefixForActionType(a.actionType);
+          const p = autoPressPrefixForAction(a);
+          if (p) item = { ...item, label: `${p}${item.label}` };
+        } else if (a?.type === "sample_assign_enter" || a?.type === "fx_assign_enter") {
+          const p = autoPressPrefixForAction(a);
           if (p) item = { ...item, label: `${p}${item.label}` };
         }
       }
@@ -184,10 +198,10 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
 function confirmView(confirm: ConfirmState, fitOledText: (text: string) => string, oledTextLines: number): { path: string; lines: string[] } {
   const title = confirm.kind === "text_dirty_exit" ? "TEXT" : confirm.kind === "help_info" ? "HELP" : "CONFIRM";
   if (confirm.kind === "help_info" && confirm.action.kind === "help_info") {
-    const contentSlots = Math.max(1, oledTextLines - 2);
+    const contentSlots = Math.max(1, oledTextLines - 3);
     const start = clamp(confirm.scroll, 0, Math.max(0, confirm.action.lines.length - contentSlots));
     const body = confirm.action.lines.slice(start, start + contentSlots).map((line) => fitOledText(line));
-    return { path: title, lines: [...body, "@@> Close"].slice(0, oledTextLines - 1) };
+    return { path: title, lines: [...body, "@@> Close"].slice(0, oledTextLines - 2) };
   }
   const details = confirmDetails(confirm);
   const lines = [fitOledText(details)];
@@ -195,7 +209,7 @@ function confirmView(confirm: ConfirmState, fitOledText: (text: string) => strin
     const prefix = confirm.cursor === i ? "@@> " : "  ";
     lines.push(`${prefix}${confirm.options[i]}`);
   }
-  return { path: title, lines: lines.slice(0, oledTextLines - 1) };
+  return { path: title, lines: lines.slice(0, oledTextLines - 2) };
 }
 
 function confirmDetails(confirm: ConfirmState): string {

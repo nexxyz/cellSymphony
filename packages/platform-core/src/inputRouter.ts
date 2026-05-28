@@ -81,6 +81,18 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
   let nextState = { ...state };
   const pressed = (i: any): boolean => (typeof i.pressed === "boolean" ? i.pressed : true);
 
+  const auxDeps = {
+    menuTree: deps.menuTree,
+    resolveBehavior: deps.resolveBehavior,
+    readAnyValue: deps.readAnyValue,
+    writeAnyValue: deps.writeAnyValue,
+    reinitBehaviorState: deps.reinitBehaviorState,
+    autoSaveEffect: deps.autoSaveEffect,
+    formatDisplayValue: deps.formatDisplayValue,
+    isSpawnActionType: deps.isSpawnActionType,
+    spawnActionTypeForBehavior: deps.spawnActionTypeForBehavior
+  };
+
   {
     const now = nowMs();
     const sys = nextState.system;
@@ -356,24 +368,14 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
   }
 
   if (input.type === "encoder_press" && input.id && !deps.isMainEncoderInput(input.id)) {
-    const auxDeps = {
-      menuTree: deps.menuTree,
-      resolveBehavior: deps.resolveBehavior,
-      readAnyValue: deps.readAnyValue,
-      writeAnyValue: deps.writeAnyValue,
-      reinitBehaviorState: deps.reinitBehaviorState,
-      autoSaveEffect: deps.autoSaveEffect,
-      formatDisplayValue: deps.formatDisplayValue,
-      isSpawnActionType: deps.isSpawnActionType,
-      spawnActionTypeForBehavior: deps.spawnActionTypeForBehavior
-    };
     if (nextState.system.shiftHeld) {
       nextState = deps.assignAuxEncoder(nextState, input.id, effects, auxDeps);
     } else {
       const view = deps.locate(deps.menuTree(nextState), nextState, nextState.menu);
       const selected = view.siblings[nextState.menu.cursor] as any;
       const selectedKey = (selected && (selected.kind === "number" || selected.kind === "enum" || selected.kind === "bool")) ? String(selected.key ?? "") : undefined;
-      const auto = resolveAuxAutoMap(nextState, { path: view.path, selectedKey }, deps.resolveBehavior);
+      const selectedAction = selected && selected.kind === "action" ? (selected.action as any) : null;
+      const auto = resolveAuxAutoMap(nextState, { path: view.path, selectedKey, selectedAction }, deps.resolveBehavior);
       const slot = input.id === "aux1" ? auto.aux1 : input.id === "aux2" ? auto.aux2 : input.id === "aux3" ? auto.aux3 : auto.aux4;
       nextState = slot?.press
         ? deps.pressAuxEncoderMapped(nextState, input.id, slot.press, effects, (event: MusicalEvent) => events.push(event), auxDeps)
@@ -381,21 +383,11 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     }
   }
   if (input.type === "encoder_turn" && input.id && !deps.isMainEncoderInput(input.id)) {
-    const auxDeps = {
-      menuTree: deps.menuTree,
-      resolveBehavior: deps.resolveBehavior,
-      readAnyValue: deps.readAnyValue,
-      writeAnyValue: deps.writeAnyValue,
-      reinitBehaviorState: deps.reinitBehaviorState,
-      autoSaveEffect: deps.autoSaveEffect,
-      formatDisplayValue: deps.formatDisplayValue,
-      isSpawnActionType: deps.isSpawnActionType,
-      spawnActionTypeForBehavior: deps.spawnActionTypeForBehavior
-    };
     const view = deps.locate(deps.menuTree(nextState), nextState, nextState.menu);
     const selected = view.siblings[nextState.menu.cursor] as any;
     const selectedKey = (selected && (selected.kind === "number" || selected.kind === "enum" || selected.kind === "bool")) ? String(selected.key ?? "") : undefined;
-    const auto = resolveAuxAutoMap(nextState, { path: view.path, selectedKey }, deps.resolveBehavior);
+    const selectedAction = selected && selected.kind === "action" ? (selected.action as any) : null;
+    const auto = resolveAuxAutoMap(nextState, { path: view.path, selectedKey, selectedAction }, deps.resolveBehavior);
     const slot = input.id === "aux1" ? auto.aux1 : input.id === "aux2" ? auto.aux2 : input.id === "aux3" ? auto.aux3 : auto.aux4;
     nextState = slot?.turn
       ? deps.turnAuxEncoderMapped(nextState, input.id, slot.turn, input.delta, effects, auxDeps)
