@@ -1,4 +1,5 @@
 import type { ToastState } from "./platformTypes";
+import { DEFAULT_TOAST_MS, TOAST_EXTEND_MS, TOAST_MAX_MS, deadlineMs, nowMs as runtimeNowMs } from "./timing";
 
 type MakeToastOptions = {
   nowMs?: number;
@@ -8,17 +9,17 @@ type MakeToastOptions = {
 };
 
 export function makeToast(message: string, options: MakeToastOptions = {}): ToastState {
-  const nowMs = options.nowMs ?? Date.now();
-  const durationMs = options.durationMs ?? 1500;
+  const nowMs = options.nowMs ?? runtimeNowMs();
+  const durationMs = options.durationMs ?? DEFAULT_TOAST_MS;
   const current = options.current;
   const active = options.extend === true && current !== undefined && current !== null && current.untilMs > nowMs;
-  if (!active) return { message, startedAtMs: nowMs, untilMs: nowMs + durationMs };
+  if (!active) return { message, startedAtMs: nowMs, untilMs: deadlineMs(nowMs, durationMs) };
 
-  const extendMs = 600;
-  const maxMs = 3000;
+  const extendMs = TOAST_EXTEND_MS;
+  const maxMs = TOAST_MAX_MS;
   return {
     message,
     startedAtMs: current.startedAtMs,
-    untilMs: Math.min(nowMs + maxMs, Math.max(nowMs + durationMs, current.untilMs + extendMs))
+    untilMs: Math.min(deadlineMs(nowMs, maxMs), Math.max(deadlineMs(nowMs, durationMs), deadlineMs(current.untilMs, extendMs)))
   };
 }

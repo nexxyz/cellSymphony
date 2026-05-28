@@ -8,10 +8,13 @@ export type BounceState = {
   cells: boolean[];
   triggerTypes: CellTriggerType[];
   maxBalls: number;
+  spawnInterval: number;
+  tickCounter: number;
 };
 
 export type BounceConfig = {
   maxBalls?: number;
+  spawnInterval?: number;
 };
 
 function idx(x: number, y: number): number {
@@ -26,6 +29,8 @@ export const bounceBehavior: BehaviorEngine<BounceState, BounceConfig> = {
       cells: new Array(CELL_COUNT).fill(false),
       triggerTypes: new Array(CELL_COUNT).fill("none") as CellTriggerType[],
       maxBalls: config.maxBalls ?? 60,
+      spawnInterval: config.spawnInterval ?? 0,
+      tickCounter: 0,
     };
   },
   onInput(state, input: DeviceInput) {
@@ -54,7 +59,18 @@ export const bounceBehavior: BehaviorEngine<BounceState, BounceConfig> = {
     };
   },
   onTick(state) {
-    const balls = state.balls.map(b => {
+    const tickCounter = (state.tickCounter + 1) | 0;
+    const spawnInterval = Math.max(0, Math.floor(state.spawnInterval));
+    let balls0 = state.balls;
+    if (spawnInterval > 0 && state.balls.length < state.maxBalls && tickCounter % spawnInterval === 0) {
+      balls0 = [...state.balls, {
+        x: Math.floor(Math.random() * GRID_WIDTH),
+        y: Math.floor(Math.random() * GRID_HEIGHT),
+        vx: (Math.random() - 0.5) * 2,
+        vy: (Math.random() - 0.5) * 2,
+      }];
+    }
+    const balls = balls0.map(b => {
       let x = b.x + b.vx;
       let y = b.y + b.vy;
       let vx = b.vx;
@@ -77,7 +93,7 @@ export const bounceBehavior: BehaviorEngine<BounceState, BounceConfig> = {
       else if (cells[i]) tt[i] = "activate";
       else if (state.cells[i]) tt[i] = "deactivate";
     }
-    return { balls, cells, triggerTypes: tt, maxBalls: state.maxBalls };
+    return { balls, cells, triggerTypes: tt, maxBalls: state.maxBalls, spawnInterval: state.spawnInterval, tickCounter };
   },
   renderModel(state) {
     return {
@@ -89,6 +105,7 @@ export const bounceBehavior: BehaviorEngine<BounceState, BounceConfig> = {
   },
   configMenu() {
     return [
+      { key: "spawnInterval", label: "Spawn Interval", type: "number", min: 0, max: 30, step: 1 },
       { key: "maxBalls", label: "Max Balls", type: "number", min: 1, max: 100, step: 1 },
       { key: "addBall", label: "Add Ball", type: "action" },
     ];

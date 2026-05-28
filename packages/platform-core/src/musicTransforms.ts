@@ -1,7 +1,7 @@
-import { GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import type { RootName, RuntimeConfig, ScaleId, ValueLaneConfig } from "./platformTypes";
 import { DEFAULT_VELOCITY_HIGH, DEFAULT_VELOCITY_MEDIUM, DEFAULT_VELOCITY_LOW, DEFAULT_NOTE_LENGTH_MS } from "./runtimeDefaults";
+import { clampSampleSlotIndex, PLATFORM_CAPS, sectionCount } from "./platformCaps";
 
 export function applyModulation(intents: { x: number; y: number; degree: number; kind: any }[], events: MusicalEvent[], cfg: RuntimeConfig): MusicalEvent[] {
   const out: MusicalEvent[] = [];
@@ -60,7 +60,7 @@ function resolveSampleAssignedNote(
   const base = sampleBaseVelocity(inst, a.level as any);
   const sense = clamp(Math.round(senseVelocity ?? sourceVelocity), 1, 127);
   const vel = clamp(Math.round((base * sense) / 127), 1, 127);
-  const sampleSlot = clamp(Math.floor(Number(a.sampleSlot ?? 0)), 0, 7);
+  const sampleSlot = clampSampleSlotIndex(a.sampleSlot ?? 0);
   return { note: 36 + sampleSlot, velocity: vel };
 }
 
@@ -97,10 +97,10 @@ export function applyGlobalSound(events: MusicalEvent[], cfg: RuntimeConfig): Mu
 
 export function pitchFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig, fallbackNote: number): number {
   const pitchPos = sectionPitchPosition(intent, cfg);
-  const xNorm = normalizedAxis(pitchPos.x, GRID_WIDTH, 0);
-  const yNorm = normalizedAxis(pitchPos.y, GRID_HEIGHT, 0);
-  const xPos = Math.round(xNorm * (GRID_WIDTH - 1));
-  const yPos = Math.round(yNorm * (GRID_HEIGHT - 1));
+  const xNorm = normalizedAxis(pitchPos.x, PLATFORM_CAPS.gridWidth, 0);
+  const yNorm = normalizedAxis(pitchPos.y, PLATFORM_CAPS.gridHeight, 0);
+  const xPos = Math.round(xNorm * (PLATFORM_CAPS.gridWidth - 1));
+  const yPos = Math.round(yNorm * (PLATFORM_CAPS.gridHeight - 1));
   const xDelta = cfg.x.pitch.enabled ? xPos * cfg.x.pitch.steps : 0;
   const yDelta = cfg.y.pitch.enabled ? yPos * cfg.y.pitch.steps : 0;
   if (!cfg.x.pitch.enabled && !cfg.y.pitch.enabled) return fallbackNote;
@@ -119,14 +119,14 @@ export function pitchFromIntent(intent: { x: number; y: number }, cfg: RuntimeCo
 }
 
 function sectionPitchPosition(intent: { x: number; y: number }, cfg: RuntimeConfig): { x: number; y: number } {
-  const sections = cfg.scanSections === "2" ? 2 : cfg.scanSections === "4" ? 4 : cfg.scanSections === "8" ? 8 : 1;
+  const sections = sectionCount(cfg.scanSections);
   if (cfg.scanMode !== "scanning" || sections <= 1) return intent;
   if (cfg.scanAxis === "rows" && cfg.y.pitch.restartEachSection) {
-    const sectionHeight = Math.max(1, Math.floor(GRID_HEIGHT / sections));
+    const sectionHeight = Math.max(1, Math.floor(PLATFORM_CAPS.gridHeight / sections));
     return { x: intent.x, y: intent.y % sectionHeight };
   }
   if (cfg.scanAxis === "columns" && cfg.x.pitch.restartEachSection) {
-    const sectionWidth = Math.max(1, Math.floor(GRID_WIDTH / sections));
+    const sectionWidth = Math.max(1, Math.floor(PLATFORM_CAPS.gridWidth / sections));
     return { x: intent.x % sectionWidth, y: intent.y };
   }
   return intent;
@@ -134,8 +134,8 @@ function sectionPitchPosition(intent: { x: number; y: number }, cfg: RuntimeConf
 
 function velocityFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig): number | null {
   const vals: number[] = [];
-  if (cfg.x.velocity.enabled) vals.push(valueFromAxis(intent.x, GRID_WIDTH, cfg.x.velocity));
-  if (cfg.y.velocity.enabled) vals.push(valueFromAxis(intent.y, GRID_HEIGHT, cfg.y.velocity));
+  if (cfg.x.velocity.enabled) vals.push(valueFromAxis(intent.x, PLATFORM_CAPS.gridWidth, cfg.x.velocity));
+  if (cfg.y.velocity.enabled) vals.push(valueFromAxis(intent.y, PLATFORM_CAPS.gridHeight, cfg.y.velocity));
   if (vals.length === 0) return null;
   return clamp(Math.round(vals.reduce((a, b) => a + b, 0) / vals.length), 1, 127);
 }
@@ -146,10 +146,10 @@ function ccFromIntent(intent: { x: number; y: number }, cfg: RuntimeConfig, chan
     const scaled = clamp(Math.round(min + source * (max - min)), 0, 127);
     events.push({ type: "cc", channel: clamp(channel, 0, 15), controller, value: scaled });
   };
-  if (cfg.x.filterCutoff.enabled) pushCc(74, normalizedAxis(intent.x, GRID_WIDTH, cfg.x.filterCutoff.gridOffset), cfg.x.filterCutoff.from, cfg.x.filterCutoff.to);
-  if (cfg.y.filterCutoff.enabled) pushCc(74, normalizedAxis(intent.y, GRID_HEIGHT, cfg.y.filterCutoff.gridOffset), cfg.y.filterCutoff.from, cfg.y.filterCutoff.to);
-  if (cfg.x.filterResonance.enabled) pushCc(71, normalizedAxis(intent.x, GRID_WIDTH, cfg.x.filterResonance.gridOffset), cfg.x.filterResonance.from, cfg.x.filterResonance.to);
-  if (cfg.y.filterResonance.enabled) pushCc(71, normalizedAxis(intent.y, GRID_HEIGHT, cfg.y.filterResonance.gridOffset), cfg.y.filterResonance.from, cfg.y.filterResonance.to);
+  if (cfg.x.filterCutoff.enabled) pushCc(74, normalizedAxis(intent.x, PLATFORM_CAPS.gridWidth, cfg.x.filterCutoff.gridOffset), cfg.x.filterCutoff.from, cfg.x.filterCutoff.to);
+  if (cfg.y.filterCutoff.enabled) pushCc(74, normalizedAxis(intent.y, PLATFORM_CAPS.gridHeight, cfg.y.filterCutoff.gridOffset), cfg.y.filterCutoff.from, cfg.y.filterCutoff.to);
+  if (cfg.x.filterResonance.enabled) pushCc(71, normalizedAxis(intent.x, PLATFORM_CAPS.gridWidth, cfg.x.filterResonance.gridOffset), cfg.x.filterResonance.from, cfg.x.filterResonance.to);
+  if (cfg.y.filterResonance.enabled) pushCc(71, normalizedAxis(intent.y, PLATFORM_CAPS.gridHeight, cfg.y.filterResonance.gridOffset), cfg.y.filterResonance.from, cfg.y.filterResonance.to);
   return events;
 }
 

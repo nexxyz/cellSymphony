@@ -291,7 +291,8 @@ function applyAutoName<TState>(state: PlatformState<TState>, rc: any, key: strin
 export function writeAnyValue<TState>(state: PlatformState<TState>, key: string, value: unknown): PlatformState<TState> {
   if (key === "touchFx.selected.fxType") {
     const fxType = isMomentaryFxType(value) ? value : "none";
-    return { ...state, runtimeConfig: writeValue(state.runtimeConfig, "touchFx.selected", { fxType, params: defaultMomentaryFxParams(fxType) }) };
+    const prevTargetKey = (state.runtimeConfig as any).touchFx?.selected?.targetKey ?? "master";
+    return { ...state, runtimeConfig: writeValue(state.runtimeConfig, "touchFx.selected", { fxType, params: defaultMomentaryFxParams(fxType), targetKey: prevTargetKey }) };
   }
   const fxTypeMatch = /^mixer\.buses\.(\d+)\.(slot[12])\.type$/.exec(key);
   if (fxTypeMatch) {

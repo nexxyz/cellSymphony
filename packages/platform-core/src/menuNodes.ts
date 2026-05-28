@@ -1,6 +1,6 @@
-import { GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contracts";
 import { readValue } from "./coreUtils";
 import type { MenuNode, PlatformState } from "./index";
+import { PLATFORM_CAPS } from "./platformCaps";
 
 export function presetListNodes<TState>(state: PlatformState<TState>, mode: "load" | "delete"): MenuNode[] {
   const names = state.system.presetNames;
@@ -49,7 +49,7 @@ export function midiInputNodes<TState>(state: PlatformState<TState>): MenuNode[]
 }
 
 export function axisGroup(label: string, prefix: string, _defaultStep: number): MenuNode {
-  const offsetLimit = prefix.endsWith(".x") || prefix === "x" ? GRID_WIDTH - 1 : GRID_HEIGHT - 1;
+  const offsetLimit = prefix.endsWith(".x") || prefix === "x" ? PLATFORM_CAPS.gridWidth - 1 : PLATFORM_CAPS.gridHeight - 1;
   return {
     kind: "group",
     label,

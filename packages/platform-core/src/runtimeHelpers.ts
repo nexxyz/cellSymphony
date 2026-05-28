@@ -1,10 +1,9 @@
 import { getBehavior } from "@cellsymphony/behavior-api";
-import { GRID_HEIGHT, GRID_WIDTH, type LedCell } from "@cellsymphony/device-contracts";
+import { type LedCell } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import { clamp, mod } from "./coreUtils";
-import { GRID_DOMAIN } from "./gridDomain";
+import { GRID_DOMAIN, PLATFORM_CAPS, sectionCount } from "./platformCaps";
 import { momentaryFxColor } from "./momentaryFx";
-import { PLATFORM_CAPS } from "./platformCaps";
 import type { PlatformState, TouchMode } from "./platformTypes";
 
 export const TOUCH_PAN_COLORS: Record<string, LedCell> = {
@@ -43,11 +42,11 @@ export function resolveTouchPanTarget(state: PlatformState<unknown>, row: number
     const busIdx = Number(busMatch[1]) - 1;
     const buses: any[] = Array.isArray((state.runtimeConfig as any).mixer?.buses) ? (state.runtimeConfig as any).mixer.buses as any[] : [];
     const bus = buses[busIdx];
-    const panPos = clamp(Math.round(Number(bus?.panPos ?? Math.floor(GRID_WIDTH / 2))), 0, GRID_WIDTH - 1);
+    const panPos = clamp(Math.round(Number(bus?.panPos ?? Math.floor(PLATFORM_CAPS.gridWidth / 2))), 0, PLATFORM_CAPS.gridWidth - 1);
     const color = TOUCH_PAN_COLORS[`fx_bus_${busIdx + 1}`] ?? TOUCH_PAN_COLORS.direct;
     return { route: "bus", busIndex: busIdx, panPos, color };
   }
-  const panPos = clamp(Math.round(Number(mixer.panPos ?? Math.floor(GRID_WIDTH / 2))), 0, GRID_WIDTH - 1);
+  const panPos = clamp(Math.round(Number(mixer.panPos ?? Math.floor(PLATFORM_CAPS.gridWidth / 2))), 0, PLATFORM_CAPS.gridWidth - 1);
   return { route: "direct", busIndex: -1, panPos, color: TOUCH_PAN_COLORS.direct };
 }
 
@@ -75,7 +74,7 @@ export function dedupeSimultaneousNotes(events: MusicalEvent[]): MusicalEvent[] 
 }
 
 export function toGridSnapshot(model: { cells: boolean[] }): { width: number; height: number; cells: boolean[] } {
-  return { width: GRID_WIDTH, height: GRID_HEIGHT, cells: model.cells };
+  return { width: PLATFORM_CAPS.gridWidth, height: PLATFORM_CAPS.gridHeight, cells: model.cells };
 }
 
 export function ghostCellsForInactiveParts<TState>(state: PlatformState<TState>, activePart: number, cellCount: number): boolean[] {
@@ -106,9 +105,9 @@ export function cellsToLeds(
   const b = clamp(brightness, 0.1, 1);
   const OFF_BG: LedCell = { r: 15, g: 15, b: 22 };
   const OFF_CURSOR: LedCell = { r: 70, g: 70, b: 76 };
-  const out = Array.from({ length: GRID_WIDTH * GRID_HEIGHT }, () => scaleLed(OFF_BG, b));
-  for (let yWorld = 0; yWorld < GRID_HEIGHT; yWorld += 1) {
-    for (let x = 0; x < GRID_WIDTH; x += 1) {
+  const out = Array.from({ length: PLATFORM_CAPS.gridWidth * PLATFORM_CAPS.gridHeight }, () => scaleLed(OFF_BG, b));
+  for (let yWorld = 0; yWorld < PLATFORM_CAPS.gridHeight; yWorld += 1) {
+    for (let x = 0; x < PLATFORM_CAPS.gridWidth; x += 1) {
       const worldIndex = GRID_DOMAIN.indexOf({ x, y: yWorld });
       const screenIndex = GRID_DOMAIN.toDisplayIndex({ x, y: yWorld });
       const alive = !!cells[worldIndex];
@@ -144,13 +143,13 @@ export function cellsToLeds(
 function overlayFnNavigation(out: LedCell[], brightness: number, fnHeld: boolean, activePartIndex: number, touchMode: TouchMode, parts: unknown[] = []): void {
   if (!fnHeld) return;
   // dim non-navigation cells (neither left column nor right column)
-  for (let y = 0; y < GRID_HEIGHT; y += 1) {
-    for (let x = 1; x < GRID_WIDTH - 1; x += 1) {
+  for (let y = 0; y < PLATFORM_CAPS.gridHeight; y += 1) {
+    for (let x = 1; x < PLATFORM_CAPS.gridWidth - 1; x += 1) {
       const idx = GRID_DOMAIN.toDisplayIndex({ x, y });
       out[idx] = { r: Math.round(out[idx].r * 0.25), g: Math.round(out[idx].g * 0.25), b: Math.round(out[idx].b * 0.25) };
     }
   }
-  const layerCount = Math.min(PLATFORM_CAPS.partCount, GRID_HEIGHT);
+  const layerCount = Math.min(PLATFORM_CAPS.partCount, PLATFORM_CAPS.gridHeight);
   const inTouch = touchMode !== "none";
   for (let layer = 0; layer < layerCount; layer += 1) {
     const screenIndex = GRID_DOMAIN.toDisplayIndex({ x: 0, y: layer });
@@ -160,31 +159,31 @@ function overlayFnNavigation(out: LedCell[], brightness: number, fnHeld: boolean
     out[screenIndex] = scaleLed(color, brightness);
   }
   const pages: TouchMode[] = ["mix", "pan", "fx"];
-  for (let row = 0; row < GRID_HEIGHT; row += 1) {
+  for (let row = 0; row < PLATFORM_CAPS.gridHeight; row += 1) {
     const page = pages[row];
     const color = page === undefined
       ? { r: 0, g: 0, b: 0 }
       : page === touchMode
         ? { r: 0, g: 210, b: 210 }
         : { r: 180, g: 180, b: 180 };
-    out[GRID_DOMAIN.toDisplayIndex({ x: GRID_WIDTH - 1, y: row })] = scaleLed(color, brightness);
+    out[GRID_DOMAIN.toDisplayIndex({ x: PLATFORM_CAPS.gridWidth - 1, y: row })] = scaleLed(color, brightness);
   }
 }
 
 function isInScanCursor(x: number, y: number, cursor: { axis: "rows" | "columns"; index: number; sections?: unknown }): boolean {
-  const sections = cursor.sections === "2" ? 2 : cursor.sections === "4" ? 4 : cursor.sections === "8" ? 8 : 1;
+  const sections = sectionCount(cursor.sections);
   if (sections <= 1) return (cursor.axis === "columns" && x === cursor.index) || (cursor.axis === "rows" && y === cursor.index);
   if (cursor.axis === "rows") {
-    const sectionHeight = Math.max(1, Math.floor(GRID_HEIGHT / sections));
-    const step = mod(cursor.index, GRID_WIDTH * sections);
-    const section = Math.floor(step / GRID_WIDTH);
-    const firstY = GRID_HEIGHT - (section + 1) * sectionHeight;
-    return x === step % GRID_WIDTH && y >= firstY && y < firstY + sectionHeight;
+    const sectionHeight = Math.max(1, Math.floor(PLATFORM_CAPS.gridHeight / sections));
+    const step = mod(cursor.index, PLATFORM_CAPS.gridWidth * sections);
+    const section = Math.floor(step / PLATFORM_CAPS.gridWidth);
+    const firstY = PLATFORM_CAPS.gridHeight - (section + 1) * sectionHeight;
+    return x === step % PLATFORM_CAPS.gridWidth && y >= firstY && y < firstY + sectionHeight;
   }
-  const sectionWidth = Math.max(1, Math.floor(GRID_WIDTH / sections));
-  const step = mod(cursor.index, GRID_HEIGHT * sections);
-  const section = Math.floor(step / GRID_HEIGHT);
-  return y === step % GRID_HEIGHT && x >= section * sectionWidth && x < (section + 1) * sectionWidth;
+  const sectionWidth = Math.max(1, Math.floor(PLATFORM_CAPS.gridWidth / sections));
+  const step = mod(cursor.index, PLATFORM_CAPS.gridHeight * sections);
+  const section = Math.floor(step / PLATFORM_CAPS.gridHeight);
+  return y === step % PLATFORM_CAPS.gridHeight && x >= section * sectionWidth && x < (section + 1) * sectionWidth;
 }
 
 export function sampleAssignmentToLeds(
@@ -194,9 +193,9 @@ export function sampleAssignmentToLeds(
   brightness: number
 ): LedCell[] {
   const b = Math.max(0, Math.min(1, brightness));
-  const out: LedCell[] = Array.from({ length: GRID_WIDTH * GRID_HEIGHT }, () => ({ r: 0, g: 0, b: 0 }));
+  const out: LedCell[] = Array.from({ length: PLATFORM_CAPS.gridWidth * PLATFORM_CAPS.gridHeight }, () => ({ r: 0, g: 0, b: 0 }));
   for (const a of assignments) {
-    if (a.x < 0 || a.x >= GRID_WIDTH || a.y < 0 || a.y >= GRID_HEIGHT) continue;
+    if (a.x < 0 || a.x >= PLATFORM_CAPS.gridWidth || a.y < 0 || a.y >= PLATFORM_CAPS.gridHeight) continue;
     const screenIndex = GRID_DOMAIN.toDisplayIndex({ x: a.x, y: a.y });
     if (a.sampleSlot !== selectedSampleSlot) {
       out[screenIndex] = scaleLed({ r: 70, g: 70, b: 70 }, b);
@@ -217,28 +216,34 @@ export function touchModeToLeds<TState>(state: PlatformState<TState>, brightness
   const mode = state.system.touchMode;
   if (mode === "none") return null;
   const b = clamp(brightness, 0.1, 1);
-  const out: LedCell[] = Array.from({ length: GRID_WIDTH * GRID_HEIGHT }, () => scaleLed({ r: 8, g: 8, b: 14 }, b));
+  const out: LedCell[] = Array.from({ length: PLATFORM_CAPS.gridWidth * PLATFORM_CAPS.gridHeight }, () => scaleLed({ r: 8, g: 8, b: 14 }, b));
   const instruments = Array.isArray((state.runtimeConfig as any).instruments) ? ((state.runtimeConfig as any).instruments as any[]) : [];
 
   if (mode === "mix") {
-    const count = Math.min(instruments.length, GRID_WIDTH);
+    const count = Math.min(instruments.length, PLATFORM_CAPS.gridWidth);
     for (let x = 0; x < count; x += 1) {
       const inst = instruments[x] ?? {};
+      const isNone = (inst as any)?.type === "none";
       const mixer = inst.mixer ?? {};
-      const y = clamp(Math.round(clamp(Number(mixer.volume ?? 100), 0, 100) / 100 * (GRID_HEIGHT - 1)), 0, GRID_HEIGHT - 1);
-      out[GRID_DOMAIN.toDisplayIndex({ x, y })] = scaleLed({ r: 0, g: 220, b: 90 }, b);
+      const y = clamp(Math.round(clamp(Number(mixer.volume ?? 100), 0, 100) / 100 * (PLATFORM_CAPS.gridHeight - 1)), 0, PLATFORM_CAPS.gridHeight - 1);
+      const cell = scaleLed({ r: 0, g: 220, b: 90 }, b);
+      out[GRID_DOMAIN.toDisplayIndex({ x, y })] = isNone ? scaleLed(cell, 0.25) : cell;
     }
     overlayFnNavigation(out, b, state.system.fnHeld, (state.runtimeConfig as any).activePartIndex ?? 0, mode, (state.runtimeConfig as any).parts);
     return out;
   }
 
   if (mode === "pan") {
-    const count = Math.min(instruments.length, GRID_HEIGHT);
+    const count = Math.min(instruments.length, PLATFORM_CAPS.gridHeight);
     for (let y = 0; y < count; y += 1) {
+      const inst = instruments[y] ?? {};
+      const isNone = (inst as any)?.type === "none";
       const { panPos, color } = resolveTouchPanTarget(state as PlatformState<unknown>, y);
       const left = touchPanMarkerLeftCell(panPos);
-      out[GRID_DOMAIN.toDisplayIndex({ x: left, y })] = scaleLed(color, b);
-      out[GRID_DOMAIN.toDisplayIndex({ x: left + 1, y })] = scaleLed(color, b);
+      const cell = scaleLed(color, b);
+      const dimmed = isNone ? scaleLed(cell, 0.25) : cell;
+      out[GRID_DOMAIN.toDisplayIndex({ x: left, y })] = dimmed;
+      out[GRID_DOMAIN.toDisplayIndex({ x: left + 1, y })] = dimmed;
     }
     overlayFnNavigation(out, b, state.system.fnHeld, (state.runtimeConfig as any).activePartIndex ?? 0, mode, (state.runtimeConfig as any).parts);
     return out;
@@ -248,8 +253,8 @@ export function touchModeToLeds<TState>(state: PlatformState<TState>, brightness
   const activeFx = Array.isArray(state.system.activeFx) ? state.system.activeFx : [];
   const activeKeys = new Set(activeFx.map((fx) => `${fx.cellX}:${fx.cellY}`));
   const full = activeFx.length >= PLATFORM_CAPS.touchFxMaxConcurrent;
-  for (let y = 0; y < GRID_HEIGHT; y += 1) {
-    for (let x = 0; x < GRID_WIDTH; x += 1) {
+  for (let y = 0; y < PLATFORM_CAPS.gridHeight; y += 1) {
+    for (let x = 0; x < PLATFORM_CAPS.gridWidth; x += 1) {
       const screenIndex = GRID_DOMAIN.toDisplayIndex({ x, y });
       const assignment = assignments.find((a) => a?.x === x && a?.y === y);
       if (!assignment || assignment.config?.fxType === "none") {

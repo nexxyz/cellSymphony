@@ -66,9 +66,10 @@ test("onInput grid_press toggles cell", () => {
 test("configMenu returns expected items", () => {
   const state = brainBehavior.init({});
   const menu = brainBehavior.configMenu!(state);
-  assert.equal(menu.length, 3);
+  assert.equal(menu.length, 4);
   assert.equal(menu[0].key, "fireThreshold");
-  assert.equal(menu[1].key, "randomSeedCells");
-  assert.equal(menu[2].key, "seedRandom");
-  assert.equal(menu[2].type, "action");
+  assert.equal(menu[1].key, "seedInterval");
+  assert.equal(menu[2].key, "randomSeedCells");
+  assert.equal(menu[3].key, "seedRandom");
+  assert.equal(menu[3].type, "action");
 });

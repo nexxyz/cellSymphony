@@ -54,9 +54,34 @@ enum AudioCommandPayload {
         fx_type: String,
         #[serde(default)]
         params: BTreeMap<String, Value>,
+        #[serde(default)]
+        target: MomentaryFxTargetPayload,
+    },
+    #[serde(rename = "momentary_fx_update")]
+    MomentaryFxUpdate {
+        id: String,
+        #[serde(default)]
+        params: BTreeMap<String, Value>,
     },
     #[serde(rename = "momentary_fx_stop")]
     MomentaryFxStop { id: String },
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(tag = "type")]
+enum MomentaryFxTargetPayload {
+    #[serde(rename = "global")]
+    Global,
+    #[serde(rename = "fx_bus")]
+    FxBus { index: usize },
+    #[serde(rename = "instrument")]
+    Instrument { index: usize },
+}
+
+impl Default for MomentaryFxTargetPayload {
+    fn default() -> Self {
+        Self::Global
+    }
 }
 
 struct AudioRuntime {
@@ -102,6 +127,11 @@ pub(crate) enum QueuedAudioEvent {
     MomentaryFxStart {
         id: String,
         fx_type: String,
+        params: BTreeMap<String, Value>,
+        target: MomentaryFxTargetPayload,
+    },
+    MomentaryFxUpdate {
+        id: String,
         params: BTreeMap<String, Value>,
     },
     MomentaryFxStop {
@@ -297,11 +327,16 @@ fn audio_command(
             id,
             fx_type,
             params,
+            target,
         } => QueuedAudioEvent::MomentaryFxStart {
             id,
             fx_type,
             params,
+            target,
         },
+        AudioCommandPayload::MomentaryFxUpdate { id, params } => {
+            QueuedAudioEvent::MomentaryFxUpdate { id, params }
+        }
         AudioCommandPayload::MomentaryFxStop { id } => QueuedAudioEvent::MomentaryFxStop { id },
     };
     state
@@ -385,12 +420,21 @@ pub fn run() {
                     id,
                     fx_type,
                     params,
+                    target,
                 } => {
                     let _ = engine_tx.send(EngineEvent::MomentaryFxStart {
                         id,
                         fx_type,
                         params,
+                        target: match target {
+                            MomentaryFxTargetPayload::Global => realtime_engine::synth::MomentaryFxTarget::Global,
+                            MomentaryFxTargetPayload::FxBus { index } => realtime_engine::synth::MomentaryFxTarget::FxBus { index },
+                            MomentaryFxTargetPayload::Instrument { index } => realtime_engine::synth::MomentaryFxTarget::Instrument { index },
+                        },
                     });
+                }
+                QueuedAudioEvent::MomentaryFxUpdate { id, params } => {
+                    let _ = engine_tx.send(EngineEvent::MomentaryFxUpdate { id, params });
                 }
                 QueuedAudioEvent::MomentaryFxStop { id } => {
                     let _ = engine_tx.send(EngineEvent::MomentaryFxStop { id });

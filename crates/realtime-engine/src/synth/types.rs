@@ -28,6 +28,14 @@ pub const DEFAULT_PAN_POSITIONS: usize = 8;
 pub const SAMPLE_SLOTS_PER_INSTRUMENT: usize = 8;
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum MomentaryFxTarget {
+    Global,
+    FxBus { index: usize },
+    Instrument { index: usize },
+}
+
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum VoiceStealingMode {
     Off,

@@ -1,1 +1,2 @@
-export { GRID_DOMAIN, createGridDomain, type GridCell, type GridDomain } from "@cellsymphony/device-contracts";
+export { GRID_DOMAIN, gridDomain } from "./platformCaps";
+export { createGridDomain, type GridCell, type GridDomain } from "@cellsymphony/device-contracts";

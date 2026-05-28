@@ -1,10 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { BehaviorEngine, CellTriggerType } from "@cellsymphony/behavior-api";
-import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
+import { type DeviceInput } from "@cellsymphony/device-contracts";
 import { lifeBehavior } from "@cellsymphony/behaviors-life";
 import { sequencerBehavior } from "@cellsymphony/behaviors-sequencer";
 import {
+  PLATFORM_CAPS,
   createInitialState,
   routeInput,
   tick,
@@ -16,14 +17,14 @@ import {
   type PlatformEffect
 } from "../src/index";
 
-const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
+const CELL_COUNT = PLATFORM_CAPS.gridWidth * PLATFORM_CAPS.gridHeight;
 
 type MockState = { cells: boolean[]; tickCount: number };
 
 const mockBehavior: BehaviorEngine<MockState, unknown> = {
   id: "mock",
   init: () => ({
-    cells: Array.from({ length: CELL_COUNT }, (_, i) => i === 0 || i === GRID_WIDTH),
+    cells: Array.from({ length: CELL_COUNT }, (_, i) => i === 0 || i === PLATFORM_CAPS.gridWidth),
     tickCount: 0
   }),
   onInput: (state) => state,

@@ -2,7 +2,7 @@ import { listBehaviorIds, type BehaviorEngine } from "@cellsymphony/behavior-api
 import type { MenuNode, PlatformState } from "./index";
 import { instrumentLabel, partLabel } from "./coreUtils";
 import { SYNTH_PRESETS } from "./synthPresets";
-import { clampSampleSlotIndex, instrumentIndexOptions, PLATFORM_CAPS, sampleSlotOptions } from "./platformCaps";
+import { clampSampleSlotIndex, instrumentIndexOptions, PLATFORM_CAPS, sampleSlotOptions, scanSectionOptions } from "./platformCaps";
 import { fxBusesMenuNode } from "./fxBusMenu";
 import { defaultMomentaryFxParams, MOMENTARY_FX_TYPES } from "./momentaryFx";
 
@@ -67,7 +67,7 @@ function l2PartGroup<TState>(state: PlatformState<TState>, deps: MenuTreeDeps<TS
       { kind: "enum", label: "Scan Axis", key: `${prefix}.l2.scanAxis`, options: ["rows", "columns"], visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
       { kind: "enum", label: "Scan Unit", key: `${prefix}.l2.scanUnit`, options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
       { kind: "enum", label: "Scan Direction", key: `${prefix}.l2.scanDirection`, options: ["forward", "reverse"], visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
-      { kind: "enum", label: "Sections", key: `${prefix}.l2.scanSections`, options: ["1", "2", "4", "8"], visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
+      { kind: "enum", label: "Sections", key: `${prefix}.l2.scanSections`, options: scanSectionOptions(), visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
       { kind: "bool", label: "Event Triggers", key: `${prefix}.l2.eventEnabled` },
       { kind: "bool", label: "State Notes", key: `${prefix}.l2.stateEnabled` },
       {
@@ -112,7 +112,13 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
   const instLabel = (idx: number): string => instrumentLabel(state, idx);
   const selectedFxType = ((state.runtimeConfig as any).touchFx?.selected?.fxType ?? "stutter") as any;
   const selectedFxParams = (state.runtimeConfig as any).touchFx?.selected?.params ?? defaultMomentaryFxParams(selectedFxType);
-  const selectedFxConfig = { fxType: selectedFxType, params: structuredClone(selectedFxParams) };
+  const selectedFxTargetKey = String((state.runtimeConfig as any).touchFx?.selected?.targetKey ?? "master");
+  const selectedFxConfig = { fxType: selectedFxType, params: structuredClone(selectedFxParams), targetKey: selectedFxTargetKey };
+  const momentaryTargetOptions = [
+    "master",
+    ...Array.from({ length: PLATFORM_CAPS.busCount }, (_, i) => `fx_bus_${i + 1}`),
+    ...Array.from({ length: PLATFORM_CAPS.instrumentCount }, (_, i) => `instrument_${i + 1}`)
+  ];
 
   return {
     kind: "group",
@@ -355,6 +361,7 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
             label: "FX Page",
             children: [
               { kind: "enum", label: "FX Type", key: "touchFx.selected.fxType", options: MOMENTARY_FX_TYPES },
+              { kind: "enum", label: "Target", key: "touchFx.selected.targetKey", options: momentaryTargetOptions },
               { kind: "number", label: "Rate Hz", key: "touchFx.selected.params.rateHz", min: 1, max: 32, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "stutter" },
               { kind: "number", label: "Depth", key: "touchFx.selected.params.depthPct", min: 0, max: 100, step: 1, visible: (c: any) => c.touchFx?.selected?.fxType === "stutter" },
               { kind: "number", label: "Release Ms", key: "touchFx.selected.params.releaseMs", min: 10, max: 5000, step: 10, visible: (c: any) => c.touchFx?.selected?.fxType === "freeze" },
@@ -371,7 +378,6 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
         ]
       },
       { kind: "spacer" },
-      { kind: "group", label: "Playback", children: [{ kind: "number", label: "BPM", key: "transport.bpm", min: 40, max: 240, step: 1 }] },
       {
         kind: "group",
         label: "System",

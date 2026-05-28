@@ -21,8 +21,10 @@ import {
   DEFAULT_VOLUME
 } from "./runtimeDefaults";
 import { defaultMomentaryFxParams } from "./momentaryFx";
+import { deadlineMs, nowMs, STARTUP_SPLASH_MS } from "./timing";
 
 export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TState, unknown>): PlatformState<TState> {
+  const now = nowMs();
   const defaultMapping = loadDefaultMappingConfig();
   const instruments = Array.from({ length: PLATFORM_CAPS.instrumentCount }, (_, idx) => ({
     type: "synth" as const,
@@ -103,7 +105,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       }))
     },
     touchFx: {
-      selected: { fxType: "stutter", params: defaultMomentaryFxParams("stutter") },
+      selected: { fxType: "stutter", params: defaultMomentaryFxParams("stutter"), targetKey: "master" },
       assignments: []
     }
   };
@@ -180,9 +182,11 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       pausedByUser: false,
       oledMode: "splash",
       oledSplashText: "Starting up",
-      oledSplashUntilMs: Date.now() + 1000,
-      lastInteractionMs: Date.now(),
+      oledSplashUntilMs: deadlineMs(now, STARTUP_SPLASH_MS),
+      lastInteractionMs: now,
       auxBindings: {},
+      shiftHeldSinceMs: null,
+      auxAutoMapEnabled: true,
       heldNotes: [],
       sampleAssign: null,
       fxAssignMode: null,

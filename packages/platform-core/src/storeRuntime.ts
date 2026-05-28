@@ -3,7 +3,7 @@ import { getBehavior } from "@cellsymphony/behavior-api";
 import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { ConfigPayload, PlatformEffect, PlatformState, RuntimeConfig, StoreResult } from "./index";
 import { isBusEffectType, sanitizeFxParams } from "./fxDefaults";
-import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
+import { clampPartIndex, isValidSectionValue, PLATFORM_CAPS } from "./platformCaps";
 import { cutoffHzToDisplay, overrideFromPart, preferMapping } from "./coreUtils";
 import { makeToast } from "./toast";
 import { DEFAULT_VELOCITY_LEVELS, DEFAULT_MIDI_ENGINE, DEFAULT_VELOCITY, DEFAULT_VOLUME } from "./runtimeDefaults";
@@ -372,7 +372,7 @@ function sanitizePartL2(partL2: any, baseL2: any): any {
   return {
     ...base,
     ...l2,
-    scanSections: l2.scanSections === "2" || l2.scanSections === "4" || l2.scanSections === "8" ? l2.scanSections : base.scanSections ?? "1",
+    scanSections: isValidSectionValue(l2.scanSections) ? String(Number(l2.scanSections)) : base.scanSections ?? "1",
     pitch: { ...(base.pitch ?? {}), ...(l2.pitch ?? {}) },
     x: sanitizeAxis(l2.x, base.x),
     y: sanitizeAxis(l2.y, base.y)

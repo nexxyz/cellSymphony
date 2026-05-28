@@ -1,11 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
-import { GRID_DOMAIN, GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
+import { type DeviceInput } from "@cellsymphony/device-contracts";
 import { lifeBehavior } from "@cellsymphony/behaviors-life";
 import {
   applyConfigPayload,
   createInitialState,
+  GRID_DOMAIN,
+  PLATFORM_CAPS,
   emergencyBrake,
   extractConfigPayload,
   routeInput,
@@ -17,14 +19,14 @@ import {
 import { validatePlatformCapabilities } from "../src/platformCaps";
 import { writeAnyValue } from "../src/stateHelpers";
 
-const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
+const CELL_COUNT = PLATFORM_CAPS.gridWidth * PLATFORM_CAPS.gridHeight;
 
 type MockState = { cells: boolean[]; tickCount: number };
 
 const mockBehavior: BehaviorEngine<MockState, unknown> = {
   id: "mock",
   init: () => ({
-    cells: Array.from({ length: CELL_COUNT }, (_, i) => i === 0 || i === GRID_WIDTH),
+    cells: Array.from({ length: CELL_COUNT }, (_, i) => i === 0 || i === PLATFORM_CAPS.gridWidth),
     tickCount: 0
   }),
   onInput: (state) => state,

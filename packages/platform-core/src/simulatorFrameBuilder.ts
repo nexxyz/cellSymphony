@@ -1,11 +1,13 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
-import { GRID_HEIGHT, GRID_WIDTH, type DisplayFrame, type SimulatorFrame } from "@cellsymphony/device-contracts";
+import { type DisplayFrame, type SimulatorFrame } from "@cellsymphony/device-contracts";
 import type { BarValue, PlatformState } from "./platformTypes";
 import { OLED_TEXT_LINES } from "./platformTypes";
+import { nowMs } from "./timing";
 import { cellsToLeds, sampleAssignmentToLeds, touchModeToLeds } from "./runtimeHelpers";
 import { renderOledFrame } from "./oledRender";
 import { logoSepia128Rgb565be } from "./oledAssets/logoSepia128_rgb565be";
 import { logo128Rgb565be } from "./oledAssets/logo128_rgb565be";
+import { PLATFORM_CAPS } from "./platformCaps";
 
 type OledLines = { lines: string[]; colors: number[] };
 
@@ -43,7 +45,7 @@ export function buildSimulatorFrame<TState>(args: Args<TState>): SimulatorFrame 
     null,
     ...menuView.barValues.slice(0, maxBodyLines)
   ].slice(0, OLED_TEXT_LINES);
-  const now = Date.now();
+  const now = nowMs();
   const toast = state.system.toast && state.system.toast.untilMs > now ? state.system.toast.message : null;
   const toastStartedAtMs = state.system.toast && state.system.toast.untilMs > now ? state.system.toast.startedAtMs : undefined;
   const transportIcon: "play" | "pause" | "stop" = state.transport.playing ? "play" : state.system.stopLatched ? "stop" : "pause";
@@ -80,8 +82,8 @@ export function buildSimulatorFrame<TState>(args: Args<TState>): SimulatorFrame 
     display: baseDisplay,
     oled,
     leds: {
-      width: GRID_WIDTH,
-      height: GRID_HEIGHT,
+      width: PLATFORM_CAPS.gridWidth,
+      height: PLATFORM_CAPS.gridHeight,
       cells: assignLeds ?? touchLeds ?? cellsToLeds(model.cells, model.triggerTypes, scanCursor, state.runtimeConfig.gridBrightness / 100, state.system.fnHeld, activePart, args.ghostCells, state.system.touchMode, (state.runtimeConfig as any).parts)
     },
     transport: state.transport,

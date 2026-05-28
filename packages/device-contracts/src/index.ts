@@ -39,8 +39,8 @@ export const GRID_HEIGHT = 8 as const;
 export const GRID_DOMAIN = createGridDomain(GRID_WIDTH, GRID_HEIGHT);
 export type { GridCell, GridDomain };
 export type LedMatrixFrame = {
-  width: typeof GRID_WIDTH;
-  height: typeof GRID_HEIGHT;
+  width: number;
+  height: number;
   cells: LedCell[];
 };
 

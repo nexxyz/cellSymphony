@@ -1,6 +1,9 @@
 import { abbreviatePath, formatMenuItemLines, getSectionColor, getSectionColorFromPath } from "./menuPresentation";
 import { clamp } from "./coreUtils";
 import type { BarValue, ConfirmState, MenuNode, MenuState, NumericDisplayMode, PlatformState } from "./platformTypes";
+import { resolveAuxAutoMap, resolveEffectiveAuxMap } from "./auxAutoMap";
+import type { BehaviorEngine } from "@cellsymphony/behavior-api";
+import { heldForMs, nowMs } from "./timing";
 
 export function visibleChildren<TState>(node: MenuNode, state: PlatformState<TState>): MenuNode[] {
   if (node.kind !== "group") return [];
@@ -24,6 +27,7 @@ export function locate<TState>(root: MenuNode, state: PlatformState<TState>, men
 type CurrentMenuViewDeps<TState> = {
   state: PlatformState<TState>;
   menuTree: (state: PlatformState<TState>) => MenuNode;
+  resolveBehavior: (id: string) => BehaviorEngine<any, any>;
   fitOledText: (text: string) => string;
   readAnyValue: (state: PlatformState<TState>, key: string) => unknown;
   formatDisplayValue: (key: string, value: unknown, runtimeConfig?: any) => string;
@@ -43,7 +47,7 @@ function barNumChars(min: number, max: number): number {
 }
 
 export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { path: string; lines: string[]; colors: number[]; barValues: (BarValue | null)[] } {
-  const { state, menuTree, fitOledText, readAnyValue, formatDisplayValue, oledTextLines } = deps;
+  const { state, menuTree, resolveBehavior, fitOledText, readAnyValue, formatDisplayValue, oledTextLines } = deps;
   if (state.system.confirm) {
     const view = confirmView(state.system.confirm, fitOledText, oledTextLines);
     return { ...view, colors: Array(view.lines.length).fill(0xffff), barValues: Array(view.lines.length).fill(null) };
@@ -53,7 +57,33 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
   const shortPath = abbreviatePath(path);
   if (!siblings.length) return { path: shortPath, lines: [], colors: [], barValues: [] };
 
+  // Shift-hold overlay: show current effective aux mappings after a delay.
+  const now = nowMs();
+  if (state.system.shiftHeld && heldForMs(now, state.system.shiftHeldSinceMs, 2000)) {
+    const cursor = clamp(menu.cursor, 0, siblings.length - 1);
+    const focused = siblings[cursor] as any;
+    const selectedKey = focused && (focused.kind === "number" || focused.kind === "enum" || focused.kind === "bool") ? String(focused.key ?? "") : undefined;
+    const eff = resolveEffectiveAuxMap(state, { path, selectedKey }, resolveBehavior);
+    const slots: Array<[string, typeof eff.aux1]> = [["A1", eff.aux1], ["A2", eff.aux2], ["A3", eff.aux3], ["A4", eff.aux4]];
+    const anyAuto = slots.some(([, s]) => s.sourceTurn === "auto" || s.sourcePress === "auto");
+    const anyCustom = slots.some(([, s]) => s.sourceTurn === "custom" || s.sourcePress === "custom");
+    const title = anyAuto ? "AUTO MAPPING" : anyCustom ? "CUSTOM MAPPING" : "AUX MAPPING";
+    const fmt = (name: string, s: any): string => {
+      const t = s.turn?.label ?? (s.turn?.key ? String(s.turn.key).split(".").slice(-1)[0] : "");
+      const p = s.press?.label ?? "";
+      if (t && p) return `${name}: ${t} / !${p}`;
+      if (t) return `${name}: ${t}`;
+      if (p) return `${name}: !${p}`;
+      return `${name}: -`;
+    };
+    const lines = slots.map(([n, s]) => fitOledText(fmt(n, s))).slice(0, oledTextLines - 1);
+    return { path: title, lines, colors: Array(lines.length).fill(0xffff), barValues: Array(lines.length).fill(null) };
+  }
+
   const cursor = clamp(menu.cursor, 0, siblings.length - 1);
+  const focused = siblings[cursor] as any;
+  const selectedKey = focused && (focused.kind === "number" || focused.kind === "enum" || focused.kind === "bool") ? String(focused.key ?? "") : undefined;
+  const auto = resolveAuxAutoMap(state, { path, selectedKey }, resolveBehavior);
   const bodyBudget = Math.max(1, oledTextLines - 1);
   let start = cursor;
   let end = cursor + 1;
@@ -86,8 +116,36 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
   const barValues: (BarValue | null)[] = [];
   const sectionColor = getSectionColorFromPath(path);
 
+  const autoTurnPrefixForKey = (key: string): string | null => {
+    const slots: Array<[string, any]> = [["1", auto.aux1], ["2", auto.aux2], ["3", auto.aux3], ["4", auto.aux4]];
+    for (const [n, s] of slots) {
+      if (s?.turn?.key === key) return `${n}-`;
+    }
+    return null;
+  };
+
+  const autoPressPrefixForActionType = (actionType: string): string | null => {
+    const slots: Array<[string, any]> = [["1", auto.aux1], ["2", auto.aux2], ["3", auto.aux3], ["4", auto.aux4]];
+    for (const [n, s] of slots) {
+      if (s?.press?.actionType === actionType) return `${n}!`;
+    }
+    return null;
+  };
+
   for (let i = start; i < end; i += 1) {
-    const item = siblings[i];
+    let item: any = siblings[i];
+    if (item && typeof item === "object" && typeof item.label === "string") {
+      if ((item.kind === "number" || item.kind === "enum" || item.kind === "bool") && typeof item.key === "string") {
+        const p = autoTurnPrefixForKey(item.key);
+        if (p) item = { ...item, label: `${p}${item.label}` };
+      } else if (item.kind === "action") {
+        const a = item.action as any;
+        if (a?.type === "behavior_action" && typeof a.actionType === "string") {
+          const p = autoPressPrefixForActionType(a.actionType);
+          if (p) item = { ...item, label: `${p}${item.label}` };
+        }
+      }
+    }
     const isSelected = i === cursor && menu.editing;
     const itemLines = formatMenuItemLines(item, state, i === cursor, isSelected, fitOledText, readAnyValue, formatDisplayValue);
     if (item.kind === "spacer") {

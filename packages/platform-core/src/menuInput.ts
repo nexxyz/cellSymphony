@@ -1,8 +1,9 @@
 import { clamp } from "./coreUtils";
 import { locate } from "./menuView";
 import type { MenuNode, PlatformEffect, PlatformState } from "./index";
-import { clampInstrumentIndex } from "./platformCaps";
+import { clampInstrumentIndex, clampSampleSlotIndex } from "./platformCaps";
 import { makeToast } from "./toast";
+import { nowMs } from "./timing";
 
 type PressDeps<TState> = {
   menuTree: (state: PlatformState<TState>) => MenuNode;
@@ -36,7 +37,7 @@ export function pressMenuInput<TState>(state: PlatformState<TState>, effects: Pl
     if (label === "MIDI Out") effects.push({ type: "midi_list_outputs_request" });
     if (label === "MIDI In") effects.push({ type: "midi_list_inputs_request" });
     if (label === "Save As") {
-      const suggested = deps.formatTimestamp(Date.now());
+      const suggested = deps.formatTimestamp(nowMs());
       nextState = { ...nextState, system: { ...nextState.system, draftName: suggested, nameCursor: suggested.length } };
     }
     if (label === "Choose Sample") {
@@ -46,7 +47,7 @@ export function pressMenuInput<TState>(state: PlatformState<TState>, effects: Pl
       if (match) {
         const instrumentSlot = clampInstrumentIndex(Number(match[1]) - 1);
         const selectedSlot = Number((nextState.runtimeConfig as any).instruments?.[instrumentSlot]?.sample?.selectedSlot ?? 0);
-        const sampleSlot = clamp(Math.floor(selectedSlot), 0, 7);
+        const sampleSlot = clampSampleSlotIndex(selectedSlot);
         const browser = nextState.system.sampleBrowser;
         const dir = browser && browser.instrumentSlot === instrumentSlot && browser.sampleSlot === sampleSlot ? browser.dir : "";
         effects.push({ type: "sample_list_request", instrumentSlot, sampleSlot, dir } as any);

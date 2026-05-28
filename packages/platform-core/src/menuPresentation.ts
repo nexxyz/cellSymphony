@@ -11,7 +11,6 @@ export function abbreviatePath(path: string): string {
     L1: "L1",
     L2: "L2",
     L3: "L3",
-    Playback: "PLAY",
     System: "SYS"
   };
   if (!path || path === "Menu") return "MENU";
@@ -25,7 +24,6 @@ export function getSectionColorFromPath(path: string): number {
   if (path.startsWith("L1") || path.includes("L1:")) return COLOR_LIFE;
   if (path.startsWith("L2") || path.includes("L2:")) return COLOR_SENSE;
   if (path.startsWith("L3") || path.includes("L3:")) return COLOR_VOICE;
-  if (path.includes("Playback") || path.includes("PLAY")) return COLOR_SEPIA;
   if (path.includes("System") || path.includes("SYS")) return COLOR_SEPIA;
   if (path.includes("Menu") || path.includes("MENU")) return COLOR_SEPIA;
   return 0xffff;
@@ -35,7 +33,6 @@ export function getSectionColor(nodeLabel: string): number {
   if (nodeLabel.startsWith("L1:") || nodeLabel === "L1: Life") return COLOR_LIFE;
   if (nodeLabel.startsWith("L2:") || nodeLabel === "L2: Sense") return COLOR_SENSE;
   if (nodeLabel.startsWith("L3:") || nodeLabel === "L3: Voice") return COLOR_VOICE;
-  if (nodeLabel === "Playback") return COLOR_SEPIA;
   if (nodeLabel === "System") return COLOR_SEPIA;
   return 0xffff;
 }

@@ -4,11 +4,9 @@ use super::fx::{
 use super::fx_params::{compile_fx_bus_params, FxBusParams};
 use super::types::*;
 use serde_json::Value;
-use signalsmith_stretch::Stretch;
 use std::collections::BTreeMap;
 use std::f32::consts::PI;
 
-pub(super) const PITCH_BLOCK_FRAMES: usize = 64;
 pub(super) const FREEZE_INJECT_MS: u32 = 120;
 pub(super) const DRY_HISTORY_FRAMES: usize = 2048;
 
@@ -26,6 +24,7 @@ pub struct SynthEngine {
     slot_volume: [f32; INSTRUMENT_SLOT_COUNT],
     bus_pan_pos: Vec<usize>,
     bus_mono_scratch: Vec<f32>,
+    bus_mono_snapshot: Vec<f32>,
     bus_slot_params: Vec<[FxBusParams; BUS_SLOTS_PER_BUS]>,
     bus_slot_state: Vec<[FxBusState; BUS_SLOTS_PER_BUS]>,
     pan_positions: usize,
@@ -66,18 +65,14 @@ struct MomentaryFxState {
     id: String,
     kind: MomentaryFxKind,
     params: BTreeMap<String, Value>,
+    target: MomentaryFxTarget,
     releasing: bool,
     release_pos: u32,
     release_len: u32,
     sweep_pos: f32,
     filt_l: BiquadState,
     filt_r: BiquadState,
-    pitch_stretch: Stretch,
-    pitch_ibuf: Vec<f32>,
-    pitch_obuf: Vec<f32>,
-    pitch_iptr: usize,
-    pitch_optr: usize,
-    pitch_owritten: usize,
+    pitch_shifter: LivePitchShift,
     pitch_ramp_pos: u32,
     pitch_ramp_len: u32,
     stutter_l: Vec<f32>,
@@ -98,12 +93,11 @@ impl MomentaryFxState {
         id: String,
         kind: MomentaryFxKind,
         params: BTreeMap<String, Value>,
+        target: MomentaryFxTarget,
         sample_rate: u32,
     ) -> Self {
         let ramp_samples = ((sample_rate as f32 * 0.002) as usize).max(1);
-        let pitch_ramp_len = ((sample_rate as f32 * 0.015) as u32).max(1);
-        let block_samples = PITCH_BLOCK_FRAMES * 2;
-        let stretch = Stretch::preset_default(2, sample_rate);
+        let pitch_ramp_len = ((sample_rate as f32 * 0.002) as u32).max(1);
         const DELAY_LENS: [usize; 4] = [1557, 1617, 1491, 1422];
         let freeze_bufs: [Vec<f32>; 4] =
             DELAY_LENS.map(|n| vec![0.0; (n * sample_rate as usize / 44_100).max(1)]);
@@ -112,18 +106,14 @@ impl MomentaryFxState {
             id,
             kind,
             params,
+            target,
             releasing: false,
             release_pos: 0,
             release_len: 0,
             sweep_pos: 0.0,
             filt_l: BiquadState::new(),
             filt_r: BiquadState::new(),
-            pitch_stretch: stretch,
-            pitch_ibuf: vec![0.0; block_samples],
-            pitch_obuf: vec![0.0; block_samples],
-            pitch_iptr: 0,
-            pitch_optr: 0,
-            pitch_owritten: 0,
+            pitch_shifter: LivePitchShift::new(sample_rate),
             pitch_ramp_pos: 0,
             pitch_ramp_len,
             stutter_l: Vec::new(),
@@ -153,6 +143,88 @@ impl SampleVoice {
     }
 }
 
+pub(super) const PITCH_BUF_FRAMES: usize = 2048;
+const PITCH_MIN_DELAY: f32 = 64.0;
+const PITCH_RANGE: f32 = 1024.0;
+
+struct LivePitchShift {
+    buf: Vec<f32>,
+    buf_len: usize,
+    pub(super) write_pos: usize,
+    pos: f32,
+    min_delay: f32,
+    range: f32,
+}
+
+impl LivePitchShift {
+    fn new(sample_rate: u32) -> Self {
+        let _ = sample_rate;
+        Self {
+            buf: vec![0.0; PITCH_BUF_FRAMES * 2],
+            buf_len: PITCH_BUF_FRAMES,
+            write_pos: 0,
+            pos: PITCH_RANGE * 0.25,
+            min_delay: PITCH_MIN_DELAY,
+            range: PITCH_RANGE,
+        }
+    }
+
+    fn prefill(&mut self, data: &[f32]) {
+        let frames = data.len().min(self.buf.len()) / 2;
+        let offset = self.buf_len.saturating_sub(frames);
+        for i in 0..frames {
+            let src = i * 2;
+            let dst = (offset + i) * 2;
+            if src + 1 < data.len() && dst + 1 < self.buf.len() {
+                self.buf[dst] = data[src];
+                self.buf[dst + 1] = data[src + 1];
+            }
+        }
+        self.write_pos = self.buf_len - 1;
+        self.pos = PITCH_RANGE * 0.25;
+    }
+
+    fn process_frame(&mut self, l: f32, r: f32, ratio: f32) -> (f32, f32) {
+        let buf_len_f = self.buf_len as f32;
+        let min_delay = self.min_delay;
+        let range = self.range;
+
+        self.buf[self.write_pos * 2] = l;
+        self.buf[self.write_pos * 2 + 1] = r;
+        self.write_pos = (self.write_pos + 1) % self.buf_len;
+
+        self.pos += 1.0 - ratio;
+        let pos_norm = ((self.pos % range) + range) % range;
+
+        let delay_a = min_delay + pos_norm;
+        let delay_b = min_delay + ((pos_norm + range * 0.5) % range);
+
+        let read_a = (self.write_pos as f32 - delay_a + buf_len_f) % buf_len_f;
+        let read_b = (self.write_pos as f32 - delay_b + buf_len_f) % buf_len_f;
+
+        let phase = ((pos_norm / range) + 0.5) % 1.0;
+        let angle = phase * PI;
+        let gain_a = angle.cos().powi(2);
+        let gain_b = angle.sin().powi(2);
+
+        let out_l = gain_a * Self::interp(&self.buf, read_a, 0)
+            + gain_b * Self::interp(&self.buf, read_b, 0);
+        let out_r = gain_a * Self::interp(&self.buf, read_a, 1)
+            + gain_b * Self::interp(&self.buf, read_b, 1);
+
+        (out_l, out_r)
+    }
+
+    fn interp(buf: &[f32], pos: f32, ch: usize) -> f32 {
+        let i = pos as usize;
+        let frac = pos - i as f32;
+        let idx = i * 2 + ch;
+        let a = buf.get(idx).copied().unwrap_or(0.0);
+        let b = buf.get(idx + 2).copied().unwrap_or(0.0);
+        a + frac * (b - a)
+    }
+}
+
 impl SynthEngine {
     pub fn new(sample_rate: u32) -> Self {
         let default = default_synth_config();
@@ -170,6 +242,7 @@ impl SynthEngine {
             slot_volume: [1.0; INSTRUMENT_SLOT_COUNT],
             bus_pan_pos: Vec::new(),
             bus_mono_scratch: Vec::new(),
+            bus_mono_snapshot: Vec::new(),
             bus_slot_params: Vec::new(),
             bus_slot_state: Vec::new(),
             pan_positions: DEFAULT_PAN_POSITIONS,
@@ -187,25 +260,27 @@ impl SynthEngine {
         id: String,
         fx_type: String,
         params: BTreeMap<String, Value>,
+        target: MomentaryFxTarget,
     ) {
         let Some(kind) = parse_momentary_fx_kind(&fx_type) else {
             return;
         };
         self.momentary_fx.retain(|fx| fx.id != id);
         self.momentary_fx
-            .push(MomentaryFxState::new(id, kind, params, self.sample_rate));
+            .push(MomentaryFxState::new(id, kind, params, target, self.sample_rate));
 
         if kind == MomentaryFxKind::PitchShift {
             if let Some(fx) = self.momentary_fx.last_mut() {
-                let mut history = Vec::with_capacity(self.dry_history.len());
                 let pos = self.dry_history_pos;
-                if pos < self.dry_history.len() {
-                    history.extend_from_slice(&self.dry_history[pos..]);
+                let len = self.dry_history.len();
+                let mut contiguous = Vec::with_capacity(len);
+                if pos < len {
+                    contiguous.extend_from_slice(&self.dry_history[pos..]);
                 }
                 if pos > 0 {
-                    history.extend_from_slice(&self.dry_history[..pos]);
+                    contiguous.extend_from_slice(&self.dry_history[..pos]);
                 }
-                fx.pitch_stretch.seek(&history, 1.0);
+                fx.pitch_shifter.prefill(&contiguous);
             }
         }
     }
@@ -231,6 +306,12 @@ impl SynthEngine {
                 let ms = param_f32(&fx.params, "releaseMs", 500.0);
                 fx.release_len = ms_to_samples(ms, self.sample_rate).max(1);
             }
+        }
+    }
+
+    pub fn momentary_fx_update(&mut self, id: &str, params: BTreeMap<String, Value>) {
+        if let Some(fx) = self.momentary_fx.iter_mut().find(|fx| fx.id == id) {
+            fx.params = params;
         }
     }
 
@@ -499,10 +580,19 @@ impl SynthEngine {
         } else {
             self.bus_mono_scratch.fill(0.0);
         }
+        if self.bus_mono_snapshot.len() != self.bus_mono_scratch.len() {
+            self.bus_mono_snapshot.resize(self.bus_mono_scratch.len(), 0.0);
+        }
         let mut left = 0.0_f32;
         let mut right = 0.0_f32;
         for (slot, sample) in slot_out.iter().enumerate() {
-            let sample = *sample * self.slot_volume[slot];
+            let mut sample = *sample * self.slot_volume[slot];
+            let (fx_l, fx_r) = self.process_momentary_fx_target(
+                MomentaryFxTarget::Instrument { index: slot },
+                sample,
+                sample,
+            );
+            sample = (fx_l + fx_r) * 0.5;
             let route = self.slot_route[slot];
             if route == 0 {
                 let (gl, gr) = pan_gains(self.slot_pan_pos[slot], self.pan_positions);
@@ -519,9 +609,10 @@ impl SynthEngine {
                 }
             }
         }
-        let bus_mono = &self.bus_mono_scratch;
-        for (bus_idx, bus_sample) in bus_mono.iter().enumerate() {
-            let mut processed = *bus_sample;
+        // Snapshot is used for ducking sources without holding a borrow of `self`.
+        self.bus_mono_snapshot.copy_from_slice(&self.bus_mono_scratch);
+        for bus_idx in 0..self.bus_mono_scratch.len() {
+            let mut processed = self.bus_mono_scratch[bus_idx];
             let mut pan_override: Option<f32> = None;
             if let (Some(params), Some(states)) = (
                 self.bus_slot_params.get(bus_idx),
@@ -533,7 +624,7 @@ impl SynthEngine {
                         &mut states[j],
                         processed,
                         &slot_out,
-                        bus_mono,
+                        &self.bus_mono_snapshot,
                         self.sample_rate,
                     );
                     if let FxBusState::AutoPan { pos, .. } = states[j] {
@@ -541,6 +632,13 @@ impl SynthEngine {
                     }
                 }
             }
+
+            let (fx_l, fx_r) = self.process_momentary_fx_target(
+                MomentaryFxTarget::FxBus { index: bus_idx },
+                processed,
+                processed,
+            );
+            processed = (fx_l + fx_r) * 0.5;
             let (gl, gr) = if let Some(pos) = pan_override {
                 pan_gains_float(pos)
             } else {
@@ -558,16 +656,24 @@ impl SynthEngine {
             self.dry_history_pos = 0;
         }
 
-        let (left, right) = self.process_momentary_fx(left, right);
+        let (left, right) = self.process_momentary_fx_target(MomentaryFxTarget::Global, left, right);
         self.sample_clock = self.sample_clock.saturating_add(1);
         (left.clamp(-1.0, 1.0), right.clamp(-1.0, 1.0))
     }
 
-    fn process_momentary_fx(&mut self, left: f32, right: f32) -> (f32, f32) {
+    fn process_momentary_fx_target(
+        &mut self,
+        target: MomentaryFxTarget,
+        left: f32,
+        right: f32,
+    ) -> (f32, f32) {
         let sample_rate = self.sample_rate;
         let mut l = left;
         let mut r = right;
         for fx in self.momentary_fx.iter_mut() {
+            if fx.target != target {
+                continue;
+            }
             match fx.kind {
                 MomentaryFxKind::Stutter => {
                     let rate = param_f32(&fx.params, "rateHz", 8.0).clamp(1.0, 32.0);
@@ -716,38 +822,19 @@ impl SynthEngine {
                     let cents = param_f32(&fx.params, "cents", 0.0).clamp(-100.0, 100.0);
                     let mix = (param_f32(&fx.params, "mixPct", 100.0) / 100.0).clamp(0.0, 1.0);
                     let total_semitones = semitones + cents / 100.0;
+                    let ratio = 2.0_f32.powf(total_semitones / 12.0);
 
-                    fx.pitch_stretch
-                        .set_transpose_factor_semitones(total_semitones, None);
-
-                    let idx = fx.pitch_iptr;
-                    fx.pitch_ibuf[idx * 2] = l;
-                    fx.pitch_ibuf[idx * 2 + 1] = r;
-                    fx.pitch_iptr += 1;
-
-                    if fx.pitch_iptr >= PITCH_BLOCK_FRAMES {
-                        fx.pitch_obuf.fill(0.0);
-                        fx.pitch_stretch.process(&fx.pitch_ibuf, &mut fx.pitch_obuf);
-                        fx.pitch_iptr = 0;
-                        fx.pitch_optr = 0;
-                        fx.pitch_owritten = fx.pitch_obuf.len();
-                    }
-
-                    if fx.pitch_optr + 1 < fx.pitch_owritten {
-                        let wet_l = fx.pitch_obuf[fx.pitch_optr];
-                        let wet_r = fx.pitch_obuf[fx.pitch_optr + 1];
-                        fx.pitch_optr += 2;
-                        let ramp = if fx.pitch_ramp_pos < fx.pitch_ramp_len {
-                            let r = fx.pitch_ramp_pos as f32 / fx.pitch_ramp_len as f32;
-                            fx.pitch_ramp_pos += 1;
-                            r
-                        } else {
-                            1.0
-                        };
-                        let wet_mix = mix * ramp;
-                        l = l * (1.0 - wet_mix) + wet_l * wet_mix;
-                        r = r * (1.0 - wet_mix) + wet_r * wet_mix;
-                    }
+                    let (wet_l, wet_r) = fx.pitch_shifter.process_frame(l, r, ratio);
+                    let ramp = if fx.pitch_ramp_pos < fx.pitch_ramp_len {
+                        let r = fx.pitch_ramp_pos as f32 / fx.pitch_ramp_len as f32;
+                        fx.pitch_ramp_pos += 1;
+                        r
+                    } else {
+                        1.0
+                    };
+                    let wet_mix = mix * ramp;
+                    l = l * (1.0 - wet_mix) + wet_l * wet_mix;
+                    r = r * (1.0 - wet_mix) + wet_r * wet_mix;
                 }
             }
         }
@@ -936,10 +1023,10 @@ impl SynthEngine {
     }
 
     #[cfg(test)]
-    pub(super) fn pitch_buf_probe(&self, id: &str) -> Option<(usize, usize, usize)> {
+    pub(super) fn pitch_buf_probe(&self, id: &str) -> Option<usize> {
         for fx in &self.momentary_fx {
             if fx.id == id && matches!(fx.kind, MomentaryFxKind::PitchShift) {
-                return Some((fx.pitch_iptr, fx.pitch_optr, fx.pitch_owritten));
+                return Some(fx.pitch_shifter.write_pos);
             }
         }
         None

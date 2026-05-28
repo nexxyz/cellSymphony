@@ -1,4 +1,3 @@
-import { GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import type { PlatformState } from "./platformTypes";
 import { PLATFORM_CAPS, clampPartIndex } from "./platformCaps";
@@ -8,7 +7,7 @@ export function emergencyBrakeState<TState>(state: PlatformState<TState>): { sta
   const activePartCfg = (state.runtimeConfig as any).parts?.[activePart]?.l2;
   const axis = activePartCfg?.scanAxis ?? state.runtimeConfig.scanAxis;
   const direction = activePartCfg?.scanDirection ?? state.runtimeConfig.scanDirection;
-  const size = axis === "columns" ? GRID_WIDTH : GRID_HEIGHT;
+  const size = axis === "columns" ? PLATFORM_CAPS.gridWidth : PLATFORM_CAPS.gridHeight;
   const origin = direction === "forward" ? 0 : size - 1;
   const events: MusicalEvent[] = [];
   for (let channel = 0; channel < 16; channel += 1) {

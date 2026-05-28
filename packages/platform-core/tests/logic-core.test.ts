@@ -3,22 +3,21 @@ import assert from "node:assert/strict";
 
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { DeviceInput } from "@cellsymphony/device-contracts";
-import { GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contracts";
 import { interpretGrid, type GridSnapshot } from "@cellsymphony/interpretation-core";
 import { loadDefaultMappingConfig, mapIntentsToMusicalEvents } from "@cellsymphony/mapping-core";
-import { createInitialState, OLED_TEXT_COLUMNS, routeInput, tick, toOledLines, toSimulatorFrame } from "../src/index";
+import { createInitialState, OLED_TEXT_COLUMNS, PLATFORM_CAPS, routeInput, tick, toOledLines, toSimulatorFrame } from "../src/index";
 
 type MockState = {
   cells: boolean[];
   tickCount: number;
 };
 
-const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
+const CELL_COUNT = PLATFORM_CAPS.gridWidth * PLATFORM_CAPS.gridHeight;
 
 const mockBehavior: BehaviorEngine<MockState, unknown> = {
   id: "mock",
   init: () => ({
-    cells: Array.from({ length: CELL_COUNT }, (_, i) => i === 0 || i === GRID_WIDTH),
+    cells: Array.from({ length: CELL_COUNT }, (_, i) => i === 0 || i === PLATFORM_CAPS.gridWidth),
     tickCount: 0
   }),
   onInput: (state) => state,

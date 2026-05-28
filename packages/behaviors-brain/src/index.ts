@@ -9,12 +9,14 @@ export type BrainState = {
   triggerTypes: CellTriggerType[];
   fireThreshold: number;
   randomSeedCells: number;
+  seedInterval: number;
   tickCounter: number;
 };
 
 export type BrainConfig = {
   fireThreshold?: number;
   randomSeedCells?: number;
+  seedInterval?: number;
 };
 
 function idx(x: number, y: number): number {
@@ -41,6 +43,7 @@ export const brainBehavior: BehaviorEngine<BrainState, BrainConfig> = {
       triggerTypes: new Array(CELL_COUNT).fill("none") as CellTriggerType[],
       fireThreshold: config.fireThreshold ?? 2,
       randomSeedCells: config.randomSeedCells ?? 0,
+      seedInterval: config.seedInterval ?? 0,
       tickCounter: 0,
     };
   },
@@ -48,7 +51,8 @@ export const brainBehavior: BehaviorEngine<BrainState, BrainConfig> = {
     if (input.type === "behavior_action" && input.actionType === "seedRandom") {
       const cells = state.cells.slice();
       const tt = state.triggerTypes.slice();
-      for (let r = 0; r < 5; r++) {
+      const count = Math.max(1, Math.floor(state.randomSeedCells > 0 ? state.randomSeedCells : 5));
+      for (let r = 0; r < count; r++) {
         const rx = Math.floor(Math.random() * GRID_WIDTH);
         const ry = Math.floor(Math.random() * GRID_HEIGHT);
         const ri = idx(rx, ry);
@@ -90,19 +94,23 @@ export const brainBehavior: BehaviorEngine<BrainState, BrainConfig> = {
       }
     }
 
-    if (state.randomSeedCells > 0) {
-      for (let r = 0; r < state.randomSeedCells; r += 1) {
-        const rx = Math.floor(Math.random() * GRID_WIDTH);
-        const ry = Math.floor(Math.random() * GRID_HEIGHT);
-        const ri = idx(rx, ry);
-        if (next[ri] === 0) {
-          next[ri] = 1;
-          tt[ri] = "activate";
+    const seedInterval = Math.max(0, Math.floor(state.seedInterval));
+    if (seedInterval > 0 && state.randomSeedCells > 0) {
+      const shouldSeed = tickCounter % seedInterval === 0;
+      if (shouldSeed) {
+        for (let r = 0; r < state.randomSeedCells; r += 1) {
+          const rx = Math.floor(Math.random() * GRID_WIDTH);
+          const ry = Math.floor(Math.random() * GRID_HEIGHT);
+          const ri = idx(rx, ry);
+          if (next[ri] === 0) {
+            next[ri] = 1;
+            tt[ri] = "activate";
+          }
         }
       }
     }
 
-    return { cells: next, generation: state.generation + 1, triggerTypes: tt, fireThreshold: state.fireThreshold, randomSeedCells: state.randomSeedCells, tickCounter };
+    return { cells: next, generation: state.generation + 1, triggerTypes: tt, fireThreshold: state.fireThreshold, randomSeedCells: state.randomSeedCells, seedInterval: state.seedInterval, tickCounter };
   },
   renderModel(state) {
     return {
@@ -115,6 +123,7 @@ export const brainBehavior: BehaviorEngine<BrainState, BrainConfig> = {
   configMenu() {
     return [
       { key: "fireThreshold", label: "Fire Threshold", type: "number", min: 1, max: 4, step: 1 },
+      { key: "seedInterval", label: "Seed Interval", type: "number", min: 0, max: 30, step: 1 },
       { key: "randomSeedCells", label: "Spawn Count", type: "number", min: 0, max: 20, step: 1 },
       { key: "seedRandom", label: "Seed Random", type: "action" },
     ];

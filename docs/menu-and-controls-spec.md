@@ -262,6 +262,7 @@ L4: Touch
 ├── BPM: [40..240] step 1  default 120
 └── FX Page (group)
     ├── FX Type: [none | stutter | freeze | filter_sweep | pitch_shift]
+    ├── Target: [master | fx_bus_1..N | instrument_1..N]
     ├── Stutter params (visible when FX Type = stutter)
     │   ├── Rate Hz: [1..32]
     │   └── Depth: [0..100] (% wet mix)
@@ -292,7 +293,8 @@ Touch layer behavior:
 - `pan` uses a **pressed-cell-plus-right-cell** mapping: pressing grid column X stores `panPos = X+1` (clamped to the right edge), and the LED marker lights cells `panPos-1` and `panPos`. Pressing column 3 (0-indexed) stores `panPos=4`, lighting display cells 4 and 5, which represents center.
 - `fx`: grid cells trigger mapped momentary effects. Press starts the mapped effect and release stops it.
 - FX cells are mapped from `L4: Touch > FX Page`: select an `FX Type`, edit its visible parameters, then select `Map to Grid` and press a grid cell. The effect type and current parameter values are stored on that cell. Mapping `none` clears a cell.
-- FX assignments are global-output targets. Platform-core resolves grid semantics into audio commands; desktop forwards those commands without interpreting Touch/grid meaning; Rust applies the realtime DSP.
+- FX assignments include a `Target` (default `master`). Targets are listed as `master` first, then FX buses, then instruments. Platform-core resolves grid semantics into audio commands; desktop forwards those commands without interpreting Touch/grid meaning; Rust applies the realtime DSP.
+- Target insertion points: `instrument_n` is applied on the instrument's outgoing signal before routing/pan; `fx_bus_n` is applied on the bus outgoing signal after bus slot FX; `master` is applied after the final mix.
 - FX concurrency is fixed by platform capability at 4. When all slots are active, additional assigned cells gray out and do not respond until a slot frees.
 - Pressing a second cell with the same effect type replaces the existing active cell of that type and emits a release for the old cell before activating the new one.
 - Stutter captures a short audio segment on press and loops it repeatedly; `Rate Hz` sets segment length (longer at lower rates) and `Depth` controls wet mix. An ease-in ramp (~2ms) and loop-wrap crossfade prevent clicks.
@@ -301,13 +303,6 @@ Touch layer behavior:
 - FX LED colours are yellow for stutter, cyan for freeze, orange for filter_sweep, and magenta for pitch_shift. Assigned inactive cells are dim, active cells are bright, and limit-blocked cells are gray.
 - Grid releases in Touch mode are consumed by the Touch layer and do not reach the active behavior engine.
 - Aux encoder bindings continue to target whichever menu item they were bound to; Touch page switching does not alter bindings.
-
-### Playback
-
-```
-Playback
-└── BPM: [40..240] step 1  default 120
-```
 
 ### System
 

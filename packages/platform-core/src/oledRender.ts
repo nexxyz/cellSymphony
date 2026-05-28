@@ -1,5 +1,6 @@
 import type { OledFrame } from "@cellsymphony/device-contracts";
 import type { BarValue } from "./platformTypes";
+import { nowMs } from "./timing";
 
 export type OledRenderState = {
   lines: string[]; // already clamped to OLED_TEXT_LINES
@@ -310,7 +311,7 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
   if (state.toast) {
     // Reserve the rightmost area for transport indicator.
     const maxChars = 17; // 17*6 + xStart(4) ~= 106px
-    const now = state.renderNowMs ?? Date.now();
+    const now = state.renderNowMs ?? nowMs();
     const startedAt = state.toastStartedAtMs ?? now;
     const msg = toastWindow(state.toast, now, startedAt, maxChars);
     drawText(buf, { pos: { x: 4, y: OLED_H - 10 }, text: msg, style: normalStyleBase });

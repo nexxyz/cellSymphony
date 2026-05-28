@@ -4,6 +4,7 @@ import type { PlatformEffect, PlatformState } from "./index";
 import { clamp, readValue } from "./coreUtils";
 import { locate } from "./menuView";
 import { defaultFxParam } from "./fxDefaults";
+import { MOMENTARY_PREVIEW_ID } from "./momentaryFxPreview";
 import { makeToast } from "./toast";
 
 type AuxSharedDeps<TState> = {
@@ -61,7 +62,7 @@ export function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId
     return openUnbindConfirm(state);
   }
 
-  if (state.menu.editing && (selected.kind === "number" || selected.kind === "enum" || selected.kind === "bool")) {
+  if (selected.kind === "number" || selected.kind === "enum" || selected.kind === "bool") {
     const key = (selected as any).key as string;
     if (!key) return state;
     if (existing?.turn && existing.turn.key === key) return openUnbindConfirm(state);
@@ -128,6 +129,30 @@ export function pressAuxEncoder<TState>(state: PlatformState<TState>, encoderId:
   return setAuxToast(nextState, `${auxInputPrefix("press", encoderId)} ${label}`);
 }
 
+export function pressAuxEncoderMapped<TState>(
+  state: PlatformState<TState>,
+  encoderId: string,
+  bindingPress: { actionType: string; routeKey?: string; label?: string },
+  _effects: PlatformEffect[],
+  emit: (event: MusicalEvent) => void,
+  deps: AuxSharedDeps<TState>
+): PlatformState<TState> {
+  const inactiveMsg = inactivePressMessage(state, bindingPress, deps);
+  if (inactiveMsg) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} ${inactiveMsg}`);
+  let actionType = bindingPress.actionType;
+  let label = bindingPress.label ?? bindingPress.actionType;
+  if (bindingPress.routeKey === "trigger.life.spawn_now") {
+    label = bindingPress.label ?? "Spawn Now";
+    const resolvedAction = deps.spawnActionTypeForBehavior(state.runtimeConfig.activeBehavior);
+    if (!resolvedAction) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} N/A (${label})`);
+    actionType = resolvedAction;
+  }
+  const behavior = deps.resolveBehavior(state.runtimeConfig.activeBehavior);
+  const newBehaviorState = behavior.onInput(state.behaviorState, { type: "behavior_action", actionType }, { bpm: state.transport.bpm, emit });
+  const nextState = { ...state, behaviorState: newBehaviorState };
+  return setAuxToast(nextState, `${auxInputPrefix("press", encoderId)} ${label}`);
+}
+
 export function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: string, delta: -1 | 1, effects: PlatformEffect[], deps: AuxSharedDeps<TState>): PlatformState<TState> {
   const binding = state.system.auxBindings[encoderId];
   if (!binding?.turn) return setAuxToast(state, `${auxInputPrefix("turn", encoderId)} No binding`);
@@ -146,6 +171,7 @@ export function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: 
       return setAuxToast(finalState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
     }
     deps.autoSaveEffect(nextState, effects);
+    maybeUpdateMomentaryPreview(nextState, t.key, effects);
     const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
     return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
   }
@@ -168,6 +194,7 @@ export function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: 
     }
     const nextState = deps.writeAnyValue(state, t.key, raw);
     deps.autoSaveEffect(nextState, effects);
+    maybeUpdateMomentaryPreview(nextState, t.key, effects);
     const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
     return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
   }
@@ -176,10 +203,82 @@ export function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: 
     const clamped = current === true ? (delta > 0 ? true : false) : (delta < 0 ? false : true);
     const nextState = deps.writeAnyValue(state, t.key, clamped);
     deps.autoSaveEffect(nextState, effects);
+    maybeUpdateMomentaryPreview(nextState, t.key, effects);
     const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
     return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
   }
   return state;
+}
+
+export function turnAuxEncoderMapped<TState>(
+  state: PlatformState<TState>,
+  encoderId: string,
+  t: any,
+  delta: -1 | 1,
+  effects: PlatformEffect[],
+  deps: AuxSharedDeps<TState>
+): PlatformState<TState> {
+  const label = t.label ?? t.key;
+  const inactiveMsg = inactiveTurnMessage(state, t.key, label, deps);
+  if (inactiveMsg) return setAuxToast(state, `${auxInputPrefix("turn", encoderId)} ${inactiveMsg}`);
+  if (t.kind === "number") {
+    const current = deps.readAnyValue(state, t.key);
+    const nextValue = clamp(Number(current) + delta * (t.step ?? 1), t.min ?? 0, t.max ?? 127);
+    const nextState = deps.writeAnyValue(state, t.key, nextValue);
+    if (t.key.startsWith("behaviorConfig.")) {
+      const finalState = deps.reinitBehaviorState(nextState, t.key);
+      deps.autoSaveEffect(finalState, effects);
+      const v = deps.formatDisplayValue(t.key, deps.readAnyValue(finalState, t.key), finalState.runtimeConfig as any);
+      return setAuxToast(finalState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+    }
+    deps.autoSaveEffect(nextState, effects);
+    maybeUpdateMomentaryPreview(nextState, t.key, effects);
+    const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
+    return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+  }
+  if (t.kind === "enum" && t.options) {
+    const current = deps.readAnyValue(state, t.key);
+    const idx = t.options.indexOf(String(current));
+    const nextIdx = clamp(idx + delta, 0, t.options.length - 1);
+    const raw = t.options[nextIdx];
+    if (t.key === "transport.playing") {
+      const nextState = { ...state, transport: { ...state.transport, playing: raw === "true" } };
+      const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
+      return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+    }
+    if (t.key === "activeBehavior" || t.key.startsWith("behaviorConfig.")) {
+      const nextState = deps.writeAnyValue(state, t.key, raw);
+      const finalState = deps.reinitBehaviorState(nextState, t.key);
+      deps.autoSaveEffect(finalState, effects);
+      const v = deps.formatDisplayValue(t.key, deps.readAnyValue(finalState, t.key), finalState.runtimeConfig as any);
+      return setAuxToast(finalState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+    }
+    const nextState = deps.writeAnyValue(state, t.key, raw);
+    deps.autoSaveEffect(nextState, effects);
+    maybeUpdateMomentaryPreview(nextState, t.key, effects);
+    const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
+    return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+  }
+  if (t.kind === "bool") {
+    const current = deps.readAnyValue(state, t.key);
+    const clamped = current === true ? (delta > 0 ? true : false) : (delta < 0 ? false : true);
+    const nextState = deps.writeAnyValue(state, t.key, clamped);
+    deps.autoSaveEffect(nextState, effects);
+    maybeUpdateMomentaryPreview(nextState, t.key, effects);
+    const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
+    return setAuxToast(nextState, `${auxInputPrefix("turn", encoderId)} ${label}: ${v}`);
+  }
+  return state;
+}
+
+function maybeUpdateMomentaryPreview<TState>(state: PlatformState<TState>, key: string, effects: PlatformEffect[]): void {
+  if (!key.startsWith("touchFx.selected.params.")) return;
+  const activeFx = state.system.activeFx;
+  if (!Array.isArray(activeFx) || !activeFx.some((fx) => fx.cellX === -1 && fx.cellY === -1)) return;
+  const selected = state.runtimeConfig.touchFx?.selected as any;
+  const fxType = selected?.fxType;
+  if (!fxType || fxType === "none") return;
+  effects.push({ type: "audio_command", command: { type: "momentary_fx_update", id: MOMENTARY_PREVIEW_ID, params: structuredClone(selected.params ?? {}) } } as any);
 }
 
 function setAuxToast<TState>(state: PlatformState<TState>, message: string): PlatformState<TState> {

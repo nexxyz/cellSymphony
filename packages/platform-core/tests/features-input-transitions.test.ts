@@ -1,15 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
-import { GRID_DOMAIN, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
+import { type DeviceInput } from "@cellsymphony/device-contracts";
 import {
   createInitialState,
+  PLATFORM_CAPS,
   routeInput,
   type PlatformEffect,
   type PlatformState
 } from "../src/index";
 
-const CELL_COUNT = GRID_WIDTH * GRID_WIDTH;
+const CELL_COUNT = PLATFORM_CAPS.gridWidth * PLATFORM_CAPS.gridHeight;
 
 type InputTestState = { cells: boolean[]; triggerTypes: import("@cellsymphony/behavior-api").CellTriggerType[] };
 
@@ -24,7 +25,7 @@ const interpretingBehavior: BehaviorEngine<InputTestState, unknown> = {
     if (input.type !== "grid_press" && input.type !== "grid_release") return state;
     const cells = state.cells.slice();
     const tt = ([] as import("@cellsymphony/behavior-api").CellTriggerType[]).concat(state.triggerTypes);
-    const idx = input.y * GRID_WIDTH + input.x;
+    const idx = input.y * PLATFORM_CAPS.gridWidth + input.x;
     if (input.type === "grid_press") {
       cells[idx] = true;
       tt[idx] = "activate";

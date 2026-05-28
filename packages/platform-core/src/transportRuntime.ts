@@ -1,4 +1,3 @@
-import { GRID_HEIGHT, GRID_WIDTH } from "@cellsymphony/device-contracts";
 import { getBehavior } from "@cellsymphony/behavior-api";
 import { interpretGrid, type AxisStrategy, type InterpretationProfile, type TickStrategy } from "@cellsymphony/interpretation-core";
 import { mapIntentsToMusicalEvents } from "@cellsymphony/mapping-core";
@@ -8,7 +7,8 @@ import { dedupeSimultaneousNotes, toGridSnapshot } from "./runtimeHelpers";
 import { mod, mergeMapping } from "./coreUtils";
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import type { PlatformState, RuntimeConfig, Direction, NoteUnit } from "./platformTypes";
-import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
+import { clampPartIndex, PLATFORM_CAPS, sectionCount } from "./platformCaps";
+import { TRANSPORT_FLASH_MS, deadlineMs, nowMs } from "./timing";
 
 const PPQN = 24;
 
@@ -141,9 +141,9 @@ function applyBeatFlash<TState>(state: PlatformState<TState>, prevPulse: number)
       if (pulse % 96 === 0) sawMeasure = true;
       else if (pulse % 24 === 0) sawBeat = true;
     }
-    const nowMs = Date.now();
-    if (sawMeasure) next.system = { ...next.system, transportFlash: "measure", transportFlashUntilMs: nowMs + 220 };
-    else if (sawBeat) next.system = { ...next.system, transportFlash: "beat", transportFlashUntilMs: nowMs + 220 };
+    const now = nowMs();
+    if (sawMeasure) next.system = { ...next.system, transportFlash: "measure", transportFlashUntilMs: deadlineMs(now, TRANSPORT_FLASH_MS) };
+    else if (sawBeat) next.system = { ...next.system, transportFlash: "beat", transportFlashUntilMs: deadlineMs(now, TRANSPORT_FLASH_MS) };
   }
   return next;
 }
@@ -175,12 +175,8 @@ function advanceScanIndex(current: number, direction: Direction, size: number): 
 
 function scanIndexSpan(cfg: RuntimeConfig): number {
   const sections = sectionCount(cfg.scanSections);
-  if (sections <= 1) return cfg.scanAxis === "columns" ? GRID_WIDTH : GRID_HEIGHT;
-  return cfg.scanAxis === "columns" ? GRID_HEIGHT * sections : GRID_WIDTH * sections;
-}
-
-function sectionCount(value: unknown): number {
-  return value === "2" ? 2 : value === "4" ? 4 : value === "8" ? 8 : 1;
+  if (sections <= 1) return cfg.scanAxis === "columns" ? PLATFORM_CAPS.gridWidth : PLATFORM_CAPS.gridHeight;
+  return cfg.scanAxis === "columns" ? PLATFORM_CAPS.gridHeight * sections : PLATFORM_CAPS.gridWidth * sections;
 }
 
 function profileFromConfig(cfg: RuntimeConfig): InterpretationProfile {

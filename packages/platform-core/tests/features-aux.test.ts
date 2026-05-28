@@ -1,12 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
-import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
+import { type DeviceInput } from "@cellsymphony/device-contracts";
 import { lifeBehavior } from "@cellsymphony/behaviors-life";
 import {
   applyConfigPayload,
   createInitialState,
   extractConfigPayload,
+  PLATFORM_CAPS,
   routeInput,
   tick,
   toSimulatorFrame,
@@ -14,14 +15,14 @@ import {
   type PlatformState
 } from "../src/index";
 
-const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
+const CELL_COUNT = PLATFORM_CAPS.gridWidth * PLATFORM_CAPS.gridHeight;
 
 type MockState = { cells: boolean[]; tickCount: number };
 
 const mockBehavior: BehaviorEngine<MockState, unknown> = {
   id: "mock",
   init: () => ({
-    cells: Array.from({ length: CELL_COUNT }, (_, i) => i === 0 || i === GRID_WIDTH),
+    cells: Array.from({ length: CELL_COUNT }, (_, i) => i === 0 || i === PLATFORM_CAPS.gridWidth),
     tickCount: 0
   }),
   onInput: (state) => state,
@@ -42,6 +43,7 @@ const mockBehavior: BehaviorEngine<MockState, unknown> = {
 function makeState() {
   const s = createInitialState(mockBehavior);
   s.system.oledMode = "normal";
+  s.system.auxAutoMapEnabled = false;
   return s;
 }
 
@@ -84,6 +86,50 @@ test("aux encoder bind while editing param", () => {
   assert.ok(state.system.auxBindings["aux1"], "aux1 should be bound");
   assert.equal(state.system.auxBindings["aux1"]!.turn!.key, "masterVolume");
   assert.equal(state.system.auxBindings["aux1"]!.press, null);
+});
+
+test("aux encoder bind while highlighting param (not editing)", () => {
+  let state = makeState();
+
+  // Navigate to Master Vol but do not enter edit mode
+  state = selectLabel(state, "System");
+  state = press(state).state;
+  state = selectLabel(state, "Sound");
+  state = press(state).state;
+
+  // Shift+press aux to bind highlighted param
+  state.system.shiftHeld = true;
+  const r = routeInput(state, { type: "encoder_press", id: "aux1" } as DeviceInput, mockBehavior);
+  state = r.state;
+
+  assert.ok(state.system.auxBindings["aux1"], "aux1 should be bound");
+  assert.equal(state.system.auxBindings["aux1"]!.turn!.key, "masterVolume");
+});
+
+test("shift-hold shows current mapping overlay (custom)", () => {
+  let state = makeState();
+  state.system.auxBindings["aux1"] = { turn: { key: "masterVolume", label: "Master Vol", kind: "number", min: 0, max: 100, step: 1 }, press: null };
+  state.system.shiftHeld = true;
+  state.system.shiftHeldSinceMs = Date.now() - 2500;
+
+  const frame = toSimulatorFrame(state, mockBehavior);
+  assert.equal(frame.display.title, "CUSTOM MAPPING");
+  assert.ok(frame.display.lines.some((l) => l.includes("A1:")), "overlay should list aux slots");
+});
+
+test("shift-hold shows current mapping overlay (auto)", () => {
+  let state = createInitialState(mockBehavior);
+  state.system.oledMode = "normal";
+  state.system.auxAutoMapEnabled = true;
+  state.system.shiftHeld = true;
+  state.system.shiftHeldSinceMs = Date.now() - 2500;
+  state.system.activeFx = [
+    { cellX: 0, cellY: 0, fxType: "stutter", config: { fxType: "stutter", params: { rateHz: 8, depthPct: 100 }, targetKey: "master" }, activatedAtMs: 0 }
+  ] as any;
+
+  const frame = toSimulatorFrame(state, mockBehavior);
+  assert.equal(frame.display.title, "AUTO MAPPING");
+  assert.ok(frame.display.lines.join("\n").includes("Rate"));
 });
 
 test("aux encoder unbind when pressing same param again", () => {
@@ -147,6 +193,7 @@ test("aux encoder turn adjusts bound param", () => {
 test("aux encoder turn adjusts bound behaviorConfig param", () => {
   let state = createInitialState(lifeBehavior);
   state.system.oledMode = "normal";
+  state.system.auxAutoMapEnabled = false;
   state.runtimeConfig.activeBehavior = "life";
   state.runtimeConfig.behaviorConfig = { life: { randomCellsPerTick: 5, randomTickInterval: 2 } } as any;
   state.system.auxBindings["aux1"] = { turn: { key: "behaviorConfig.life.randomCellsPerTick", label: "Spawn Count", kind: "number", min: 0, max: 20, step: 1 }, press: null };
@@ -161,6 +208,7 @@ test("aux encoder turn adjusts bound behaviorConfig param", () => {
 test("aux encoder press triggers bound behavior action", () => {
   let state = createInitialState(lifeBehavior);
   state.system.oledMode = "normal";
+  state.system.auxAutoMapEnabled = false;
   state.runtimeConfig.activeBehavior = "life";
   state.system.auxBindings["aux1"] = { turn: null, press: { actionType: "spawnRandom", label: "Spawn Random" } };
 
@@ -414,6 +462,7 @@ test("stale part scan turn shows not active toast", () => {
 test("stale concrete behavior action press shows not active toast", () => {
   let state = createInitialState(lifeBehavior);
   state.system.oledMode = "normal";
+  state.system.auxAutoMapEnabled = false;
   state.runtimeConfig.activeBehavior = "life";
   state.activeBehavior = "life";
   state.system.auxBindings["aux1"] = {
@@ -434,6 +483,7 @@ test("stale concrete behavior action press shows not active toast", () => {
 test("stale spawn route press shows not active toast", () => {
   let state = createInitialState(lifeBehavior);
   state.system.oledMode = "normal";
+  state.system.auxAutoMapEnabled = false;
   state.runtimeConfig.activeBehavior = "life";
   state.activeBehavior = "life";
   state.system.auxBindings["aux1"] = {

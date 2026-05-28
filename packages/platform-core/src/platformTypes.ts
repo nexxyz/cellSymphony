@@ -11,6 +11,10 @@ export type VoiceStealingMode = "off" | "lenient" | "balanced" | "aggressive";
 export type NumericDisplayMode = "bar" | "numbers" | "bar+numbers";
 export type TouchMode = "none" | "mix" | "pan" | "fx";
 export type MomentaryFxType = "none" | "stutter" | "freeze" | "filter_sweep" | "pitch_shift";
+export type MomentaryFxTarget =
+  | { type: "global" }
+  | { type: "fx_bus"; index: number }
+  | { type: "instrument"; index: number };
 export type BarValue = { frac: number; numChars: number };
 export type ScaleId = "chromatic" | "major" | "natural_minor" | "dorian" | "mixolydian" | "major_pentatonic" | "minor_pentatonic" | "harmonic_minor";
 export type RootName = "C" | "C#" | "D" | "D#" | "E" | "F" | "F#" | "G" | "G#" | "A" | "A#" | "B";
@@ -109,11 +113,12 @@ export type FxBusConfig = {
   name: string;
 };
 
-export type MomentaryFxConfig = { fxType: MomentaryFxType; params: Record<string, unknown> };
+export type MomentaryFxConfig = { fxType: MomentaryFxType; params: Record<string, unknown>; targetKey: string };
 export type FxCellConfig = { x: number; y: number; config: MomentaryFxConfig };
 export type ActiveFx = { cellX: number; cellY: number; fxType: MomentaryFxType; config: MomentaryFxConfig; activatedAtMs: number };
 export type AudioCommand =
-  | { type: "momentary_fx_start"; id: string; fxType: MomentaryFxType; params: Record<string, unknown>; target: { type: "global" } }
+  | { type: "momentary_fx_start"; id: string; fxType: MomentaryFxType; params: Record<string, unknown>; target: MomentaryFxTarget }
+  | { type: "momentary_fx_update"; id: string; params: Record<string, unknown> }
   | { type: "momentary_fx_stop"; id: string };
 
 export type PartSenseConfig = {
@@ -203,6 +208,8 @@ export type SystemState = {
   transportFlash: "none" | "beat" | "measure"; transportFlashUntilMs: number; textEdit: TextEditSession | null;
   midiOutputs: MidiPortInfo[]; midiInputs: MidiPortInfo[]; midiStatus: string | null; externalPpqnPulse: number; pendingResync: boolean; pausedByUser: boolean;
   oledMode: "normal" | "splash" | "off"; oledSplashText: string; oledSplashUntilMs: number; lastInteractionMs: number; auxBindings: Record<string, AuxBinding | null>;
+  shiftHeldSinceMs: number | null;
+  auxAutoMapEnabled: boolean;
   heldNotes: string[];
   pendingCloneSource: number | null;
   sampleAssign: { instrumentSlot: number; sampleSlot: number } | null;

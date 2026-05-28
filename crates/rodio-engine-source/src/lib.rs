@@ -45,6 +45,11 @@ pub enum EngineEvent {
         id: String,
         fx_type: String,
         params: BTreeMap<String, Value>,
+        target: realtime_engine::synth::MomentaryFxTarget,
+    },
+    MomentaryFxUpdate {
+        id: String,
+        params: BTreeMap<String, Value>,
     },
     MomentaryFxStop {
         id: String,
@@ -143,7 +148,11 @@ impl EngineSource {
                     id,
                     fx_type,
                     params,
-                } => self.engine.momentary_fx_start(id, fx_type, params),
+                    target,
+                } => self.engine.momentary_fx_start(id, fx_type, params, target),
+                EngineEvent::MomentaryFxUpdate { id, params } => {
+                    self.engine.momentary_fx_update(&id, params)
+                }
                 EngineEvent::MomentaryFxStop { id } => self.engine.momentary_fx_stop(&id),
             }
         }

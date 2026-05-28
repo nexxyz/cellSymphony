@@ -11,8 +11,6 @@ import { raindropsBehavior } from "@cellsymphony/behaviors-raindrops";
 import { dlaBehavior } from "@cellsymphony/behaviors-dla";
 import { gliderBehavior } from "@cellsymphony/behaviors-glider";
 import {
-  GRID_HEIGHT,
-  GRID_WIDTH,
   type DeviceInput,
   type DisplayFrame,
   type PageId,
@@ -32,7 +30,7 @@ import { applyGlobalSound, pitchFromIntent } from "./musicTransforms";
 import { axisGroup, midiInputNodes, midiOutputNodes, presetListNodes, presetRenameNodes, sampleBrowserNodes } from "./menuNodes";
 import { currentMenuView as renderCurrentMenuView, locate, visibleChildren } from "./menuView";
 import { pressMenuInput, turnMenuInput } from "./menuInput";
-import { applyAuxUnbindChoice, assignAuxEncoder, pressAuxEncoder, turnAuxEncoder } from "./auxInput";
+import { applyAuxUnbindChoice, assignAuxEncoder, pressAuxEncoder, pressAuxEncoderMapped, turnAuxEncoder, turnAuxEncoderMapped } from "./auxInput";
 import { handleMenuAction } from "./actions";
 import { getSynthPreset } from "./synthPresets";
 export { GRID_DOMAIN, createGridDomain, type GridCell, type GridDomain } from "./gridDomain";
@@ -51,6 +49,7 @@ import { buildMenuTree } from "./menuTree";
 import { routeInputWithDeps } from "./inputRouter";
 import { createInitialPlatformState } from "./initialState";
 import { makeToast } from "./toast";
+import { EVENT_BLIP_MS, SLEEP_SPLASH_MS, nowMs as runtimeNowMs, deadlineMs } from "./timing";
 import {
   applyConfigPayload as applyConfigPayloadRuntime,
   applyStoreResult as applyStoreResultRuntime,
@@ -138,6 +137,8 @@ export function routeInput<TState>(
     assignAuxEncoder,
     pressAuxEncoder,
     turnAuxEncoder,
+    pressAuxEncoderMapped,
+    turnAuxEncoderMapped,
     reinitBehaviorState: (s, k) => reinitBehaviorState(s, k, resolveBehavior),
     autoSaveEffect,
     formatDisplayValue,
@@ -248,7 +249,7 @@ export function tick<TState>(
   const events: MusicalEvent[] = [];
   const effects: PlatformEffect[] = [];
   let next = { ...state };
-  const nowMs = Date.now();
+  const nowMs = runtimeNowMs();
 
   // OLED sleep/splash timing.
   {
@@ -258,7 +259,7 @@ export function tick<TState>(
         ...next.system,
         oledMode: "splash",
         oledSplashText: "Going to sleep",
-        oledSplashUntilMs: nowMs + 3000
+        oledSplashUntilMs: deadlineMs(nowMs, SLEEP_SPLASH_MS)
       };
     } else if (next.system.oledMode === "splash" && nowMs >= next.system.oledSplashUntilMs) {
       // Startup splash returns to normal; sleep splash turns OLED off.
@@ -284,7 +285,7 @@ export function tick<TState>(
   events.push(...advanced.events);
 
   if (events.some((e) => e.type === "note_on")) {
-    next.system = { ...next.system, eventBlipUntilMs: nowMs + 100 };
+    next.system = { ...next.system, eventBlipUntilMs: deadlineMs(nowMs, EVENT_BLIP_MS) };
   }
   return { state: next, events, effects };
 }
@@ -348,6 +349,7 @@ function currentMenuView<TState>(state: PlatformState<TState>): { path: string; 
   return renderCurrentMenuView({
     state,
     menuTree,
+    resolveBehavior,
     fitOledText: (text: string) => fitOledTextToColumns(text, OLED_TEXT_COLUMNS),
     readAnyValue,
     formatDisplayValue,

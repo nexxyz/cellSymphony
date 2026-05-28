@@ -1,16 +1,19 @@
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
-import { GRID_HEIGHT, GRID_WIDTH, type DeviceInput } from "@cellsymphony/device-contracts";
+import { type DeviceInput } from "@cellsymphony/device-contracts";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import { interpretGrid, type AxisStrategy, type InterpretationProfile, type TickStrategy } from "@cellsymphony/interpretation-core";
 import { mapIntentsToMusicalEvents } from "@cellsymphony/mapping-core";
 import { clamp } from "./coreUtils";
-import { clampPartIndex, PLATFORM_CAPS } from "./platformCaps";
+import { clampInstrumentIndex, clampPartIndex, clampSampleSlotIndex, PLATFORM_CAPS } from "./platformCaps";
 import type { PlatformEffect, PlatformState, RuntimeConfig } from "./index";
 import { resolveTouchPanTarget, toGridSnapshot, touchPanPosFromGridX } from "./runtimeHelpers";
 import { applyModulation, applyNoteBehavior, withScaleSteps } from "./musicTransforms";
 import { makeToast } from "./toast";
 import type { TouchMode } from "./platformTypes";
 import { activateMomentaryFx, applyFxAssignment, releaseMomentaryFx } from "./touchFxRuntime";
+import { resolveAuxAutoMap } from "./auxAutoMap";
+import { startMomentaryFxPreview, stopMomentaryFxPreview } from "./momentaryFxPreview";
+import { EVENT_BLIP_MS, SAMPLE_ASSIGN_REPEAT_WINDOW_MS, deadlineMs, nowMs } from "./timing";
 
 type Deps<TState> = {
   isMainEncoderInput: (id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined) => boolean;
@@ -28,6 +31,8 @@ type Deps<TState> = {
   assignAuxEncoder: any;
   pressAuxEncoder: any;
   turnAuxEncoder: any;
+  pressAuxEncoderMapped: any;
+  turnAuxEncoderMapped: any;
   reinitBehaviorState: (state: PlatformState<TState>, key: string) => PlatformState<TState>;
   autoSaveEffect: (state: PlatformState<TState>, effects: PlatformEffect[]) => void;
   formatDisplayValue: (key: string, value: unknown, runtimeConfig?: any) => string;
@@ -46,12 +51,16 @@ function touchPageFromRow(y: number, current: TouchMode): TouchMode {
 
 function handleTouchGridPress<TState>(state: PlatformState<TState>, input: Extract<DeviceInput, { type: "grid_press" }>, effects: PlatformEffect[], deps: Deps<TState>): PlatformState<TState> {
   if (state.system.touchMode === "mix") {
-    const inst = clamp(Math.floor(input.x), 0, Math.min(PLATFORM_CAPS.instrumentCount, GRID_WIDTH) - 1);
-    const volume = Math.round(clamp(Math.floor(input.y), 0, GRID_HEIGHT - 1) / (GRID_HEIGHT - 1) * 100);
+    const inst = clamp(Math.floor(input.x), 0, Math.min(PLATFORM_CAPS.instrumentCount, PLATFORM_CAPS.gridWidth) - 1);
+    const instruments = Array.isArray((state.runtimeConfig as any).instruments) ? ((state.runtimeConfig as any).instruments as any[]) : [];
+    if ((instruments[inst] as any)?.type === "none") return state;
+    const volume = Math.round(clamp(Math.floor(input.y), 0, PLATFORM_CAPS.gridHeight - 1) / (PLATFORM_CAPS.gridHeight - 1) * 100);
     return deps.writeAnyValue(state, `instruments.${inst}.mixer.volume`, volume);
   }
   if (state.system.touchMode === "pan") {
-    const inst = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.instrumentCount, GRID_HEIGHT) - 1);
+    const inst = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.instrumentCount, PLATFORM_CAPS.gridHeight) - 1);
+    const instruments = Array.isArray((state.runtimeConfig as any).instruments) ? ((state.runtimeConfig as any).instruments as any[]) : [];
+    if ((instruments[inst] as any)?.type === "none") return state;
     const panPos = touchPanPosFromGridX(input.x);
     const target = resolveTouchPanTarget(state as PlatformState<unknown>, inst);
     if (target.route === "bus") {
@@ -73,7 +82,7 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
   const pressed = (i: any): boolean => (typeof i.pressed === "boolean" ? i.pressed : true);
 
   {
-    const now = Date.now();
+    const now = nowMs();
     const sys = nextState.system;
     const isMidiRealtime = input.type === "midi_clock" || input.type === "midi_start" || input.type === "midi_continue" || input.type === "midi_stop";
     const wasAsleep = sys.oledMode === "off" || sys.oledMode === "splash";
@@ -83,7 +92,10 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
 
   if (nextState.system.confirm) {
     const c = nextState.system.confirm;
-    if (input.type === "button_shift") nextState.system = { ...nextState.system, shiftHeld: pressed(input) };
+    if (input.type === "button_shift") {
+      const down = pressed(input);
+      nextState.system = { ...nextState.system, shiftHeld: down, shiftHeldSinceMs: down ? (nextState.system.shiftHeldSinceMs ?? nowMs()) : null };
+    }
     if (input.type === "button_fn") nextState.system = { ...nextState.system, fnHeld: pressed(input) };
     if (input.type === "encoder_turn" && deps.isMainEncoderInput(input.id)) {
       if (c.kind === "help_info" && c.action.kind === "help_info") {
@@ -116,7 +128,10 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     return { state: nextState, events, effects };
   }
 
-  if (input.type === "button_shift") nextState.system = { ...nextState.system, shiftHeld: pressed(input), pendingCloneSource: pressed(input) ? nextState.system.pendingCloneSource : null };
+  if (input.type === "button_shift") {
+    const down = pressed(input);
+    nextState.system = { ...nextState.system, shiftHeld: down, shiftHeldSinceMs: down ? (nextState.system.shiftHeldSinceMs ?? nowMs()) : null, pendingCloneSource: down ? nextState.system.pendingCloneSource : null };
+  }
   if (input.type === "button_fn") nextState.system = { ...nextState.system, fnHeld: pressed(input), pendingCloneSource: pressed(input) ? nextState.system.pendingCloneSource : null };
 
   if (nextState.system.sampleAssign) {
@@ -125,9 +140,9 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       return { state: nextState, events, effects };
     }
     if (input.type === "grid_press") {
-      const now = Date.now();
+      const now = nowMs();
       const mode = nextState.system.shiftHeld
-        ? (nextState.system.sampleAssignLastPress && nextState.system.sampleAssignLastPress.x === input.x && nextState.system.sampleAssignLastPress.y === input.y && now - nextState.system.sampleAssignLastPress.atMs <= 350 ? "column" : "row")
+        ? (nextState.system.sampleAssignLastPress && nextState.system.sampleAssignLastPress.x === input.x && nextState.system.sampleAssignLastPress.y === input.y && now - nextState.system.sampleAssignLastPress.atMs <= SAMPLE_ASSIGN_REPEAT_WINDOW_MS ? "column" : "row")
         : "single";
       nextState = applySampleAssignment(nextState, nextState.system.sampleAssign.instrumentSlot, nextState.system.sampleAssign.sampleSlot, input.x, input.y, mode as "single" | "row" | "column");
       nextState.system = {
@@ -145,7 +160,7 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       const advanced = deps.applyExternalClockPulses(nextState, behavior, pulses);
       nextState = advanced.state;
       events.push(...advanced.events);
-      if (advanced.events.some((e) => e.type === "note_on")) nextState.system = { ...nextState.system, eventBlipUntilMs: Date.now() + 100 };
+      if (advanced.events.some((e) => e.type === "note_on")) nextState.system = { ...nextState.system, eventBlipUntilMs: deadlineMs(nowMs(), EVENT_BLIP_MS) };
     }
     return { state: nextState, events, effects };
   }
@@ -175,8 +190,8 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     return { state: nextState, events, effects };
   }
 
-  if (input.type === "grid_press" && nextState.system.fnHeld && nextState.system.shiftHeld && input.x === GRID_WIDTH - 1) {
-    const srcIdx = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.partCount, GRID_HEIGHT) - 1);
+  if (input.type === "grid_press" && nextState.system.fnHeld && nextState.system.shiftHeld && input.x === PLATFORM_CAPS.gridWidth - 1) {
+    const srcIdx = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.partCount, PLATFORM_CAPS.gridHeight) - 1);
     nextState.system = { ...nextState.system, pendingCloneSource: srcIdx, toast: makeToast(`Clone P${srcIdx + 1} → select target`) };
     return { state: nextState, events, effects };
   }
@@ -193,7 +208,7 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     }
   }
 
-  if (input.type === "grid_press" && nextState.system.fnHeld && !nextState.system.shiftHeld && input.x === GRID_WIDTH - 1) {
+  if (input.type === "grid_press" && nextState.system.fnHeld && !nextState.system.shiftHeld && input.x === PLATFORM_CAPS.gridWidth - 1) {
     const touchMode = touchPageFromRow(input.y, nextState.system.touchMode);
     nextState.system = { ...nextState.system, touchMode, toast: makeToast(`Touch: ${touchMode}`) };
     nextState.menu = { stack: [3], cursor: 0, editing: false };
@@ -212,7 +227,7 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
   }
 
   if (input.type === "grid_press" && nextState.system.fnHeld && input.x === 0) {
-    const idx = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.partCount, GRID_HEIGHT) - 1);
+    const idx = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.partCount, PLATFORM_CAPS.gridHeight) - 1);
     const pending = nextState.system.pendingCloneSource;
     if (pending !== null && pending !== idx) {
       const parts = Array.isArray((nextState.runtimeConfig as any).parts) ? [...((nextState.runtimeConfig as any).parts as any[])] : [];
@@ -230,6 +245,10 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
 
   if (input.type === "button_s" && pressed(input)) {
     const view = deps.locate(deps.menuTree(nextState), nextState, nextState.menu);
+    if (view.path.endsWith("/FX Page") || view.path.includes("L4: Touch/FX Page")) {
+      nextState = startMomentaryFxPreview(nextState, effects);
+      return { state: nextState, events, effects };
+    }
     if (view.path.endsWith("/Choose Sample")) {
       const selected = view.siblings[nextState.menu.cursor] as any;
       if (selected?.kind === "action" && selected.action?.type === "sample_pick" && typeof selected.action.path === "string") {
@@ -239,13 +258,19 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     }
   }
 
+  if (input.type === "button_s" && !pressed(input)) {
+    const before = nextState;
+    nextState = stopMomentaryFxPreview(nextState, effects);
+    if (before !== nextState) return { state: nextState, events, effects };
+  }
+
   if (input.type === "button_s" && pressed(input)) {
     if (nextState.runtimeConfig.midi.syncMode === "external" && nextState.system.shiftHeld) {
       nextState.system = { ...nextState.system, pendingResync: true };
       return { state: nextState, events, effects };
     }
     const wasPlaying = nextState.transport.playing;
-    const now = Date.now();
+    const now = nowMs();
     const playing = !wasPlaying;
     nextState.transport = { ...nextState.transport, playing };
     if (nextState.runtimeConfig.midi.syncMode === "external") {
@@ -342,12 +367,21 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       isSpawnActionType: deps.isSpawnActionType,
       spawnActionTypeForBehavior: deps.spawnActionTypeForBehavior
     };
-    nextState = nextState.system.shiftHeld
-      ? deps.assignAuxEncoder(nextState, input.id, effects, auxDeps)
-      : deps.pressAuxEncoder(nextState, input.id, effects, (event: MusicalEvent) => events.push(event), auxDeps);
+    if (nextState.system.shiftHeld) {
+      nextState = deps.assignAuxEncoder(nextState, input.id, effects, auxDeps);
+    } else {
+      const view = deps.locate(deps.menuTree(nextState), nextState, nextState.menu);
+      const selected = view.siblings[nextState.menu.cursor] as any;
+      const selectedKey = (selected && (selected.kind === "number" || selected.kind === "enum" || selected.kind === "bool")) ? String(selected.key ?? "") : undefined;
+      const auto = resolveAuxAutoMap(nextState, { path: view.path, selectedKey }, deps.resolveBehavior);
+      const slot = input.id === "aux1" ? auto.aux1 : input.id === "aux2" ? auto.aux2 : input.id === "aux3" ? auto.aux3 : auto.aux4;
+      nextState = slot?.press
+        ? deps.pressAuxEncoderMapped(nextState, input.id, slot.press, effects, (event: MusicalEvent) => events.push(event), auxDeps)
+        : deps.pressAuxEncoder(nextState, input.id, effects, (event: MusicalEvent) => events.push(event), auxDeps);
+    }
   }
   if (input.type === "encoder_turn" && input.id && !deps.isMainEncoderInput(input.id)) {
-    nextState = deps.turnAuxEncoder(nextState, input.id, input.delta, effects, {
+    const auxDeps = {
       menuTree: deps.menuTree,
       resolveBehavior: deps.resolveBehavior,
       readAnyValue: deps.readAnyValue,
@@ -357,7 +391,15 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       formatDisplayValue: deps.formatDisplayValue,
       isSpawnActionType: deps.isSpawnActionType,
       spawnActionTypeForBehavior: deps.spawnActionTypeForBehavior
-    });
+    };
+    const view = deps.locate(deps.menuTree(nextState), nextState, nextState.menu);
+    const selected = view.siblings[nextState.menu.cursor] as any;
+    const selectedKey = (selected && (selected.kind === "number" || selected.kind === "enum" || selected.kind === "bool")) ? String(selected.key ?? "") : undefined;
+    const auto = resolveAuxAutoMap(nextState, { path: view.path, selectedKey }, deps.resolveBehavior);
+    const slot = input.id === "aux1" ? auto.aux1 : input.id === "aux2" ? auto.aux2 : input.id === "aux3" ? auto.aux3 : auto.aux4;
+    nextState = slot?.turn
+      ? deps.turnAuxEncoderMapped(nextState, input.id, slot.turn, input.delta, effects, auxDeps)
+      : deps.turnAuxEncoder(nextState, input.id, input.delta, effects, auxDeps);
   }
 
   const beforeInputGrid = behavior.interpretInputTransitions ? toGridSnapshot(behavior.renderModel(nextState.behaviorState)) : null;
@@ -377,7 +419,7 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       }
     }
   }
-  if (events.some((e) => e.type === "note_on")) nextState.system = { ...nextState.system, eventBlipUntilMs: Date.now() + 100 };
+  if (events.some((e) => e.type === "note_on")) nextState.system = { ...nextState.system, eventBlipUntilMs: deadlineMs(nowMs(), EVENT_BLIP_MS) };
   return { state: nextState, events, effects };
 }
 
@@ -402,16 +444,6 @@ function inputTransitionProfile(cfg: RuntimeConfig): InterpretationProfile {
   };
 }
 
-function inputNoteBehavior(
-  events: MusicalEvent[],
-  runtimeConfig: RuntimeConfig,
-  partIdx: number,
-  initialHeld: string[]
-): { events: MusicalEvent[]; heldNotes: string[] } {
-  const instruments: any[] = Array.isArray((runtimeConfig as any).instruments) ? ((runtimeConfig as any).instruments as any[]) : [];
-  return applyNoteBehavior(events, instruments, partIdx, initialHeld);
-}
-
 function applySampleAssignment<TState>(
   state: PlatformState<TState>,
   instrumentSlot: number,
@@ -420,10 +452,10 @@ function applySampleAssignment<TState>(
   y: number,
   mode: "single" | "row" | "column"
 ): PlatformState<TState> {
-  const slot = clamp(Math.floor(instrumentSlot), 0, 15);
-  const sslot = clamp(Math.floor(sampleSlot), 0, 7);
-  const gx = clamp(Math.floor(x), 0, GRID_WIDTH - 1);
-  const gy = clamp(Math.floor(y), 0, GRID_HEIGHT - 1);
+  const slot = clampInstrumentIndex(instrumentSlot);
+  const sslot = clampSampleSlotIndex(sampleSlot);
+  const gx = clamp(Math.floor(x), 0, PLATFORM_CAPS.gridWidth - 1);
+  const gy = clamp(Math.floor(y), 0, PLATFORM_CAPS.gridHeight - 1);
   const instruments = Array.isArray((state.runtimeConfig as any).instruments) ? ([...((state.runtimeConfig as any).instruments as any[])] as any[]) : [];
   const inst = instruments[slot];
   if (!inst || inst.type !== "sample") return state;
@@ -434,9 +466,9 @@ function applySampleAssignment<TState>(
   const points: Array<{ x: number; y: number }> = [];
   if (mode === "single") points.push({ x: gx, y: gy });
   else if (mode === "row") {
-    for (let cx = 0; cx < GRID_WIDTH; cx += 1) points.push({ x: cx, y: gy });
+    for (let cx = 0; cx < PLATFORM_CAPS.gridWidth; cx += 1) points.push({ x: cx, y: gy });
   } else {
-    for (let cy = 0; cy < GRID_HEIGHT; cy += 1) points.push({ x: gx, y: cy });
+    for (let cy = 0; cy < PLATFORM_CAPS.gridHeight; cy += 1) points.push({ x: gx, y: cy });
   }
   for (const pt of points) {
     const idx = assignments.findIndex((a) => a.x === pt.x && a.y === pt.y);
