@@ -115,7 +115,7 @@ test("shift-hold shows current mapping overlay (custom)", () => {
 
   const frame = toSimulatorFrame(state, mockBehavior);
   assert.equal(frame.display.title, "CUSTOM MAP");
-  assert.ok(frame.display.lines.some((l) => l.startsWith("A1 ")), "overlay should list aux slots");
+  assert.ok(frame.display.lines.some((l) => l.startsWith("A1")), "overlay should list aux slots");
 });
 
 test("shift-hold mapping overlay waits for delay", () => {

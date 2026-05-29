@@ -21,6 +21,7 @@ import { type MappingConfig } from "@cellsymphony/mapping-core";
 import type { MusicalEvent } from "@cellsymphony/musical-events";
 import { resolveMenuHelp, type HelpTarget } from "./menuHelp";
 import { menuHelpTargetFromNode } from "./menuHelpTargets";
+import { compactMenuPath } from "./compactMenuPath";
 import {
   getSectionColorFromPath,
   isSpawnActionType,
@@ -361,9 +362,12 @@ function openContextHelp<TState>(state: PlatformState<TState>): PlatformState<TS
   const view = locate(menuTree(state), state, state.menu);
   const selected = view.siblings[state.menu.cursor];
   if (!selected || selected.kind === "spacer") return state;
+
+  const compactPath = compactMenuPath(view.path, "label" in (selected as any) ? String((selected as any).label ?? "") : "");
+
   const target = menuHelpTargetFromNode(view.path, selected);
   const help = resolveMenuHelp(target);
-  const lines = wrapOledText(help.detail, OLED_TEXT_COLUMNS);
+  const lines = [compactPath, ...wrapOledText(help.detail, OLED_TEXT_COLUMNS)];
   return {
     ...state,
     system: {

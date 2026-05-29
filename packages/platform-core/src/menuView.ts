@@ -5,6 +5,54 @@ import { resolveAuxAutoMap, resolveEffectiveAuxMap } from "./auxAutoMap";
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import { AUX_MAPPING_OVERLAY_DELAY_MS, heldForMs, nowMs } from "./timing";
 
+function fxTypeShort(fxType: string): string {
+  if (fxType === "pitch_shift") return "Pitch";
+  if (fxType === "filter_sweep") return "Filter";
+  if (fxType === "stutter") return "Stut";
+  if (fxType === "freeze") return "Freeze";
+  return "FX";
+}
+
+function compactSourcePathFromKey<TState>(state: PlatformState<TState>, key: string): string | null {
+  if (key.startsWith("touchFx.selected.params.")) {
+    const fxType = String((state.runtimeConfig as any).touchFx?.selected?.fxType ?? "none");
+    return `L4>FX>${fxTypeShort(fxType)}`;
+  }
+  const inst = /^instruments\.(\d+)\.(synth|sample)\.(.+)$/.exec(key);
+  if (inst) {
+    const idx = Number(inst[1]) + 1;
+    const kind = inst[2] === "synth" ? "Synth" : "Sample";
+    const rest = inst[3];
+    if (rest.startsWith("filterEnv.")) return `L3>I${idx}>${kind}>FEnv`;
+    if (rest.startsWith("ampEnv.")) return `L3>I${idx}>${kind}>AEnv`;
+    if (rest.startsWith("filter.")) return `L3>I${idx}>${kind}>Filter`;
+    if (rest.startsWith("amp.")) return `L3>I${idx}>${kind}>Amp`;
+    if (rest.startsWith("osc1.")) return `L3>I${idx}>Synth>Osc1`;
+    if (rest.startsWith("osc2.")) return `L3>I${idx}>Synth>Osc2`;
+    return `L3>I${idx}>${kind}`;
+  }
+  const mix = /^instruments\.(\d+)\.mixer\./.exec(key);
+  if (mix) return `L3>I${Number(mix[1]) + 1}>Mixer`;
+
+  const part = /^parts\.(\d+)\.l1\./.exec(key);
+  if (part) return `L1>P${Number(part[1]) + 1}`;
+  if (key.startsWith("behaviorConfig.")) return "L1";
+
+  const bus = /^mixer\.buses\.(\d+)\.(slot[12])\.(?:params\.)?/.exec(key);
+  if (bus) {
+    const b = Number(bus[1]);
+    const slotKey = bus[2];
+    const slotIdx = slotKey === "slot1" ? 1 : 2;
+    const type = String((state.runtimeConfig as any).mixer?.buses?.[b]?.[slotKey]?.type ?? "none");
+    const label = type === "none" ? "None" : type;
+    return `L3>B${b + 1}>S${slotIdx}>${label}`;
+  }
+  const busPan = /^mixer\.buses\.(\d+)\.panPos$/.exec(key);
+  if (busPan) return `L3>B${Number(busPan[1]) + 1}`;
+
+  return null;
+}
+
 export function visibleChildren<TState>(node: MenuNode, state: PlatformState<TState>): MenuNode[] {
   if (node.kind !== "group") return [];
   const kids = typeof node.children === "function" ? node.children(state) : node.children;
@@ -69,15 +117,55 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
     const anyAuto = slots.some(([, s]) => s.sourceTurn === "auto" || s.sourcePress === "auto");
     const anyCustom = slots.some(([, s]) => s.sourceTurn === "custom" || s.sourcePress === "custom");
     const title = anyAuto ? "AUTO MAP" : anyCustom ? "CUSTOM MAP" : "AUX MAP";
-    const fmt = (name: string, s: any): string => {
-      const t = s.turn?.label ?? (s.turn?.key ? String(s.turn.key).split(".").slice(-1)[0] : "");
-      const p = s.press?.label ?? "";
-      if (t && p) return `${name} ${t}/!${p}`;
-      if (t) return `${name} ${t}`;
-      if (p) return `${name} !${p}`;
-      return `${name} -`;
-    };
-    const lines = slots.map(([n, s]) => fitOledText(fmt(n, s))).slice(0, oledTextLines - 2);
+
+    const body: string[] = [];
+    for (const [name, s] of slots) {
+      const turnLabel = s.turn?.label ?? (s.turn?.key ? String(s.turn.key).split(".").slice(-1)[0] : "");
+      const pressLabel = s.press?.label ?? (s.press?.kind === "behavior_action" ? s.press.actionType : "");
+      const turnPath = s.turn?.key ? compactSourcePathFromKey(state, String(s.turn.key)) : null;
+      const pressPath = (() => {
+        const p = s.press;
+        if (!p) return null;
+        if (p.kind === "menu_action") {
+          if ((p.action as any)?.type === "sample_assign_enter") {
+            const i = Number((p.action as any).instrumentSlot) + 1;
+            return `L3>I${i}>Sample`;
+          }
+          if ((p.action as any)?.type === "fx_assign_enter") {
+            const fxType = String((p.action as any).config?.fxType ?? "none");
+            return `L4>FX>${fxTypeShort(fxType)}`;
+          }
+        }
+        if (p.kind === "behavior_action") {
+          const activePart = Number((state.runtimeConfig as any).activePartIndex ?? 0) + 1;
+          return p.routeKey === "trigger.life.spawn_now" ? `L1>P${activePart}` : `L1>P${activePart}`;
+        }
+        return null;
+      })();
+
+      if (!turnLabel && !pressLabel) {
+        body.push(`${name}: -`);
+        continue;
+      }
+      if (turnLabel && pressLabel && turnPath && pressPath && turnPath === pressPath) {
+        body.push(`${name}: ${turnPath}`);
+        body.push(`${turnLabel}/!${pressLabel}`);
+        continue;
+      }
+      if (turnLabel) {
+        body.push(`${name}- ${turnPath ?? "?"}`);
+        body.push(turnLabel);
+      }
+      if (pressLabel) {
+        body.push(`${name}! ${pressPath ?? "?"}`);
+        body.push(`!${pressLabel}`);
+      }
+    }
+
+    const contentSlots = Math.max(1, oledTextLines - 2);
+    const maxScroll = Math.max(0, body.length - contentSlots);
+    const scroll = clamp(state.system.auxOverlayScroll ?? 0, 0, maxScroll);
+    const lines = body.slice(scroll, scroll + contentSlots).map((l) => fitOledText(l));
     return { path: title, lines, colors: Array(lines.length).fill(0xffff), barValues: Array(lines.length).fill(null) };
   }
 

@@ -186,6 +186,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       lastInteractionMs: now,
       auxBindings: {},
       shiftHeldSinceMs: null,
+      auxOverlayScroll: 0,
       auxAutoMapEnabled: true,
       heldNotes: [],
       sampleAssign: null,

@@ -13,7 +13,7 @@ import type { TouchMode } from "./platformTypes";
 import { activateMomentaryFx, applyFxAssignment, releaseMomentaryFx } from "./touchFxRuntime";
 import { resolveAuxAutoMap } from "./auxAutoMap";
 import { startMomentaryFxPreview, stopMomentaryFxPreview } from "./momentaryFxPreview";
-import { EVENT_BLIP_MS, SAMPLE_ASSIGN_REPEAT_WINDOW_MS, deadlineMs, nowMs } from "./timing";
+import { AUX_MAPPING_OVERLAY_DELAY_MS, EVENT_BLIP_MS, SAMPLE_ASSIGN_REPEAT_WINDOW_MS, deadlineMs, heldForMs, nowMs } from "./timing";
 
 type Deps<TState> = {
   isMainEncoderInput: (id: "main" | "aux1" | "aux2" | "aux3" | "aux4" | undefined) => boolean;
@@ -142,7 +142,7 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
 
   if (input.type === "button_shift") {
     const down = pressed(input);
-    nextState.system = { ...nextState.system, shiftHeld: down, shiftHeldSinceMs: down ? (nextState.system.shiftHeldSinceMs ?? nowMs()) : null, pendingCloneSource: down ? nextState.system.pendingCloneSource : null };
+    nextState.system = { ...nextState.system, shiftHeld: down, shiftHeldSinceMs: down ? (nextState.system.shiftHeldSinceMs ?? nowMs()) : null, auxOverlayScroll: 0, pendingCloneSource: down ? nextState.system.pendingCloneSource : null };
   }
   if (input.type === "button_fn") nextState.system = { ...nextState.system, fnHeld: pressed(input), pendingCloneSource: pressed(input) ? nextState.system.pendingCloneSource : null };
 
@@ -364,7 +364,9 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     if (nextState.system.shiftHeld && nextState.system.fnHeld) return { state: deps.openContextHelp(nextState), events, effects };
     nextState = deps.pressMenu(nextState, effects);
   } else if (input.type === "encoder_turn" && deps.isMainEncoderInput(input.id)) {
-    nextState = deps.turnMenu(nextState, input.delta, effects);
+    nextState = nextState.system.shiftHeld && heldForMs(nowMs(), nextState.system.shiftHeldSinceMs, AUX_MAPPING_OVERLAY_DELAY_MS)
+      ? { ...nextState, system: { ...nextState.system, auxOverlayScroll: Math.max(0, (nextState.system.auxOverlayScroll ?? 0) + input.delta) } }
+      : deps.turnMenu(nextState, input.delta, effects);
   }
 
   if (input.type === "encoder_press" && input.id && !deps.isMainEncoderInput(input.id)) {

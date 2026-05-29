@@ -211,6 +211,7 @@ export type SystemState = {
   midiOutputs: MidiPortInfo[]; midiInputs: MidiPortInfo[]; midiStatus: string | null; externalPpqnPulse: number; pendingResync: boolean; pausedByUser: boolean;
   oledMode: "normal" | "splash" | "off"; oledSplashText: string; oledSplashUntilMs: number; lastInteractionMs: number; auxBindings: Record<string, AuxBinding | null>;
   shiftHeldSinceMs: number | null;
+  auxOverlayScroll: number;
   auxAutoMapEnabled: boolean;
   heldNotes: string[];
   pendingCloneSource: number | null;
