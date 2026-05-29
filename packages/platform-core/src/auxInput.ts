@@ -106,7 +106,10 @@ export function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId
     if (action.type === "sample_assign_enter" || action.type === "fx_assign_enter") {
       const nextPress: any = { kind: "menu_action", action, label: (selected as any).label };
       if (existing?.press?.kind === "menu_action" && existing.press.action?.type === action.type) {
-        if (action.type !== "sample_assign_enter" || existing.press.action.instrumentSlot === action.instrumentSlot) {
+        if (
+          action.type !== "sample_assign_enter"
+          || (existing.press.action.type === "sample_assign_enter" && existing.press.action.instrumentSlot === action.instrumentSlot)
+        ) {
           return openUnbindConfirm(state);
         }
       }

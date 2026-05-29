@@ -266,8 +266,13 @@ impl SynthEngine {
             return;
         };
         self.momentary_fx.retain(|fx| fx.id != id);
-        self.momentary_fx
-            .push(MomentaryFxState::new(id, kind, params, target, self.sample_rate));
+        self.momentary_fx.push(MomentaryFxState::new(
+            id,
+            kind,
+            params,
+            target,
+            self.sample_rate,
+        ));
 
         if kind == MomentaryFxKind::PitchShift {
             if let Some(fx) = self.momentary_fx.last_mut() {
@@ -581,7 +586,8 @@ impl SynthEngine {
             self.bus_mono_scratch.fill(0.0);
         }
         if self.bus_mono_snapshot.len() != self.bus_mono_scratch.len() {
-            self.bus_mono_snapshot.resize(self.bus_mono_scratch.len(), 0.0);
+            self.bus_mono_snapshot
+                .resize(self.bus_mono_scratch.len(), 0.0);
         }
         let mut left = 0.0_f32;
         let mut right = 0.0_f32;
@@ -610,7 +616,8 @@ impl SynthEngine {
             }
         }
         // Snapshot is used for ducking sources without holding a borrow of `self`.
-        self.bus_mono_snapshot.copy_from_slice(&self.bus_mono_scratch);
+        self.bus_mono_snapshot
+            .copy_from_slice(&self.bus_mono_scratch);
         for bus_idx in 0..self.bus_mono_scratch.len() {
             let mut processed = self.bus_mono_scratch[bus_idx];
             let mut pan_override: Option<f32> = None;
@@ -656,7 +663,8 @@ impl SynthEngine {
             self.dry_history_pos = 0;
         }
 
-        let (left, right) = self.process_momentary_fx_target(MomentaryFxTarget::Global, left, right);
+        let (left, right) =
+            self.process_momentary_fx_target(MomentaryFxTarget::Global, left, right);
         self.sample_clock = self.sample_clock.saturating_add(1);
         (left.clamp(-1.0, 1.0), right.clamp(-1.0, 1.0))
     }

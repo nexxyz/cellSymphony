@@ -427,9 +427,15 @@ pub fn run() {
                         fx_type,
                         params,
                         target: match target {
-                            MomentaryFxTargetPayload::Global => realtime_engine::synth::MomentaryFxTarget::Global,
-                            MomentaryFxTargetPayload::FxBus { index } => realtime_engine::synth::MomentaryFxTarget::FxBus { index },
-                            MomentaryFxTargetPayload::Instrument { index } => realtime_engine::synth::MomentaryFxTarget::Instrument { index },
+                            MomentaryFxTargetPayload::Global => {
+                                realtime_engine::synth::MomentaryFxTarget::Global
+                            }
+                            MomentaryFxTargetPayload::FxBus { index } => {
+                                realtime_engine::synth::MomentaryFxTarget::FxBus { index }
+                            }
+                            MomentaryFxTargetPayload::Instrument { index } => {
+                                realtime_engine::synth::MomentaryFxTarget::Instrument { index }
+                            }
                         },
                     });
                 }

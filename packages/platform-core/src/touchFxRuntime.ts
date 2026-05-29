@@ -1,7 +1,8 @@
 import { clamp } from "./coreUtils";
 import { PLATFORM_CAPS } from "./platformCaps";
 import type { PlatformEffect, PlatformState } from "./platformTypes";
-import { defaultMomentaryFxParams, type MomentaryFxType } from "./momentaryFx";
+import { defaultMomentaryFxParams } from "./momentaryFx";
+import type { MomentaryFxType } from "./platformTypes";
 import { makeToast } from "./toast";
 import { targetFromKey } from "./momentaryFxTarget";
 import { nowMs } from "./timing";

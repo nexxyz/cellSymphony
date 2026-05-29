@@ -1,8 +1,8 @@
 use super::engine::FREEZE_INJECT_MS;
 use super::{
     default_synth_config, FilterType, FxBusConfig, FxBusSlotConfig, InstrumentMixerConfig,
-    InstrumentSlotConfig, InstrumentsConfig, MixerConfig, SampleBankConfig, SampleBuffer,
-    MomentaryFxTarget, SampleSlotConfig, SynthEngine, DEFAULT_PAN_POSITIONS, INSTRUMENT_SLOT_COUNT,
+    InstrumentSlotConfig, InstrumentsConfig, MixerConfig, MomentaryFxTarget, SampleBankConfig,
+    SampleBuffer, SampleSlotConfig, SynthEngine, DEFAULT_PAN_POSITIONS, INSTRUMENT_SLOT_COUNT,
 };
 use serde_json::json;
 use std::collections::BTreeMap;
