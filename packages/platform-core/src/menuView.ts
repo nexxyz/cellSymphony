@@ -131,12 +131,12 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
     for (const [n, s] of slots) {
       const p = s?.press;
       if (!p) continue;
-      if (p.kind === "behavior_action" && action?.type === "behavior_action" && p.actionType === action.actionType) return `${n}!`;
+      if (p.kind === "behavior_action" && action?.type === "behavior_action" && p.actionType === action.actionType) return n;
       if (p.kind === "menu_action" && action && p.action?.type === action.type) {
         if (action.type === "sample_assign_enter") {
-          if (p.action.instrumentSlot === action.instrumentSlot) return `${n}!`;
+          if (p.action.instrumentSlot === action.instrumentSlot) return n;
         } else {
-          return `${n}!`;
+          return n;
         }
       }
     }
@@ -153,10 +153,10 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
         const a = item.action as any;
         if (a?.type === "behavior_action" && typeof a.actionType === "string") {
           const p = autoPressPrefixForAction(a);
-          if (p) item = { ...item, label: `${p}${item.label}` };
+          if (p) item = { ...item, actionPrefix: p } as any;
         } else if (a?.type === "sample_assign_enter" || a?.type === "fx_assign_enter") {
           const p = autoPressPrefixForAction(a);
-          if (p) item = { ...item, label: `${p}${item.label}` };
+          if (p) item = { ...item, actionPrefix: p } as any;
         }
       }
     }
