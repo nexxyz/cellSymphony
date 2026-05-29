@@ -165,6 +165,7 @@ export type RuntimeConfig = {
   instruments: InstrumentSlotConfig[];
   mixer?: { buses: FxBusConfig[] };
   touchFx?: { selected: MomentaryFxConfig; assignments: FxCellConfig[] };
+  auxBindings?: Record<string, AuxBinding | null>;
 };
 
 export type ActionSpec =

@@ -120,7 +120,10 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     } else if (input.type === "encoder_press" && deps.isMainEncoderInput(input.id)) {
       const choice = c.options[c.cursor];
       if (c.kind === "aux_unbind" && c.action.kind === "aux_unbind") {
-        if (choice !== "Cancel") nextState = deps.applyAuxUnbindChoice(nextState, c.action.encoderId, choice);
+        if (choice !== "Cancel") {
+          nextState = deps.applyAuxUnbindChoice(nextState, c.action.encoderId, choice);
+          deps.autoSaveEffect(nextState, effects);
+        }
       } else if (c.kind === "text_dirty_exit") {
         if (choice === "Save") nextState = deps.executeConfirmed(nextState, c.action, effects, behavior);
         else if (c.action.kind === "text_dirty_exit") {

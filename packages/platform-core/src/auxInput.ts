@@ -28,6 +28,7 @@ export function applyAuxUnbindChoice<TState>(state: PlatformState<TState>, encod
   else if (choice === "Turn") nextBinding = binding.press ? { turn: null, press: binding.press } : null;
   const nextState = {
     ...state,
+    runtimeConfig: { ...(state.runtimeConfig as any), auxBindings: { ...((state.runtimeConfig as any).auxBindings ?? {}), [encoderId]: nextBinding } } as any,
     system: {
       ...state.system,
       auxBindings: {
@@ -74,10 +75,16 @@ export function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId
     } else if (selected.kind === "enum") {
       turn.options = (selected as any).options;
     }
-    return setAuxToast(
-      { ...state, system: { ...state.system, auxBindings: { ...state.system.auxBindings, [encoderId]: { turn, press: existing?.press ?? null } } } },
+    const next = setAuxToast(
+      {
+        ...state,
+        runtimeConfig: { ...(state.runtimeConfig as any), auxBindings: { ...((state.runtimeConfig as any).auxBindings ?? {}), [encoderId]: { turn, press: existing?.press ?? null } } } as any,
+        system: { ...state.system, auxBindings: { ...state.system.auxBindings, [encoderId]: { turn, press: existing?.press ?? null } } }
+      },
       `${auxInputPrefix("press", encoderId)} Bound turn: ${(selected as any).label}`
     );
+    deps.autoSaveEffect(next, _effects);
+    return next;
   }
 
   if (selected.kind === "action") {
@@ -89,9 +96,10 @@ export function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId
       if (existing?.press?.kind === "behavior_action" && existing.press.actionType === nextPress.actionType && existing.press.routeKey === nextPress.routeKey) {
         return openUnbindConfirm(state);
       }
-      return setAuxToast(
+      const next = setAuxToast(
         {
           ...state,
+          runtimeConfig: { ...(state.runtimeConfig as any), auxBindings: { ...((state.runtimeConfig as any).auxBindings ?? {}), [encoderId]: { turn: existing?.turn ?? null, press: nextPress } } } as any,
           system: {
             ...state.system,
             auxBindings: {
@@ -102,6 +110,8 @@ export function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId
         },
         `${auxInputPrefix("press", encoderId)} Bound click: ${(selected as any).label}`
       );
+      deps.autoSaveEffect(next, _effects);
+      return next;
     }
     if (action.type === "sample_assign_enter" || action.type === "fx_assign_enter") {
       const nextPress: any = { kind: "menu_action", action, label: (selected as any).label };
@@ -113,9 +123,10 @@ export function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId
           return openUnbindConfirm(state);
         }
       }
-      return setAuxToast(
+      const next = setAuxToast(
         {
           ...state,
+          runtimeConfig: { ...(state.runtimeConfig as any), auxBindings: { ...((state.runtimeConfig as any).auxBindings ?? {}), [encoderId]: { turn: existing?.turn ?? null, press: nextPress } } } as any,
           system: {
             ...state.system,
             auxBindings: {
@@ -126,6 +137,8 @@ export function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId
         },
         `${auxInputPrefix("press", encoderId)} Bound click: ${(selected as any).label}`
       );
+      deps.autoSaveEffect(next, _effects);
+      return next;
     }
     return state;
   }

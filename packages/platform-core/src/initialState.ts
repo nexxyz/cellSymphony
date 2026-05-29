@@ -184,7 +184,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       oledSplashText: "Starting up",
       oledSplashUntilMs: deadlineMs(now, STARTUP_SPLASH_MS),
       lastInteractionMs: now,
-      auxBindings: {},
+      auxBindings: structuredClone((runtimeConfig as any).auxBindings ?? {}),
       shiftHeldSinceMs: null,
       auxOverlayScroll: 0,
       auxAutoMapEnabled: true,

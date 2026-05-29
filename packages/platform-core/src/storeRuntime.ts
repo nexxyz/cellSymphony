@@ -7,6 +7,7 @@ import { clampPartIndex, isValidSectionValue, PLATFORM_CAPS } from "./platformCa
 import { cutoffHzToDisplay, overrideFromPart, preferMapping } from "./coreUtils";
 import { makeToast } from "./toast";
 import { DEFAULT_VELOCITY_LEVELS, DEFAULT_MIDI_ENGINE, DEFAULT_VELOCITY, DEFAULT_VOLUME } from "./runtimeDefaults";
+import { cloneAuxBindings, sanitizeAuxBindings } from "./auxBindingsSerde";
 
 type StoreDeps<TState> = {
   resolveBehavior: (id: string) => BehaviorEngine<any, any>;
@@ -70,7 +71,7 @@ export function extractConfigPayload<TState>(state: PlatformState<TState>): Conf
       }
     };
   }
-  const runtimeConfig = { ...(state.runtimeConfig as any), parts } as RuntimeConfig;
+  const runtimeConfig = { ...(state.runtimeConfig as any), parts, auxBindings: cloneAuxBindings((state.system as any).auxBindings) } as RuntimeConfig;
   return {
     activeBehavior: runtimeAny.activeBehavior ?? state.activeBehavior,
     runtimeConfig,
@@ -113,6 +114,8 @@ export function applyConfigPayload<TState>(
     return engine.init({ ...(part?.l1?.behaviorConfig ?? {}) });
   });
   while (next.partStates.length < PLATFORM_CAPS.partCount) next.partStates.push(resolved.init({}));
+
+  next.system = { ...next.system, auxBindings: cloneAuxBindings((safe.runtimeConfig as any).auxBindings) };
   const shouldUseRestoredActiveState = activePartBehaviorId === safe.activeBehavior && activePart?.l1?.saveGridState !== false && activePart?.l1?.savedState !== undefined;
   if (shouldUseRestoredActiveState) {
     next.behaviorState = (next.partStates[activePartIndex] ?? next.behaviorState) as TState;
@@ -282,23 +285,18 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     },
     numericDisplayMode: rt.numericDisplayMode === "bar" || rt.numericDisplayMode === "numbers" || rt.numericDisplayMode === "bar+numbers"
       ? rt.numericDisplayMode
-      : typeof rt.showNumericValueWithBars === "boolean"
-        ? rt.showNumericValueWithBars ? "bar+numbers" : "bar"
-        : "bar+numbers",
+      : typeof rt.showNumericValueWithBars === "boolean" ? (rt.showNumericValueWithBars ? "bar+numbers" : "bar") : "bar+numbers",
     activePartIndex: clampPartIndex(rt.activePartIndex ?? (factory.runtimeConfig as any).activePartIndex ?? 0),
     parts: Array.isArray(rt.parts) ? rt.parts : Array.isArray((factory.runtimeConfig as any).parts) ? (factory.runtimeConfig as any).parts : [],
     instruments: sanitizeInstruments(rt.instruments, factory),
-    mixer: sanitizeMixer(rt.mixer, factory)
+    mixer: sanitizeMixer(rt.mixer, factory),
+    auxBindings: sanitizeAuxBindings(rt.auxBindings)
   };
 
   const voiceStealingMode = (mergedRuntime as any).sound?.voiceStealingMode;
-  if (voiceStealingMode !== "off" && voiceStealingMode !== "lenient" && voiceStealingMode !== "balanced" && voiceStealingMode !== "aggressive") {
-    (mergedRuntime as any).sound.voiceStealingMode = (factory.runtimeConfig as any).sound?.voiceStealingMode ?? "balanced";
-  }
+  if (voiceStealingMode !== "off" && voiceStealingMode !== "lenient" && voiceStealingMode !== "balanced" && voiceStealingMode !== "aggressive") (mergedRuntime as any).sound.voiceStealingMode = (factory.runtimeConfig as any).sound?.voiceStealingMode ?? "balanced";
 
-  if (!Array.isArray((mergedRuntime as any).parts) || (mergedRuntime as any).parts.length === 0) {
-    (mergedRuntime as any).parts = Array.isArray((factory.runtimeConfig as any).parts) ? structuredClone((factory.runtimeConfig as any).parts) : [];
-  }
+  if (!Array.isArray((mergedRuntime as any).parts) || (mergedRuntime as any).parts.length === 0) (mergedRuntime as any).parts = Array.isArray((factory.runtimeConfig as any).parts) ? structuredClone((factory.runtimeConfig as any).parts) : [];
   const active = clampPartIndex((mergedRuntime as any).activePartIndex ?? 0);
   const parts = [...((mergedRuntime as any).parts as any[])];
   while (parts.length < PLATFORM_CAPS.partCount) {
@@ -365,6 +363,7 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     mappingConfig: mergedMapping
   };
 }
+
 
 function sanitizePartL2(partL2: any, baseL2: any): any {
   const base = baseL2 ?? {};

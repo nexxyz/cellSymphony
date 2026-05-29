@@ -89,6 +89,25 @@ test("aux encoder bind while editing param", () => {
   assert.equal(state.system.auxBindings["aux1"]!.press, null);
 });
 
+test("aux bindings persist through config payload", () => {
+  let state = makeState();
+  state.runtimeConfig.autoSaveDefault = true;
+  state.system.shiftHeld = true;
+
+  // Bind Master Vol on aux1
+  state = selectLabel(state, "System");
+  state = press(state).state;
+  state = selectLabel(state, "Sound");
+  state = press(state).state;
+  state = selectLabel(state, "Master Vol");
+  state = routeInput(state, { type: "encoder_press", id: "aux1" } as DeviceInput, mockBehavior).state;
+
+  const payload = extractConfigPayload(state);
+  const restored = applyConfigPayload(createInitialState(mockBehavior), payload, mockBehavior);
+  assert.ok(restored.system.auxBindings.aux1, "aux1 binding should restore");
+  assert.equal(restored.system.auxBindings.aux1!.turn!.key, "masterVolume");
+});
+
 test("aux encoder bind while highlighting param (not editing)", () => {
   let state = makeState();
 
