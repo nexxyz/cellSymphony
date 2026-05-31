@@ -153,28 +153,11 @@ export function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId
 export function pressAuxEncoder<TState>(state: PlatformState<TState>, encoderId: string, _effects: PlatformEffect[], emit: (event: MusicalEvent) => void, deps: AuxSharedDeps<TState>): PlatformState<TState> {
   const binding = state.system.auxBindings[encoderId];
   if (!binding?.press) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} No binding`);
-  const inactiveMsg = inactivePressMessage(state, binding.press, deps);
-  if (inactiveMsg) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} ${inactiveMsg}`);
-  if (binding.press.kind === "menu_action") {
-    return pressMenuAction(state, encoderId, binding.press.action, binding.press.label ?? "Action");
-  }
-
-  let actionType = binding.press.actionType;
-  let label = binding.press.label ?? binding.press.actionType;
-  const pfx = auxToastPrefix(state, "press", encoderId, binding.press);
-  if (binding.press.routeKey === "trigger.life.spawn_now") {
-    label = binding.press.label ?? "Spawn Now";
-    const resolvedAction = deps.spawnActionTypeForBehavior(state.runtimeConfig.activeBehavior);
-    if (!resolvedAction) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} N/A (${label})`);
-    actionType = resolvedAction;
-  }
-  const behavior = deps.resolveBehavior(state.runtimeConfig.activeBehavior);
-  const newBehaviorState = behavior.onInput(state.behaviorState, { type: "behavior_action", actionType }, { bpm: state.transport.bpm, emit });
-  const nextState = { ...state, behaviorState: newBehaviorState };
-  return setAuxToast(nextState, `${pfx} ${label}`);
+  return executePressAction(state, encoderId, binding.press, _effects, emit, deps);
 }
 
-export function pressAuxEncoderMapped<TState>(
+// Shared helper used by both pressAuxEncoder and pressAuxEncoderMapped
+function executePressAction<TState>(
   state: PlatformState<TState>,
   encoderId: string,
   bindingPress: any,
@@ -187,7 +170,6 @@ export function pressAuxEncoderMapped<TState>(
   if (bindingPress.kind === "menu_action") {
     return pressMenuAction(state, encoderId, bindingPress.action, bindingPress.label ?? "Action");
   }
-
   let actionType = bindingPress.actionType;
   let label = bindingPress.label ?? bindingPress.actionType;
   const pfx = auxToastPrefix(state, "press", encoderId, bindingPress);
@@ -199,75 +181,97 @@ export function pressAuxEncoderMapped<TState>(
   }
   const behavior = deps.resolveBehavior(state.runtimeConfig.activeBehavior);
   const newBehaviorState = behavior.onInput(state.behaviorState, { type: "behavior_action", actionType }, { bpm: state.transport.bpm, emit });
-  const nextState = { ...state, behaviorState: newBehaviorState };
-  return setAuxToast(nextState, `${pfx} ${label}`);
+  return setAuxToast({ ...state, behaviorState: newBehaviorState }, `${pfx} ${label}`);
+}
+
+// Shared helper for number/enum/bool turn actions (used by both turnAuxEncoder and turnAuxEncoderMapped)
+function executeTurnAction<TState>(
+  state: PlatformState<TState>,
+  encoderId: string,
+  tKey: string,
+  t: any,
+  delta: -1 | 1,
+  effects: PlatformEffect[],
+  deps: AuxSharedDeps<TState>
+): PlatformState<TState> {
+  const label = t.label ?? tKey;
+  const pfx = auxToastPrefix(state, "turn", encoderId, tKey);
+  const inactiveMsg = inactiveTurnMessage(state, tKey, label, deps);
+  if (inactiveMsg) return setAuxToast(state, `${auxInputPrefix("turn", encoderId)} ${inactiveMsg}`);
+  if (t.kind === "number") {
+    const current = deps.readAnyValue(state, tKey);
+    const nextValue = clamp(Number(current) + delta * (t.step ?? 1), t.min ?? 0, t.max ?? 127);
+    let nextState: PlatformState<TState> = deps.writeAnyValue(state, tKey, nextValue);
+    if (tKey.startsWith("behaviorConfig.")) {
+      const finalState = deps.reinitBehaviorState(nextState, tKey);
+      deps.autoSaveEffect(finalState, effects);
+      const v = deps.formatDisplayValue(tKey, deps.readAnyValue(finalState, tKey), finalState.runtimeConfig as any);
+      return setAuxToast(finalState, `${pfx} ${label}: ${v}`);
+    }
+    if (tKey.includes(".l1.behaviorConfig.")) {
+      nextState = applyBehaviorConfigField(nextState, tKey, nextValue);
+    }
+    deps.autoSaveEffect(nextState, effects);
+    maybeUpdateMomentaryPreview(nextState, tKey, effects);
+    const v = deps.formatDisplayValue(tKey, deps.readAnyValue(nextState, tKey), nextState.runtimeConfig as any);
+    return setAuxToast(nextState, `${pfx} ${label}: ${v}`);
+  }
+  if (t.kind === "enum" && t.options) {
+    const current = deps.readAnyValue(state, tKey);
+    const idx = t.options.indexOf(String(current));
+    const nextIdx = clamp(idx + delta, 0, t.options.length - 1);
+    const raw = t.options[nextIdx];
+    if (tKey === "transport.playing") {
+      const nextState = { ...state, transport: { ...state.transport, playing: raw === "true" } };
+      const v = deps.formatDisplayValue(tKey, deps.readAnyValue(nextState, tKey), nextState.runtimeConfig as any);
+      return setAuxToast(nextState, `${pfx} ${label}: ${v}`);
+    }
+    if (tKey === "activeBehavior" || tKey.startsWith("behaviorConfig.")) {
+      const nextState = deps.writeAnyValue(state, tKey, raw);
+      const finalState = deps.reinitBehaviorState(nextState, tKey);
+      deps.autoSaveEffect(finalState, effects);
+      const v = deps.formatDisplayValue(tKey, deps.readAnyValue(finalState, tKey), finalState.runtimeConfig as any);
+      return setAuxToast(finalState, `${pfx} ${label}: ${v}`);
+    }
+    let nextState = deps.writeAnyValue(state, tKey, raw);
+    if (tKey.includes(".l1.behaviorConfig.")) {
+      nextState = applyBehaviorConfigField(nextState, tKey, raw);
+    }
+    deps.autoSaveEffect(nextState, effects);
+    maybeUpdateMomentaryPreview(nextState, tKey, effects);
+    const v = deps.formatDisplayValue(tKey, deps.readAnyValue(nextState, tKey), nextState.runtimeConfig as any);
+    return setAuxToast(nextState, `${pfx} ${label}: ${v}`);
+  }
+  if (t.kind === "bool") {
+    const current = deps.readAnyValue(state, tKey);
+    const clamped = current === true ? (delta > 0 ? true : false) : (delta < 0 ? false : true);
+    let nextState = deps.writeAnyValue(state, tKey, clamped);
+    if (tKey.includes(".l1.behaviorConfig.")) {
+      nextState = applyBehaviorConfigField(nextState, tKey, clamped);
+    }
+    deps.autoSaveEffect(nextState, effects);
+    maybeUpdateMomentaryPreview(nextState, tKey, effects);
+    const v = deps.formatDisplayValue(tKey, deps.readAnyValue(nextState, tKey), nextState.runtimeConfig as any);
+    return setAuxToast(nextState, `${pfx} ${label}: ${v}`);
+  }
+  return state;
+}
+
+export function pressAuxEncoderMapped<TState>(
+  state: PlatformState<TState>,
+  encoderId: string,
+  bindingPress: any,
+  _effects: PlatformEffect[],
+  emit: (event: MusicalEvent) => void,
+  deps: AuxSharedDeps<TState>
+): PlatformState<TState> {
+  return executePressAction(state, encoderId, bindingPress, _effects, emit, deps);
 }
 
 export function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: string, delta: -1 | 1, effects: PlatformEffect[], deps: AuxSharedDeps<TState>): PlatformState<TState> {
   const binding = state.system.auxBindings[encoderId];
   if (!binding?.turn) return setAuxToast(state, `${auxInputPrefix("turn", encoderId)} No binding`);
-  const t = binding.turn;
-  const label = t.label ?? t.key;
-  const pfx = auxToastPrefix(state, "turn", encoderId, t.key);
-  const inactiveMsg = inactiveTurnMessage(state, t.key, label, deps);
-  if (inactiveMsg) return setAuxToast(state, `${auxInputPrefix("turn", encoderId)} ${inactiveMsg}`);
-  if (t.kind === "number") {
-    const current = deps.readAnyValue(state, t.key);
-    const nextValue = clamp(Number(current) + delta * (t.step ?? 1), t.min ?? 0, t.max ?? 127);
-    let nextState: PlatformState<TState> = deps.writeAnyValue(state, t.key, nextValue);
-    if (t.key.startsWith("behaviorConfig.")) {
-      const finalState = deps.reinitBehaviorState(nextState, t.key);
-      deps.autoSaveEffect(finalState, effects);
-      const v = deps.formatDisplayValue(t.key, deps.readAnyValue(finalState, t.key), finalState.runtimeConfig as any);
-      return setAuxToast(finalState, `${pfx} ${label}: ${v}`);
-    }
-    if (t.key.includes(".l1.behaviorConfig.")) {
-      nextState = applyBehaviorConfigField(nextState, t.key, nextValue);
-    }
-    deps.autoSaveEffect(nextState, effects);
-    maybeUpdateMomentaryPreview(nextState, t.key, effects);
-    const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
-    return setAuxToast(nextState, `${pfx} ${label}: ${v}`);
-  }
-  if (t.kind === "enum" && t.options) {
-    const current = deps.readAnyValue(state, t.key);
-    const idx = t.options.indexOf(String(current));
-    const nextIdx = clamp(idx + delta, 0, t.options.length - 1);
-    const raw = t.options[nextIdx];
-    if (t.key === "transport.playing") {
-      const nextState = { ...state, transport: { ...state.transport, playing: raw === "true" } };
-      const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
-      return setAuxToast(nextState, `${pfx} ${label}: ${v}`);
-    }
-    if (t.key === "activeBehavior" || t.key.startsWith("behaviorConfig.")) {
-      const nextState = deps.writeAnyValue(state, t.key, raw);
-      const finalState = deps.reinitBehaviorState(nextState, t.key);
-      deps.autoSaveEffect(finalState, effects);
-      const v = deps.formatDisplayValue(t.key, deps.readAnyValue(finalState, t.key), finalState.runtimeConfig as any);
-      return setAuxToast(finalState, `${pfx} ${label}: ${v}`);
-    }
-    let nextState = deps.writeAnyValue(state, t.key, raw);
-    if (t.key.includes(".l1.behaviorConfig.")) {
-      nextState = applyBehaviorConfigField(nextState, t.key, raw);
-    }
-    deps.autoSaveEffect(nextState, effects);
-    maybeUpdateMomentaryPreview(nextState, t.key, effects);
-    const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
-    return setAuxToast(nextState, `${pfx} ${label}: ${v}`);
-  }
-  if (t.kind === "bool") {
-    const current = deps.readAnyValue(state, t.key);
-    const clamped = current === true ? (delta > 0 ? true : false) : (delta < 0 ? false : true);
-    let nextState = deps.writeAnyValue(state, t.key, clamped);
-    if (t.key.includes(".l1.behaviorConfig.")) {
-      nextState = applyBehaviorConfigField(nextState, t.key, clamped);
-    }
-    deps.autoSaveEffect(nextState, effects);
-    maybeUpdateMomentaryPreview(nextState, t.key, effects);
-    const v = deps.formatDisplayValue(t.key, deps.readAnyValue(nextState, t.key), nextState.runtimeConfig as any);
-    return setAuxToast(nextState, `${pfx} ${label}: ${v}`);
-  }
-  return state;
+  return executeTurnAction(state, encoderId, binding.turn.key, binding.turn, delta, effects, deps);
 }
 
 export function turnAuxEncoderMapped<TState>(

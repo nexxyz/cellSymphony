@@ -133,8 +133,6 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       },
       displayBrightness: (next as any).runtimeConfig.displayBrightness ?? 75,
       buttonBrightness: (next as any).runtimeConfig.buttonBrightness ?? 75,
-      displayBrightness: (next as any).runtimeConfig.displayBrightness ?? 75,
-      buttonBrightness: (next as any).runtimeConfig.buttonBrightness ?? 75,
       masterVolume: (next as any).runtimeConfig.masterVolume ?? 100,
       voiceStealingMode: ((next as any).runtimeConfig.sound?.voiceStealingMode ?? "balanced") as any,
       audioLoad,

@@ -23,6 +23,8 @@ export type SimulatorSnapshot = {
   instruments: unknown[];
   mixer: unknown;
   autoSaveFlash: "none" | "flash";
+  displayBrightness: number;
+  buttonBrightness: number;
 };
 
 export type RuntimeListener = (snapshot: SimulatorSnapshot) => void;

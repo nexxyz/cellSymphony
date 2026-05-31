@@ -18,7 +18,7 @@ export function extractConfigPayload<TState>(state: PlatformState<TState>): Conf
   const runtimeAny: any = state.runtimeConfig;
   const active = clampPartIndex(runtimeAny.activePartIndex ?? 0);
   const parts = Array.isArray(runtimeAny.parts) ? [...runtimeAny.parts] : [];
-  const partStates: unknown[] = Array.isArray((state as any).partStates) ? ([...((state as any).partStates as unknown[])] as unknown[]) : [];
+  const partStates: unknown[] = Array.isArray((state as any).partStates) ? [...((state as any).partStates as unknown[])] : [];
   for (let i = 0; i < parts.length; i += 1) {
     const part = parts[i];
     const behaviorId = String(part?.l1?.behaviorId ?? runtimeAny.activeBehavior ?? state.activeBehavior);
