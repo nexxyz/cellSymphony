@@ -68,16 +68,10 @@ import {
   wrapOledText,
   writeValue
 } from "./coreUtils";
-registerBehavior(noneBehavior); registerBehavior(lifeBehavior);
-registerBehavior(sequencerBehavior);
-registerBehavior(keysBehavior);
-registerBehavior(brainBehavior);
-registerBehavior(antBehavior);
-registerBehavior(bounceBehavior);
-registerBehavior(shapesBehavior);
-registerBehavior(raindropsBehavior);
-registerBehavior(dlaBehavior);
-registerBehavior(gliderBehavior);
+registerBehavior(noneBehavior); registerBehavior(lifeBehavior); registerBehavior(sequencerBehavior);
+registerBehavior(keysBehavior); registerBehavior(brainBehavior); registerBehavior(antBehavior);
+registerBehavior(bounceBehavior); registerBehavior(shapesBehavior); registerBehavior(raindropsBehavior);
+registerBehavior(dlaBehavior); registerBehavior(gliderBehavior);
 function resolveBehavior(activeId: string): BehaviorEngine<any, any> {
   return getBehavior(activeId) ?? sequencerBehavior;
 }

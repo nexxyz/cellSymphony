@@ -1,4 +1,4 @@
-import type { BehaviorEngine } from "@cellsymphony/behavior-api";
+﻿import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import { getBehavior } from "@cellsymphony/behavior-api";
 import type { MappingConfig } from "@cellsymphony/mapping-core";
 import type { ConfigPayload, PlatformEffect, PlatformState, RuntimeConfig, StoreResult } from "./index";
@@ -492,7 +492,7 @@ export function applyStoreResult<TState>(
   }
   if (result.type === "save_default_result") {
     const flashUntilMs = result.ok ? Date.now() + 500 : undefined;
-    const flashState = { ...state, system: { ...state.system, autoSaveFlash: "flash", autoSaveFlashUntilMs: flashUntilMs ?? 0 } };
+    const flashState: PlatformState<TState> = { ...state, system: { ...state.system, autoSaveFlash: "flash" as const, autoSaveFlashUntilMs: flashUntilMs ?? 0 } };
     if (result.isAuto) return { state: flashState, effects };
     return { state: setToast(flashState, result.ok ? "Save ok." : "Save failed"), effects };
 }
