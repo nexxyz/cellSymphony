@@ -302,7 +302,7 @@ export function applyConfigPayload<TState>(
 ): PlatformState<TState> {
   return applyConfigPayloadRuntime(state, payload, behavior, {
     resolveBehavior,
-    factoryPayload: (b) => factoryPayload(b, createInitialState, extractConfigPayload)
+    factoryPayload: (b: BehaviorEngine<any, any>) => factoryPayload(b, createInitialState, extractConfigPayload)
   });
 }
 
@@ -313,7 +313,7 @@ export function applyStoreResult<TState>(
 ): { state: PlatformState<TState>; effects: PlatformEffect[] } {
   return applyStoreResultRuntime(state, result, behavior, {
     resolveBehavior,
-    factoryPayload: (b) => factoryPayload(b, createInitialState, extractConfigPayload)
+    factoryPayload: (b: BehaviorEngine<any, any>) => factoryPayload(b, createInitialState, extractConfigPayload)
   });
 }
 

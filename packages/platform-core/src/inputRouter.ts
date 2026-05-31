@@ -6,7 +6,7 @@ import { mapIntentsToMusicalEvents } from "@cellsymphony/mapping-core";
 import { clamp } from "./coreUtils";
 import { clampInstrumentIndex, clampPartIndex, clampSampleSlotIndex, PLATFORM_CAPS } from "./platformCaps";
 import type { PlatformEffect, PlatformState } from "./index";
-import { resolveTouchPanTarget, toGridSnapshot, touchPanPosFromGridX } from "./runtimeHelpers";
+import { applySampleAssignment, handleTouchGridPress, gridChanged, inputTransitionProfile, touchPageFromRow } from "./inputInternal";
 import { applyModulation, applyNoteBehavior, withScaleSteps } from "./musicTransforms";
 import { makeToast } from "./toast";
 import { activateMomentaryFx, applyFxAssignment, releaseMomentaryFx } from "./touchFxRuntime";
@@ -14,7 +14,7 @@ import { resolveAuxAutoMap } from "./auxAutoMap";
 import { visibleChildren } from "./menuView";
 import { startMomentaryFxPreview, stopMomentaryFxPreview } from "./momentaryFxPreview";
 import { AUX_MAPPING_OVERLAY_DELAY_MS, EVENT_BLIP_MS, SAMPLE_ASSIGN_REPEAT_WINDOW_MS, deadlineMs, heldForMs, nowMs } from "./timing";
-import { applySampleAssignment, gridChanged, inputTransitionProfile, touchPageFromRow } from "./inputInternal";
+import { resolveTouchPanTarget, toGridSnapshot, touchPanPosFromGridX } from "./runtimeHelpers";
 
 function reinitBehaviorConfig<TState>(
   state: PlatformState<TState>,
@@ -59,32 +59,6 @@ type Deps<TState> = {
   spawnActionTypeForBehavior: (behaviorId: string) => string | null;
   executeConfirmed: (state: PlatformState<TState>, action: any, effects: PlatformEffect[], behavior: BehaviorEngine<TState, unknown>) => PlatformState<TState>;
 };
-
-function handleTouchGridPress<TState>(state: PlatformState<TState>, input: Extract<DeviceInput, { type: "grid_press" }>, effects: PlatformEffect[], deps: Deps<TState>): PlatformState<TState> {
-  if (state.system.touchMode === "mix") {
-    const inst = clamp(Math.floor(input.x), 0, Math.min(PLATFORM_CAPS.instrumentCount, PLATFORM_CAPS.gridWidth) - 1);
-    const instruments = Array.isArray((state.runtimeConfig as any).instruments) ? ((state.runtimeConfig as any).instruments as any[]) : [];
-    if ((instruments[inst] as any)?.type === "none") return state;
-    const volume = Math.round(clamp(Math.floor(input.y), 0, PLATFORM_CAPS.gridHeight - 1) / (PLATFORM_CAPS.gridHeight - 1) * 100);
-    return deps.writeAnyValue(state, `instruments.${inst}.mixer.volume`, volume);
-  }
-  if (state.system.touchMode === "pan") {
-    const inst = clamp(Math.floor(input.y), 0, Math.min(PLATFORM_CAPS.instrumentCount, PLATFORM_CAPS.gridHeight) - 1);
-    const instruments = Array.isArray((state.runtimeConfig as any).instruments) ? ((state.runtimeConfig as any).instruments as any[]) : [];
-    if ((instruments[inst] as any)?.type === "none") return state;
-    const panPos = touchPanPosFromGridX(input.x);
-    const target = resolveTouchPanTarget(state as PlatformState<unknown>, inst);
-    if (target.route === "bus") {
-      const afterBus = deps.writeAnyValue(state, `mixer.buses.${target.busIndex}.panPos`, panPos);
-      return deps.writeAnyValue(afterBus, `instruments.${inst}.mixer.panPos`, panPos);
-    }
-    return deps.writeAnyValue(state, `instruments.${inst}.mixer.panPos`, panPos);
-  }
-  if (state.system.touchMode === "fx") {
-    return activateMomentaryFx(state, input.x, input.y, effects);
-  }
-  return state;
-}
 
 export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: DeviceInput, behavior: BehaviorEngine<TState, unknown>, deps: Deps<TState>): { state: PlatformState<TState>; events: MusicalEvent[]; effects: PlatformEffect[] } {
   const events: MusicalEvent[] = [];
