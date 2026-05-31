@@ -7,6 +7,7 @@ export type DlaState = {
   cells: boolean[];
   triggerTypes: CellTriggerType[];
   spawnInterval: number;
+  spawnStep: number;
   tickCounter: number;
 };
 
@@ -33,6 +34,7 @@ export type DlaConfig = {
 
 export const dlaBehavior: BehaviorEngine<DlaState, DlaConfig> = {
   id: "dla",
+  interpretInputTransitions: true,
   init(config) {
     const cells = new Array(CELL_COUNT).fill(false);
     const cx = Math.floor(GRID_WIDTH / 2);
@@ -44,6 +46,7 @@ export const dlaBehavior: BehaviorEngine<DlaState, DlaConfig> = {
       cells,
       triggerTypes: new Array(CELL_COUNT).fill("none") as CellTriggerType[],
       spawnInterval: config.spawnInterval ?? 2,
+      spawnStep: 0,
       tickCounter: 0,
     };
   },
@@ -66,7 +69,7 @@ export const dlaBehavior: BehaviorEngine<DlaState, DlaConfig> = {
   onTick(state) {
     const cells = state.cells.slice();
     const tickCounter = state.tickCounter + 1;
-    if (tickCounter % state.spawnInterval === 0) {
+    if (state.spawnInterval > 0 && (tickCounter - 1) % state.spawnInterval === state.spawnStep % state.spawnInterval) {
       const edge = Math.floor(Math.random() * (2 * (GRID_WIDTH + GRID_HEIGHT)));
       let sx: number;
       let sy: number;
@@ -99,7 +102,7 @@ export const dlaBehavior: BehaviorEngine<DlaState, DlaConfig> = {
       else if (cells[i]) tt[i] = "activate";
       else if (state.cells[i]) tt[i] = "deactivate";
     }
-    return { cells, triggerTypes: tt, spawnInterval: state.spawnInterval, tickCounter };
+    return { cells, triggerTypes: tt, spawnInterval: state.spawnInterval, spawnStep: state.spawnStep, tickCounter };
   },
   renderModel(state) {
     const count = state.cells.filter(Boolean).length;
@@ -113,6 +116,7 @@ export const dlaBehavior: BehaviorEngine<DlaState, DlaConfig> = {
   configMenu() {
     return [
       { key: "spawnInterval", label: "Spawn Interval", type: "number", min: 1, max: 20, step: 1 },
+      { key: "spawnStep", label: "Spawn Step", type: "number", min: 0, max: 63, step: 1 },
       { key: "seedCluster", label: "Seed Cluster", type: "action" }
     ];
   },

@@ -39,6 +39,11 @@ export function applyModulation(intents: { x: number; y: number; degree: number;
       out.push({ ...event, note: assigned.note });
       continue;
     }
+    if (event.type === "note_off") {
+      const note = pitchFromIntent(intent, cfg, event.note);
+      out.push({ ...event, note });
+      continue;
+    }
     out.push(event);
   }
   return applyGlobalSound(out, cfg);

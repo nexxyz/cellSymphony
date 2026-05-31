@@ -9,6 +9,7 @@ export type AntState = {
   triggerTypes: CellTriggerType[];
   maxAnts: number;
   autoSpawnInterval: number;
+  spawnStep: number;
   tickCounter: number;
 };
 
@@ -23,6 +24,7 @@ function idx(x: number, y: number): number {
 
 export const antBehavior: BehaviorEngine<AntState, AntConfig> = {
   id: "ant",
+  interpretInputTransitions: true,
   init(config) {
     return {
       ants: [],
@@ -30,6 +32,7 @@ export const antBehavior: BehaviorEngine<AntState, AntConfig> = {
       triggerTypes: new Array(CELL_COUNT).fill("none") as CellTriggerType[],
       maxAnts: config.maxAnts ?? 50,
       autoSpawnInterval: config.autoSpawnInterval ?? 0,
+      spawnStep: 0,
       tickCounter: 0,
     };
   },
@@ -62,7 +65,7 @@ export const antBehavior: BehaviorEngine<AntState, AntConfig> = {
     }
 
     let finalAnts = ants;
-    if (state.autoSpawnInterval > 0 && tickCounter % state.autoSpawnInterval === 0 && ants.length < state.maxAnts) {
+    if (state.autoSpawnInterval > 0 && (tickCounter - 1) % state.autoSpawnInterval === state.spawnStep % state.autoSpawnInterval && ants.length < state.maxAnts) {
       finalAnts = [...ants, { x: Math.floor(Math.random() * GRID_WIDTH), y: Math.floor(Math.random() * GRID_HEIGHT), dir: 0 }];
     }
 
@@ -71,7 +74,7 @@ export const antBehavior: BehaviorEngine<AntState, AntConfig> = {
       if (state.cells[i] === cells[i]) continue;
       tt[i] = cells[i] ? "activate" : "deactivate";
     }
-    return { ants: finalAnts, cells, triggerTypes: tt, maxAnts: state.maxAnts, autoSpawnInterval: state.autoSpawnInterval, tickCounter };
+    return { ants: finalAnts, cells, triggerTypes: tt, maxAnts: state.maxAnts, autoSpawnInterval: state.autoSpawnInterval, spawnStep: state.spawnStep, tickCounter };
   },
   renderModel(state) {
     const vis = state.cells.slice();
@@ -87,6 +90,7 @@ export const antBehavior: BehaviorEngine<AntState, AntConfig> = {
     return [
       { key: "maxAnts", label: "Max Ants", type: "number", min: 1, max: 100, step: 1 },
       { key: "autoSpawnInterval", label: "Spawn Interval", type: "number", min: 0, max: 20, step: 1 },
+      { key: "spawnStep", label: "Spawn Step", type: "number", min: 0, max: 63, step: 1 },
       { key: "spawnAnt", label: "Spawn Ant", type: "action" },
     ];
   },

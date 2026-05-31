@@ -281,6 +281,11 @@ export function tick<TState>(
     next.system = { ...next.system, transportFlashUntilMs: 0, transportFlash: "none" };
   }
 
+  // Auto-save flash decay.
+  if (next.system.autoSaveFlashUntilMs > 0 && nowMs > next.system.autoSaveFlashUntilMs) {
+    next.system = { ...next.system, autoSaveFlashUntilMs: 0, autoSaveFlash: "none" };
+  }
+
   const advanced = tickTransport(next, behavior, elapsedSeconds);
   next = advanced.state;
   events.push(...advanced.events);
@@ -387,7 +392,8 @@ function openContextHelp<TState>(state: PlatformState<TState>): PlatformState<TS
 function backMenu(menu: MenuState): MenuState {
   if (menu.editing) return { ...menu, editing: false };
   if (menu.stack.length === 0) return menu;
-  return { ...menu, stack: menu.stack.slice(0, -1), cursor: 0 };
+  const parentCursor = menu.stack[menu.stack.length - 1];
+  return { ...menu, stack: menu.stack.slice(0, -1), cursor: parentCursor };
 }
 
 function pressMenu<TState>(state: PlatformState<TState>, effects: PlatformEffect[]): PlatformState<TState> {

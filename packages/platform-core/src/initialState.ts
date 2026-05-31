@@ -76,7 +76,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       return [id, defaults];
     })),
     eventEnabled: true,
-    stateEnabled: true,
+    inputEventsWhilePaused: true,
     numericDisplayMode: "bar+numbers",
     pitch: { startingNote: DEFAULT_PITCH_STARTING_NOTE, lowestNote: DEFAULT_PITCH_LOWEST_NOTE, highestNote: DEFAULT_PITCH_HIGHEST_NOTE, outOfRange: "clamp", scale: "major_pentatonic", root: "D" },
     x: {
@@ -123,7 +123,6 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       scanDirection: "forward",
       scanSections: "1",
       eventEnabled: idx === 0,
-      stateEnabled: true,
       pitch: structuredClone(runtimeConfig.pitch),
       x: structuredClone(runtimeConfig.x),
       y: structuredClone(runtimeConfig.y),
@@ -173,6 +172,8 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       stopLatched: true,
       transportFlash: "none",
       transportFlashUntilMs: 0,
+      autoSaveFlash: "none",
+      autoSaveFlashUntilMs: 0,
       textEdit: null,
       midiOutputs: [],
       midiInputs: [],

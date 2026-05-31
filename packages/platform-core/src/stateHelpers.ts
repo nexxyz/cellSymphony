@@ -14,6 +14,8 @@ function syncLegacyFromActivePart<TState>(state: PlatformState<TState>): Platfor
   const active = clampPartIndex((state.runtimeConfig as any).activePartIndex ?? 0);
   const part = (state.runtimeConfig as any).parts?.[active];
   if (!part) return state;
+  const partCfg = part.l1.behaviorConfig ?? {};
+  const hasPartCfg = Object.keys(partCfg).length > 0;
   const nextRuntime: any = {
     ...(state.runtimeConfig as any),
     algorithmStepUnit: part.l1.stepRate,
@@ -24,13 +26,12 @@ function syncLegacyFromActivePart<TState>(state: PlatformState<TState>): Platfor
     scanDirection: part.l2.scanDirection,
     scanSections: part.l2.scanSections ?? "1",
     eventEnabled: part.l2.eventEnabled,
-    stateEnabled: part.l2.stateEnabled,
     pitch: structuredClone(part.l2.pitch),
     x: structuredClone(part.l2.x),
     y: structuredClone(part.l2.y),
     behaviorConfig: {
       ...(state.runtimeConfig as any).behaviorConfig,
-      [part.l1.behaviorId]: { ...(part.l1.behaviorConfig ?? {}) }
+      ...(hasPartCfg ? { [part.l1.behaviorId]: { ...partCfg } } : {})
     }
   };
   return { ...state, runtimeConfig: nextRuntime, mappingConfig: overrideFromPart(state.mappingConfig, part) as any };
@@ -59,7 +60,6 @@ function syncActivePartFromLegacy<TState>(state: PlatformState<TState>): Platfor
       scanDirection: (state.runtimeConfig as any).scanDirection,
       scanSections: (state.runtimeConfig as any).scanSections ?? "1",
       eventEnabled: Boolean((state.runtimeConfig as any).eventEnabled),
-      stateEnabled: Boolean((state.runtimeConfig as any).stateEnabled),
       pitch: structuredClone((state.runtimeConfig as any).pitch),
       x: structuredClone((state.runtimeConfig as any).x),
       y: structuredClone((state.runtimeConfig as any).y),
@@ -118,13 +118,12 @@ export function factoryPayload<TState>(behavior: BehaviorEngine<TState, unknown>
   parts[0].l2.mapping = {
     activate: { action: "note_on", slot: 0 },
     stable: { action: "none", slot: 0 },
-    deactivate: { action: "note_off", slot: 1 },
+    deactivate: { action: "note_off", slot: 0 },
     scanned: { action: "none", slot: 0 },
     scanned_empty: { action: "note_off", slot: 0 }
   };
   parts[0].l2.scanAxis = "columns";
   parts[0].l2.eventEnabled = true;
-  parts[0].l2.stateEnabled = true;
   parts[0].name = "life";
   parts[0].autoName = true;
 
@@ -141,7 +140,6 @@ export function factoryPayload<TState>(behavior: BehaviorEngine<TState, unknown>
   };
   parts[1].l2.scanAxis = "rows";
   parts[1].l2.eventEnabled = true;
-  parts[1].l2.stateEnabled = true;
   parts[1].name = "sequencer";
   parts[1].autoName = true;
 
@@ -157,7 +155,6 @@ export function factoryPayload<TState>(behavior: BehaviorEngine<TState, unknown>
       scanned_empty: { action: "none", slot: 0 }
     };
     parts[i].l2.eventEnabled = false;
-    parts[i].l2.stateEnabled = false;
     parts[i].name = "(none)";
     parts[i].autoName = true;
   }

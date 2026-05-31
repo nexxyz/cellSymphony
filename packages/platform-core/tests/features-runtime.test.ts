@@ -182,13 +182,15 @@ test("behavior onTick is called when accumulator reaches step threshold", () => 
 
 // ─── Sense Menu Instrument Targets ────────────────────────────────
 
-test("L2: Sense has 4 instrument targets accessible via menu", () => {
+test("L2: Sense has event instrument targets accessible via menu", () => {
   let state = makeState();
 
-  // Verify targets exist and can be edited through the menu
+  // Verify event targets (Activate, Stable, Deactivate) under Events > Instrument Targets
   state = selectLabel(state, "L2: Sense");
   state = press(state).state;
   state = selectLabel(state, "P1: mock");
+  state = press(state).state;
+  state = selectLabel(state, "Events");
   state = press(state).state;
   state = selectLabel(state, "Instrument Targets");
   state = press(state).state;
@@ -208,15 +210,28 @@ test("L2: Sense has 4 instrument targets accessible via menu", () => {
   state = turn(state, 1).state;
   state = press(state).state;
 
-  state = selectLabel(state, "Scanned Instrument");
+  assert.ok("activate" in state.mappingConfig, "activate target exists");
+  assert.ok("stable" in state.mappingConfig, "stable target exists");
+  assert.ok("deactivate" in state.mappingConfig, "deactivate target exists");
+});
+
+test("L2: Sense has scanning instrument targets accessible via menu", () => {
+  let state = makeState();
+
+  state = selectLabel(state, "L2: Sense");
+  state = press(state).state;
+  state = selectLabel(state, "P1: mock");
+  state = press(state).state;
+  state = selectLabel(state, "Scanning");
+  state = press(state).state;
+  state = selectLabel(state, "Instrument Targets");
+  state = press(state).state;
+
+  state = selectLabel(state, "Instrument");
   state = press(state).state;
   state = turn(state, 1).state;
   state = press(state).state;
 
-  // Verify all targets are present and settable
-  assert.ok("activate" in state.mappingConfig, "activate target exists");
-  assert.ok("stable" in state.mappingConfig, "stable target exists");
-  assert.ok("deactivate" in state.mappingConfig, "deactivate target exists");
   assert.ok("scanned" in state.mappingConfig, "scanned target exists");
 });
 
@@ -226,6 +241,8 @@ test("stable target is separate from activate and deactivate", () => {
   state = selectLabel(state, "L2: Sense");
   state = press(state).state;
   state = selectLabel(state, "P1: mock");
+  state = press(state).state;
+  state = selectLabel(state, "Events");
   state = press(state).state;
   state = selectLabel(state, "Instrument Targets");
   state = press(state).state;

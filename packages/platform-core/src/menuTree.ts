@@ -63,27 +63,44 @@ function l2PartGroup<TState>(state: PlatformState<TState>, deps: MenuTreeDeps<TS
     kind: "group",
     label: partLabelFn(state, idx),
     children: [
-      { kind: "enum", label: "Scan Mode", key: `${prefix}.l2.scanMode`, options: ["immediate", "scanning"] },
-      { kind: "enum", label: "Scan Axis", key: `${prefix}.l2.scanAxis`, options: ["rows", "columns"], visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
-      { kind: "enum", label: "Scan Unit", key: `${prefix}.l2.scanUnit`, options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
-      { kind: "enum", label: "Scan Direction", key: `${prefix}.l2.scanDirection`, options: ["forward", "reverse"], visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
-      { kind: "enum", label: "Sections", key: `${prefix}.l2.scanSections`, options: scanSectionOptions(), visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
-      { kind: "bool", label: "Event Triggers", key: `${prefix}.l2.eventEnabled` },
-      { kind: "bool", label: "State Notes", key: `${prefix}.l2.stateEnabled` },
       {
         kind: "group",
-        label: "Instrument Targets",
+        label: "Scanning",
         children: [
-          { kind: "enum", label: "Activate Action", key: `${prefix}.l2.mapping.activate.action`, options: ["none", "note_on", "note_off"] },
-          { kind: "enum", label: "Activate Instrument", key: `${prefix}.l2.mapping.activate.slot`, options: instrumentSlotOptions },
-          { kind: "enum", label: "Stable Action", key: `${prefix}.l2.mapping.stable.action`, options: ["none", "note_on", "note_off"] },
-          { kind: "enum", label: "Stable Instrument", key: `${prefix}.l2.mapping.stable.slot`, options: instrumentSlotOptions },
-          { kind: "enum", label: "Deactivate Action", key: `${prefix}.l2.mapping.deactivate.action`, options: ["none", "note_on", "note_off"] },
-          { kind: "enum", label: "Deactivate Instrument", key: `${prefix}.l2.mapping.deactivate.slot`, options: instrumentSlotOptions },
-          { kind: "enum", label: "Scanned Action", key: `${prefix}.l2.mapping.scanned.action`, options: ["none", "note_on", "note_off"] },
-          { kind: "enum", label: "Scanned Instrument", key: `${prefix}.l2.mapping.scanned.slot`, options: instrumentSlotOptions },
-          { kind: "enum", label: "Scanned Empty Action", key: `${prefix}.l2.mapping.scanned_empty.action`, options: ["none", "note_on", "note_off"] },
-          { kind: "enum", label: "Scanned Empty Instrument", key: `${prefix}.l2.mapping.scanned_empty.slot`, options: instrumentSlotOptions }
+          { kind: "enum", label: "Scan Mode", key: `${prefix}.l2.scanMode`, options: ["immediate", "scanning"] },
+          { kind: "enum", label: "Scan Axis", key: `${prefix}.l2.scanAxis`, options: ["rows", "columns"], visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
+          { kind: "enum", label: "Scan Unit", key: `${prefix}.l2.scanUnit`, options: ["1/16", "1/8", "1/4", "1/2", "1/1"], visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
+          { kind: "enum", label: "Scan Direction", key: `${prefix}.l2.scanDirection`, options: ["forward", "reverse"], visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
+          { kind: "enum", label: "Sections", key: `${prefix}.l2.scanSections`, options: scanSectionOptions(), visible: (c: any) => c.parts?.[idx]?.l2?.scanMode === "scanning" },
+          {
+            kind: "group",
+            label: "Instrument Targets",
+            children: [
+              { kind: "enum", label: "Action", key: `${prefix}.l2.mapping.scanned.action`, options: ["none", "note_on", "note_off"] },
+              { kind: "enum", label: "Instrument", key: `${prefix}.l2.mapping.scanned.slot`, options: instrumentSlotOptions },
+              { kind: "enum", label: "Empty Action", key: `${prefix}.l2.mapping.scanned_empty.action`, options: ["none", "note_on", "note_off"] },
+              { kind: "enum", label: "Empty Instrument", key: `${prefix}.l2.mapping.scanned_empty.slot`, options: instrumentSlotOptions }
+            ]
+          }
+        ]
+      },
+      {
+        kind: "group",
+        label: "Events",
+        children: [
+          { kind: "bool", label: "Event Triggers", key: `${prefix}.l2.eventEnabled` },
+          {
+            kind: "group",
+            label: "Instrument Targets",
+            children: [
+              { kind: "enum", label: "Activate Action", key: `${prefix}.l2.mapping.activate.action`, options: ["none", "note_on", "note_off"] },
+              { kind: "enum", label: "Activate Instrument", key: `${prefix}.l2.mapping.activate.slot`, options: instrumentSlotOptions },
+              { kind: "enum", label: "Stable Action", key: `${prefix}.l2.mapping.stable.action`, options: ["none", "note_on", "note_off"] },
+              { kind: "enum", label: "Stable Instrument", key: `${prefix}.l2.mapping.stable.slot`, options: instrumentSlotOptions },
+              { kind: "enum", label: "Deactivate Action", key: `${prefix}.l2.mapping.deactivate.action`, options: ["none", "note_on", "note_off"] },
+              { kind: "enum", label: "Deactivate Instrument", key: `${prefix}.l2.mapping.deactivate.slot`, options: instrumentSlotOptions }
+            ]
+          }
         ]
       },
       {
@@ -424,7 +441,7 @@ export function buildMenuTree<TState>(state: PlatformState<TState>, deps: MenuTr
               { kind: "group", label: "Sync & Clock", children: [{ kind: "enum", label: "Sync Mode", key: "midi.syncMode", options: ["internal", "external"] }, { kind: "bool", label: "Clock Out", key: "midi.clockOutEnabled" }, { kind: "bool", label: "Clock In", key: "midi.clockInEnabled" }, { kind: "bool", label: "Respond Start/Stop", key: "midi.respondToStartStop" }] }
             ]
           },
-          { kind: "group", label: "UI Settings", children: [{ kind: "bool", label: "Ghost Cells", key: "ghostCells" }, { kind: "enum", label: "Numeric Display", key: "numericDisplayMode", options: ["bar", "numbers", "bar+numbers"] }, { kind: "number", label: "Screen Sleep", key: "screenSleepSeconds", min: 0, max: 600, step: 10 }, { kind: "number", label: "Display Brightness", key: "displayBrightness", min: 10, max: 100, step: 5, displayStyle: "bar" }, { kind: "number", label: "Grid Brightness", key: "gridBrightness", min: 10, max: 100, step: 5, displayStyle: "bar" }, { kind: "number", label: "Button Brightness", key: "buttonBrightness", min: 10, max: 100, step: 5, displayStyle: "bar" }] }
+          { kind: "group", label: "UI Settings", children: [{ kind: "bool", label: "Ghost Cells", key: "ghostCells" }, { kind: "bool", label: "Input Events While Paused", key: "inputEventsWhilePaused" }, { kind: "enum", label: "Numeric Display", key: "numericDisplayMode", options: ["bar", "numbers", "bar+numbers"] }, { kind: "number", label: "Screen Sleep", key: "screenSleepSeconds", min: 0, max: 600, step: 10 }, { kind: "number", label: "Display Brightness", key: "displayBrightness", min: 10, max: 100, step: 5, displayStyle: "bar" }, { kind: "number", label: "Grid Brightness", key: "gridBrightness", min: 10, max: 100, step: 5, displayStyle: "bar" }, { kind: "number", label: "Button Brightness", key: "buttonBrightness", min: 10, max: 100, step: 5, displayStyle: "bar" }] }
         ]
       }
     ]

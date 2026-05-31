@@ -96,3 +96,27 @@ test("interpreting behavior events respect eventEnabled=false", () => {
   const result = routeInput(state, { type: "grid_press", x: 2, y: 3 } as DeviceInput, interpretingBehavior);
   assert.equal(result.events.filter(e => e.type === "note_on").length, 0, "should not produce note_on when eventEnabled is false");
 });
+
+test("interpreting behavior fires events while paused with inputEventsWhilePaused=true (default)", () => {
+  const state = makeState(interpretingBehavior);
+  assert.equal(state.transport.playing, false, "transport starts stopped");
+  assert.equal(state.runtimeConfig.inputEventsWhilePaused, true, "default is true");
+  const result = routeInput(state, { type: "grid_press", x: 2, y: 4 } as DeviceInput, interpretingBehavior);
+  assert.ok(result.events.filter(e => e.type === "note_on").length > 0, "should produce note_on while paused when inputEventsWhilePaused is true");
+});
+
+test("interpreting behavior suppresses events while paused when inputEventsWhilePaused=false", () => {
+  let state = makeState(interpretingBehavior);
+  state.transport.playing = false;
+  state.runtimeConfig.inputEventsWhilePaused = false;
+  const result = routeInput(state, { type: "grid_press", x: 2, y: 5 } as DeviceInput, interpretingBehavior);
+  assert.equal(result.events.filter(e => e.type === "note_on").length, 0, "should not produce note_on while paused when inputEventsWhilePaused is false");
+});
+
+test("interpreting behavior fires events while playing regardless of inputEventsWhilePaused", () => {
+  let state = makeState(interpretingBehavior);
+  state.transport.playing = true;
+  state.runtimeConfig.inputEventsWhilePaused = false;
+  const result = routeInput(state, { type: "grid_press", x: 2, y: 6 } as DeviceInput, interpretingBehavior);
+  assert.ok(result.events.filter(e => e.type === "note_on").length > 0, "should produce note_on while playing even when inputEventsWhilePaused is false");
+});

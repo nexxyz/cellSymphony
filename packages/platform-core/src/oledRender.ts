@@ -15,6 +15,7 @@ export type OledRenderState = {
   toast?: string | null;
   toastStartedAtMs?: number;
   renderNowMs?: number;
+  autoSaveFlash?: "none" | "flash";
 };
 
 const OLED_W = 128;
@@ -257,6 +258,9 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
     if (top.trim().length > 0) drawText(buf, { pos: { x: 4, y: 2 }, text: top, style: { fg: 0xffff, bg: null } });
     const bottom = state.splash.bottomText ? state.splash.bottomText.slice(0, OLED_TEXT_COLUMNS) : "";
     if (bottom.trim().length > 0) drawText(buf, { pos: { x: 4, y: OLED_H - 10 }, text: bottom, style: { fg: 0xffff, bg: null } });
+    if (state.autoSaveFlash === "flash") {
+      drawText(buf, { pos: { x: OLED_W - 10, y: 2 }, text: "S", style: { fg: 0xffff, bg: null } });
+    }
     return { width: 128, height: 128, format: "rgb565be", pixels: buf };
   }
 
@@ -304,6 +308,10 @@ export function renderOledFrame(state: OledRenderState): OledFrame {
 
   if (state.transportIcon) {
     drawTransport(buf, state.transportIcon, state.transportFlash ?? "none", Boolean(state.eventDotOn));
+  }
+
+  if (state.autoSaveFlash === "flash") {
+    drawText(buf, { pos: { x: OLED_W - 10, y: 4 }, text: "S", style: { fg: 0xffff, bg: null } });
   }
 
   if (state.audioLoadIndicator) drawAudioLoadIndicator(buf, state.audioLoadIndicator);

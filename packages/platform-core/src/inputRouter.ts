@@ -12,6 +12,7 @@ import { makeToast } from "./toast";
 import type { TouchMode } from "./platformTypes";
 import { activateMomentaryFx, applyFxAssignment, releaseMomentaryFx } from "./touchFxRuntime";
 import { resolveAuxAutoMap } from "./auxAutoMap";
+import { visibleChildren } from "./menuView";
 import { startMomentaryFxPreview, stopMomentaryFxPreview } from "./momentaryFxPreview";
 import { AUX_MAPPING_OVERLAY_DELAY_MS, EVENT_BLIP_MS, SAMPLE_ASSIGN_REPEAT_WINDOW_MS, deadlineMs, heldForMs, nowMs } from "./timing";
 
@@ -255,6 +256,15 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
     nextState = deps.writeAnyValue(nextState, "activePartIndex", idx);
     nextState = deps.reinitBehaviorState(nextState, "activePartIndex");
     nextState.system = { ...nextState.system, touchMode: "none", pendingCloneSource: null, toast: makeToast(pending !== null && pending !== idx ? `Cloned P${pending + 1} → P${idx + 1}` : `Part ${idx + 1}`) };
+    const ms = nextState.menu.stack;
+    if (ms.length >= 2 && ms[0] <= 1) {
+      const partGroups = visibleChildren((deps.menuTree(nextState) as any).children?.[ms[0]], nextState);
+      const newPartIdx = Math.min(idx, partGroups.length - 1);
+      if (newPartIdx !== ms[1]) {
+        const partKids = visibleChildren(partGroups[newPartIdx], nextState);
+        nextState = { ...nextState, menu: { ...nextState.menu, stack: [ms[0], newPartIdx, ...ms.slice(2)], cursor: Math.min(nextState.menu.cursor, Math.max(0, partKids.length - 1)), editing: false } };
+      }
+    }
     return { state: nextState, events, effects };
   }
 
@@ -320,23 +330,21 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       }
     } else if (nextState.system.fnHeld && nextState.system.shiftHeld) {
       const activePart = clampPartIndex((nextState.runtimeConfig as any).activePartIndex ?? 0);
-      const parts = Array.isArray((nextState.runtimeConfig as any).parts) ? [...((nextState.runtimeConfig as any).parts as any[])] : [];
-      const partStates = Array.isArray((nextState as any).partStates) ? [...(nextState as any).partStates] : [];
-      const noneId = "none";
-      const noneEngine = deps.resolveBehavior(noneId);
-      const emptyCfg: any = {};
-      if (noneEngine.configMenu) for (const item of noneEngine.configMenu(noneEngine.init({}))) { const val = emptyCfg[item.key]; if (val !== undefined) emptyCfg[item.key] = val; }
-      parts[activePart] = {
-        ...parts[activePart],
-        l1: { stepRate: "1/4", behaviorId: noneId, behaviorConfig: emptyCfg, saveGridState: true },
-        l2: { scanMode: "immediate", scanAxis: "columns", scanUnit: "1/8", scanDirection: "forward", eventEnabled: false, stateEnabled: false, pitch: { startingNote: 60, lowestNote: 36, highestNote: 83, outOfRange: "clamp", scale: "chromatic", root: "C" }, x: { pitch: { enabled: false, steps: 1 }, velocity: { enabled: false, steps: 8 } }, y: { pitch: { enabled: false, steps: 1 }, velocity: { enabled: false, steps: 8 } }, mapping: { activate: { action: "none", slot: 0 }, stable: { action: "none", slot: 0 }, deactivate: { action: "none", slot: 0 }, scanned: { action: "none", slot: 0 }, scanned_empty: { action: "none", slot: 0 } } },
-        autoName: true,
-        name: "none"
-      };
-      partStates[activePart] = noneEngine.init(emptyCfg);
-      nextState = { ...nextState, runtimeConfig: { ...(nextState.runtimeConfig as any), parts } as any, behaviorState: noneEngine.init(emptyCfg), activeBehavior: noneId } as any;
-      (nextState as any).partStates = partStates;
-      nextState.system = { ...nextState.system, toast: makeToast(`P${activePart + 1} reset`) };
+      const part: any = (nextState.runtimeConfig as any).parts?.[activePart];
+      const behaviorId = String(part?.l1?.behaviorId ?? nextState.runtimeConfig.activeBehavior);
+      const b = deps.resolveBehavior(behaviorId);
+      const ns = (part?.l1?.behaviorConfig ?? nextState.runtimeConfig.behaviorConfig?.[behaviorId]) as Record<string, unknown> | undefined;
+      const cfg: any = {};
+      if (b.configMenu) for (const item of b.configMenu(b.init({}))) { const val = ns?.[item.key]; if (val !== undefined) cfg[item.key] = val; }
+      nextState.behaviorState = b.init(cfg);
+      if (Array.isArray((nextState as any).partStates) && (nextState as any).partStates.length > activePart) {
+        (nextState as any).partStates[activePart] = nextState.behaviorState;
+      }
+      for (let channel = 0; channel < 16; channel += 1) {
+        events.push({ type: "cc", channel, controller: 120, value: 0 });
+        events.push({ type: "cc", channel, controller: 123, value: 0 });
+      }
+      nextState.system = { ...nextState.system, heldNotes: [], toast: makeToast("Grid cleared") };
     } else if (nextState.system.shiftHeld && !nextState.system.fnHeld) {
       const activePart = clampPartIndex((nextState.runtimeConfig as any).activePartIndex ?? 0);
       const part: any = (nextState.runtimeConfig as any).parts?.[activePart];
@@ -403,7 +411,7 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
   nextState.behaviorState = behavior.onInput(nextState.behaviorState, input, { bpm: nextState.transport.bpm, emit: (event) => events.push(event) });
   if (beforeInputGrid) {
     const afterInputGrid = toGridSnapshot(behavior.renderModel(nextState.behaviorState));
-    if (gridChanged(beforeInputGrid, afterInputGrid)) {
+    if (gridChanged(beforeInputGrid, afterInputGrid) && (nextState.transport.playing || nextState.runtimeConfig.inputEventsWhilePaused)) {
       const profile = inputTransitionProfile(nextState.runtimeConfig);
       const intents = interpretGrid(beforeInputGrid, afterInputGrid, nextState.transport.tick, profile);
       if (intents.length > 0) {
@@ -414,6 +422,19 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
         nextState.system = { ...nextState.system, heldNotes: shaped.heldNotes };
         events.push(...shaped.events);
       }
+    }
+    const cellCount = PLATFORM_CAPS.gridWidth * PLATFORM_CAPS.gridHeight;
+    const tt = (nextState.behaviorState as any)?.triggerTypes;
+    if (Array.isArray(tt) && tt.length >= cellCount) {
+      const newTT = [...tt];
+      let changed = false;
+      for (let i = 0; i < cellCount; i++) {
+        if (beforeInputGrid.cells[i] !== afterInputGrid.cells[i]) {
+          newTT[i] = afterInputGrid.cells[i] ? "activate" : "deactivate";
+          changed = true;
+        }
+      }
+      if (changed) (nextState.behaviorState as any).triggerTypes = newTT;
     }
   }
   if (events.some((e) => e.type === "note_on")) nextState.system = { ...nextState.system, eventBlipUntilMs: deadlineMs(nowMs(), EVENT_BLIP_MS) };

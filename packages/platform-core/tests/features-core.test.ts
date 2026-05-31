@@ -573,7 +573,7 @@ test("FN+left column without pending clone source just selects part", () => {
   assert.equal(result.state.system.toast?.message, "Part 6");
 });
 
-test("FN+SHIFT+BACK resets active part to none behavior", () => {
+test("FN+SHIFT+BACK clears grid without changing behavior", () => {
   let state = makeState();
   const activeIdx = (state.runtimeConfig as any).activePartIndex;
   (state.runtimeConfig as any).parts[activeIdx].l1.behaviorId = "life";
@@ -582,9 +582,9 @@ test("FN+SHIFT+BACK resets active part to none behavior", () => {
   state = routeInput(state, { type: "button_shift", pressed: true }, mockBehavior).state;
   state = routeInput(state, { type: "button_a", pressed: true }, mockBehavior).state;
 
-  assert.equal(((state.runtimeConfig as any).parts[activeIdx] as any).l1.behaviorId, "none");
-  assert.equal(state.activeBehavior, "none");
-  assert.ok(state.system.toast?.message.includes("reset"));
+  assert.equal(((state.runtimeConfig as any).parts[activeIdx] as any).l1.behaviorId, "life");
+  assert.equal(state.activeBehavior, "mock");
+  assert.ok(state.system.toast?.message.includes("Grid"));
 });
 
 test("factory reset defaults match REQ-14 specification", () => {

@@ -544,15 +544,6 @@ test("default axis pitch steps are x=0 and y=1", () => {
   assert.equal(state.runtimeConfig.y.pitch.steps, 1);
 });
 
-test("default State Notes is on for all parts", () => {
-  const state = createInitialState(mockBehavior) as any;
-  const parts = Array.isArray(state.runtimeConfig.parts) ? state.runtimeConfig.parts : [];
-  assert.equal(parts.length, 8);
-  for (const part of parts) {
-    assert.equal(part?.l2?.stateEnabled, true);
-  }
-});
-
 test("section restart makes pitch mapping local to scan section", () => {
   const state = createInitialState(mockBehavior) as any;
   const cfg = state.runtimeConfig;

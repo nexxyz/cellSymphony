@@ -376,7 +376,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "kind": "group",
     "title": "Part",
     "line1": "Per-part Sense interpretation, scanning, and trigger routing settings.",
-    "line2": "Part-specific event/state toggles, X/Y modulation, note mapping, and instrument targets."
+    "line2": "Organized into Scanning and Events subgroups; also includes Note Mapping, X/Y axis modulation."
   },
   {
     "id": "life_save_grid_state",
@@ -438,21 +438,12 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "key:eventEnabled",
     "kind": "bool",
     "title": "Event Triggers",
-    "line1": "Enables transition triggers such as activate/deactivate.",
-    "line2": "Disable to ignore transition events and rely on state scanning only."
-  },
-  {
-    "id": "state_enabled",
-    "path": "*",
-    "key": "key:stateEnabled",
-    "kind": "bool",
-    "title": "State Notes",
-    "line1": "Enables state-based scan triggers from current cell occupancy.",
-    "line2": "Default is On for all parts; disable to use only transition events from cell changes."
+    "line1": "Enables transition triggers (activate, deactivate, stable).",
+    "line2": "Disable to suppress transition events."
   },
   {
     "id": "targets_group",
-    "path": "Menu > L2: Sense > Instrument Targets",
+    "path": "Menu > L2: Sense > P*: * > Events > Instrument Targets",
     "key": "",
     "kind": "group",
     "title": "Instrument Targets",
@@ -1135,8 +1126,35 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "The slot path updates immediately and can auto-save if enabled."
   },
   {
+    "id": "sense_scanning_group",
+    "path": "Menu > L2: Sense > P*: * > Scanning",
+    "key": "",
+    "kind": "group",
+    "title": "Scanning",
+    "line1": "Controls scan cursor movement, subdivision, and cursor-based instrument targets.",
+    "line2": "Scan mode, axis, unit, direction, sections; plus action/instrument mappings for scanned-filled and scanned-empty."
+  },
+  {
+    "id": "sense_scan_targets_group",
+    "path": "Menu > L2: Sense > P*: * > Scanning > Instrument Targets",
+    "key": "",
+    "kind": "group",
+    "title": "Scan Instrument Targets",
+    "line1": "Maps scan cursor hits (filled and empty) to action and instrument slot.",
+    "line2": "Action defaults to none so you opt into scan-based triggering."
+  },
+  {
+    "id": "sense_events_group",
+    "path": "Menu > L2: Sense > P*: * > Events",
+    "key": "",
+    "kind": "group",
+    "title": "Events",
+    "line1": "Controls transition event triggering and event-based instrument targets.",
+    "line2": "Event Triggers toggle, plus activate/stable/deactivate action/instrument mappings."
+  },
+  {
     "id": "sense_note_mapping_group",
-    "path": "Menu > L2: Sense > Note Mapping",
+    "path": "Menu > L2: Sense > P*: * > Note Mapping",
     "key": "",
     "kind": "group",
     "title": "Sense Note Mapping",
@@ -1295,15 +1313,6 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "title": "Filter Envelope",
     "line1": "Shapes filter movement over time using ADSR stages.",
     "line2": "Use with Env Amount for plucks, swells, and contour motion."
-  },
-  {
-    "id": "playback_section",
-    "path": "Menu > Playback",
-    "key": "",
-    "kind": "group",
-    "title": "Playback",
-    "line1": "Transport tempo and timing controls.",
-    "line2": "These settings affect scheduler pacing and clock behavior."
   },
   {
     "id": "bpm_help",
@@ -1469,7 +1478,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "sense_x_axis_group",
-    "path": "Menu > L2: Sense > X Axis",
+    "path": "Menu > L2: Sense > P*: * > X Axis",
     "key": "",
     "kind": "group",
     "title": "X Axis Modulation",
@@ -1478,7 +1487,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "sense_x_pitch_group",
-    "path": "Menu > L2: Sense > X Axis > Pitch Steps",
+    "path": "Menu > L2: Sense > P*: * > X Axis > Pitch Steps",
     "key": "",
     "kind": "group",
     "title": "X Pitch Steps",
@@ -1486,17 +1495,8 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "Disable to remove X-axis pitch influence."
   },
   {
-    "id": "restart_section_x",
-    "path": "*",
-    "key": "key:parts.*.l2.x.pitch.restartEachSection",
-    "kind": "bool",
-    "title": "Restart Section",
-    "line1": "Restarts X pitch stepping inside each scan section.",
-    "line2": "Use with sectioned column scans for repeated motifs per lane."
-  },
-  {
     "id": "sense_x_velocity_group",
-    "path": "Menu > L2: Sense > X Axis > Velocity",
+    "path": "Menu > L2: Sense > P*: * > X Axis > Velocity",
     "key": "",
     "kind": "group",
     "title": "X Velocity Lane",
@@ -1505,7 +1505,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "sense_x_cutoff_group",
-    "path": "Menu > L2: Sense > X Axis > Filter Cutoff",
+    "path": "Menu > L2: Sense > P*: * > X Axis > Filter Cutoff",
     "key": "",
     "kind": "group",
     "title": "X Cutoff Lane",
@@ -1514,7 +1514,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "sense_x_res_group",
-    "path": "Menu > L2: Sense > X Axis > Filter Resonance",
+    "path": "Menu > L2: Sense > P*: * > X Axis > Filter Resonance",
     "key": "",
     "kind": "group",
     "title": "X Resonance Lane",
@@ -1523,7 +1523,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "sense_y_axis_group",
-    "path": "Menu > L2: Sense > Y Axis",
+    "path": "Menu > L2: Sense > P*: * > Y Axis",
     "key": "",
     "kind": "group",
     "title": "Y Axis Modulation",
@@ -1532,7 +1532,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "sense_y_pitch_group",
-    "path": "Menu > L2: Sense > Y Axis > Pitch Steps",
+    "path": "Menu > L2: Sense > P*: * > Y Axis > Pitch Steps",
     "key": "",
     "kind": "group",
     "title": "Y Pitch Steps",
@@ -1540,17 +1540,8 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "Disable to remove Y-axis pitch influence."
   },
   {
-    "id": "restart_section_y",
-    "path": "*",
-    "key": "key:parts.*.l2.y.pitch.restartEachSection",
-    "kind": "bool",
-    "title": "Restart Section",
-    "line1": "Restarts Y pitch stepping inside each scan section.",
-    "line2": "Use with sectioned row scans for repeated motifs per lane."
-  },
-  {
     "id": "sense_y_velocity_group",
-    "path": "Menu > L2: Sense > Y Axis > Velocity",
+    "path": "Menu > L2: Sense > P*: * > Y Axis > Velocity",
     "key": "",
     "kind": "group",
     "title": "Y Velocity Lane",
@@ -1559,7 +1550,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "sense_y_cutoff_group",
-    "path": "Menu > L2: Sense > Y Axis > Filter Cutoff",
+    "path": "Menu > L2: Sense > P*: * > Y Axis > Filter Cutoff",
     "key": "",
     "kind": "group",
     "title": "Y Cutoff Lane",
@@ -1568,7 +1559,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "sense_y_res_group",
-    "path": "Menu > L2: Sense > Y Axis > Filter Resonance",
+    "path": "Menu > L2: Sense > P*: * > Y Axis > Filter Resonance",
     "key": "",
     "kind": "group",
     "title": "Y Resonance Lane",
@@ -1999,44 +1990,8 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "Use Slot 1 and Slot 2 to build a bus chain."
   },
   {
-    "id": "fx_bus_1",
-    "path": "Menu > L3: Voice > FX Buses > Bus 1",
-    "key": "",
-    "kind": "group",
-    "title": "FX Bus",
-    "line1": "Settings for this FX bus.",
-    "line2": "Use Slot 1 and Slot 2 to build a bus chain."
-  },
-  {
-    "id": "fx_bus_2",
-    "path": "Menu > L3: Voice > FX Buses > Bus 2",
-    "key": "",
-    "kind": "group",
-    "title": "FX Bus",
-    "line1": "Settings for this FX bus.",
-    "line2": "Use Slot 1 and Slot 2 to build a bus chain."
-  },
-  {
-    "id": "fx_bus_3",
-    "path": "Menu > L3: Voice > FX Buses > Bus 3",
-    "key": "",
-    "kind": "group",
-    "title": "FX Bus",
-    "line1": "Settings for this FX bus.",
-    "line2": "Use Slot 1 and Slot 2 to build a bus chain."
-  },
-  {
-    "id": "fx_bus_4",
-    "path": "Menu > L3: Voice > FX Buses > Bus 4",
-    "key": "",
-    "kind": "group",
-    "title": "FX Bus",
-    "line1": "Settings for this FX bus.",
-    "line2": "Use Slot 1 and Slot 2 to build a bus chain."
-  },
-  {
     "id": "fx_bus_slot1",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 1",
     "key": "key:mixer.buses.*.slot1",
     "kind": "enum",
     "title": "FX Slot 1",
@@ -2045,7 +2000,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot2",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 2",
     "key": "key:mixer.buses.*.slot2",
     "kind": "enum",
     "title": "FX Slot 2",
@@ -2054,7 +2009,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_pan",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Pan Pos",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Pan Pos",
     "key": "key:mixer.buses.*.panPos",
     "kind": "number",
     "title": "FX Bus Pan Position",
@@ -2063,7 +2018,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot1_group",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 1",
     "key": "",
     "kind": "group",
     "title": "FX Slot",
@@ -2072,7 +2027,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot2_group",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 2",
     "key": "",
     "kind": "group",
     "title": "FX Slot",
@@ -2081,7 +2036,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot1_type",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1 > Type",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 1 > Type",
     "key": "key:mixer.buses.*.slot1.type",
     "kind": "enum",
     "title": "Slot Type",
@@ -2090,7 +2045,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot2_type",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2 > Type",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 2 > Type",
     "key": "key:mixer.buses.*.slot2.type",
     "kind": "enum",
     "title": "Slot Type",
@@ -2099,7 +2054,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot1_duck_group",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1 > duck",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 1 > duck",
     "key": "",
     "kind": "group",
     "title": "duck",
@@ -2108,7 +2063,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot2_duck_group",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2 > duck",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 2 > duck",
     "key": "",
     "kind": "group",
     "title": "duck",
@@ -2117,7 +2072,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot1_duck_source",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1 > duck > Source",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 1 > duck > Source",
     "key": "key:mixer.buses.*.slot1.params.source",
     "kind": "enum",
     "title": "duck Source",
@@ -2126,7 +2081,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot2_duck_source",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2 > duck > Source",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 2 > duck > Source",
     "key": "key:mixer.buses.*.slot2.params.source",
     "kind": "enum",
     "title": "duck Source",
@@ -2135,7 +2090,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot1_compressor_group",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1 > compressor",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 1 > compressor",
     "key": "",
     "kind": "group",
     "title": "compressor",
@@ -2144,7 +2099,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot2_compressor_group",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2 > compressor",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 2 > compressor",
     "key": "",
     "kind": "group",
     "title": "compressor",
@@ -2153,7 +2108,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot1_eq_group",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 1 > eq",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 1 > eq",
     "key": "",
     "kind": "group",
     "title": "eq",
@@ -2162,7 +2117,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
   },
   {
     "id": "fx_bus_slot2_eq_group",
-    "path": "Menu > L3: Voice > FX Buses > Bus * > Slot 2 > eq",
+    "path": "Menu > L3: Voice > FX Buses > B*: * > Slot 2 > eq",
     "key": "",
     "kind": "group",
     "title": "eq",
@@ -2203,7 +2158,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "kind": "number",
     "title": "BPM",
     "line1": "Sets master tempo in beats per minute from the Touch layer.",
-    "line2": "This mirrors the Playback BPM setting for performance access."
+    "line2": "This is the main tempo control."
   },
   {
     "id": "touch_fx_section",
@@ -2220,7 +2175,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "key:touchFx.selected.fxType",
     "kind": "enum",
     "title": "FX Type",
-    "line1": "Options: none, stutter, freeze, filter_sweep, pitch_shift. none clears mapped cells; stutter repeats/gates; freeze holds audio; filter_sweep moves cutoff and resonance; pitch_shift shifts pitch.",
+    "line1": "Options: none, stutter, freeze, filter_sweep, pitch_shift. none clears mapped cells; stutter captures and loops a segment; freeze captures early audio into an infinite reverb tail, release fades and removes; filter_sweep sweeps cutoff from open to target on press and back on release; pitch_shift shifts pitch.",
     "line2": "Changing the type seeds that effect's default parameters."
   },
   {
@@ -2229,7 +2184,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "key:touchFx.selected.params.rateHz",
     "kind": "number",
     "title": "Rate Hz",
-    "line1": "Sets stutter repeat rate in Hertz for the config being mapped.",
+    "line1": "Sets the captured segment repeat rate (1-32 Hz). Higher rate = shorter captured segment.",
     "line2": "Stored per grid cell when Map to Grid is used."
   },
   {
@@ -2238,16 +2193,16 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "key:touchFx.selected.params.depthPct",
     "kind": "number",
     "title": "Depth",
-    "line1": "Sets stutter depth from 0 to 100 for the config being mapped.",
+    "line1": "Sets stutter wet mix from 0 (dry) to 100 (fully wet repeat) for the config being mapped.",
     "line2": "Stored per grid cell when Map to Grid is used."
   },
   {
-    "id": "touch_fx_decay",
-    "path": "Menu > L4: Touch > FX Page > Decay",
-    "key": "key:touchFx.selected.params.decayMs",
+    "id": "touch_fx_release_ms",
+    "path": "Menu > L4: Touch > FX Page > Release Ms",
+    "key": "key:touchFx.selected.params.releaseMs",
     "kind": "number",
-    "title": "Decay",
-    "line1": "Sets freeze decay time in milliseconds for the config being mapped.",
+    "title": "Release Ms",
+    "line1": "Sets freeze release fade time in milliseconds (10-5000). Controls how long the reverb tail fades out after releasing the grid cell.",
     "line2": "Stored per grid cell when Map to Grid is used."
   },
   {
@@ -2265,7 +2220,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "key": "key:touchFx.selected.params.cutoffPct",
     "kind": "number",
     "title": "Cutoff",
-    "line1": "Sets filter_sweep cutoff amount from 0 to 100 for the config being mapped.",
+    "line1": "Sets filter_sweep target cutoff amount from 0 (higher cutoff) to 100 (lower cutoff). Sweeps from fully open on press toward this target.",
     "line2": "Stored per grid cell when Map to Grid is used."
   },
   {
@@ -2278,12 +2233,39 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "line2": "Stored per grid cell when Map to Grid is used."
   },
   {
+    "id": "touch_fx_sweep_in",
+    "path": "Menu > L4: Touch > FX Page > Sweep In",
+    "key": "key:touchFx.selected.params.sweepInMs",
+    "kind": "number",
+    "title": "Sweep In",
+    "line1": "Sets filter_sweep sweep-in time in milliseconds (10-3000). Duration to sweep from open filter toward the target cutoff on press.",
+    "line2": "Stored per grid cell when Map to Grid is used."
+  },
+  {
+    "id": "touch_fx_sweep_out",
+    "path": "Menu > L4: Touch > FX Page > Sweep Out",
+    "key": "key:touchFx.selected.params.sweepOutMs",
+    "kind": "number",
+    "title": "Sweep Out",
+    "line1": "Sets filter_sweep sweep-out time in milliseconds (10-3000). Duration to sweep from target back to fully open filter on release.",
+    "line2": "Stored per grid cell when Map to Grid is used."
+  },
+  {
     "id": "touch_fx_semitones",
     "path": "Menu > L4: Touch > FX Page > Semitones",
     "key": "key:touchFx.selected.params.semitones",
     "kind": "number",
     "title": "Semitones",
-    "line1": "Sets pitch_shift offset in semitones for the config being mapped.",
+    "line1": "Sets pitch_shift semitone offset (-24..24) for the config being mapped. Combined with Cents for fine tuning.",
+    "line2": "Stored per grid cell when Map to Grid is used."
+  },
+  {
+    "id": "touch_fx_cents",
+    "path": "Menu > L4: Touch > FX Page > Cents",
+    "key": "key:touchFx.selected.params.cents",
+    "kind": "number",
+    "title": "Cents",
+    "line1": "Sets pitch_shift cents offset (-100..100) for fine detuning the config being mapped. Added to Semitones for the total shift.",
     "line2": "Stored per grid cell when Map to Grid is used."
   },
   {

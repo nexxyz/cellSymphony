@@ -17,13 +17,12 @@ export type NeoKeyLeds = {
 export type SimulatorSnapshot = {
   frame: SimulatorFrame;
   neoKeyLeds: NeoKeyLeds;
-  displayBrightness: number;
-  buttonBrightness: number;
   masterVolume: number;
   voiceStealingMode: "off" | "lenient" | "balanced" | "aggressive";
   audioLoad: { ratio: number; voiceSteal: boolean };
   instruments: unknown[];
   mixer: unknown;
+  autoSaveFlash: "none" | "flash";
 };
 
 export type RuntimeListener = (snapshot: SimulatorSnapshot) => void;

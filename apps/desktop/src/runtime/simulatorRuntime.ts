@@ -98,8 +98,8 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
     if (!pendingDefaultSave) return;
     store.saveDefault(pendingDefaultSave);
     pendingDefaultSave = null;
-    const applied = applyStoreResult(state, { type: "save_default_result", ok: true } as any, activeBehavior());
-    state = applied.state;
+    state = applyStoreResult(state, { type: "save_default_result", ok: true, isAuto: true }, activeBehavior()).state;
+    publishSnapshot();
   }
 
   function cancelPendingDefaultSave() {
@@ -133,11 +133,14 @@ export function createSimulatorRuntime(scheduler: RuntimeScheduler = createInter
       },
       displayBrightness: (next as any).runtimeConfig.displayBrightness ?? 75,
       buttonBrightness: (next as any).runtimeConfig.buttonBrightness ?? 75,
+      displayBrightness: (next as any).runtimeConfig.displayBrightness ?? 75,
+      buttonBrightness: (next as any).runtimeConfig.buttonBrightness ?? 75,
       masterVolume: (next as any).runtimeConfig.masterVolume ?? 100,
       voiceStealingMode: ((next as any).runtimeConfig.sound?.voiceStealingMode ?? "balanced") as any,
       audioLoad,
       instruments: Array.isArray((next as any).runtimeConfig.instruments) ? ((next as any).runtimeConfig.instruments as unknown[]) : [],
-      mixer: (next as any).runtimeConfig.mixer ?? { buses: [] }
+      mixer: (next as any).runtimeConfig.mixer ?? { buses: [] },
+      autoSaveFlash: (next.system as any).autoSaveFlash ?? "none"
     };
   }
 

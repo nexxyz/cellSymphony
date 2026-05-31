@@ -54,7 +54,6 @@ export function extractConfigPayload<TState>(state: PlatformState<TState>): Conf
         scanUnit: runtimeAny.scanUnit,
         scanDirection: runtimeAny.scanDirection,
         eventEnabled: runtimeAny.eventEnabled,
-        stateEnabled: runtimeAny.stateEnabled,
         pitch: structuredClone(runtimeAny.pitch),
         x: structuredClone(runtimeAny.x),
         y: structuredClone(runtimeAny.y),
@@ -314,7 +313,6 @@ function sanitizePayload<TState>(payload: ConfigPayload, behavior: BehaviorEngin
     mergedRuntime.scanDirection = p.l2?.scanDirection ?? mergedRuntime.scanDirection;
     mergedRuntime.scanSections = p.l2?.scanSections ?? mergedRuntime.scanSections ?? "1";
     mergedRuntime.eventEnabled = p.l2?.eventEnabled ?? mergedRuntime.eventEnabled;
-    mergedRuntime.stateEnabled = p.l2?.stateEnabled ?? mergedRuntime.stateEnabled;
     mergedRuntime.pitch = p.l2?.pitch ? structuredClone(p.l2.pitch) : mergedRuntime.pitch;
     mergedRuntime.x = p.l2?.x ? structuredClone(p.l2.x) : mergedRuntime.x;
     mergedRuntime.y = p.l2?.y ? structuredClone(p.l2.y) : mergedRuntime.y;
@@ -492,7 +490,12 @@ export function applyStoreResult<TState>(
     const loaded = applyConfigPayload(state, result.payload, behavior, deps);
     return { state: setToast({ ...loaded, system: { ...loaded.system, currentPresetName: null } }, "Loaded default"), effects };
   }
-  if (result.type === "save_default_result") return { state: setToast(state, result.ok ? "Save ok." : "Save failed"), effects };
+  if (result.type === "save_default_result") {
+    const flashUntilMs = result.ok ? Date.now() + 500 : undefined;
+    const flashState = { ...state, system: { ...state.system, autoSaveFlash: "flash", autoSaveFlashUntilMs: flashUntilMs ?? 0 } };
+    if (result.isAuto) return { state: flashState, effects };
+    return { state: setToast(flashState, result.ok ? "Save ok." : "Save failed"), effects };
+}
   if (result.type === "store_error") return { state: setToast(state, result.message.slice(0, 18)), effects };
   return { state, effects };
 }

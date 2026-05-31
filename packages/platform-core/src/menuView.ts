@@ -5,7 +5,7 @@ import { resolveAuxAutoMap, resolveEffectiveAuxMap } from "./auxAutoMap";
 import type { BehaviorEngine } from "@cellsymphony/behavior-api";
 import { AUX_MAPPING_OVERLAY_DELAY_MS, heldForMs, nowMs } from "./timing";
 
-function fxTypeShort(fxType: string): string {
+export function fxTypeShort(fxType: string): string {
   if (fxType === "pitch_shift") return "Pitch";
   if (fxType === "filter_sweep") return "Filter";
   if (fxType === "stutter") return "Stut";
@@ -13,7 +13,7 @@ function fxTypeShort(fxType: string): string {
   return "FX";
 }
 
-function compactSourcePathFromKey<TState>(state: PlatformState<TState>, key: string): string | null {
+export function compactSourcePathFromKey<TState>(state: PlatformState<TState>, key: string): string | null {
   if (key.startsWith("touchFx.selected.params.")) {
     const fxType = String((state.runtimeConfig as any).touchFx?.selected?.fxType ?? "none");
     return `L4>FX>${fxTypeShort(fxType)}`;
@@ -149,16 +149,17 @@ export function currentMenuView<TState>(deps: CurrentMenuViewDeps<TState>): { pa
       }
       if (turnLabel && pressLabel && turnPath && pressPath && turnPath === pressPath) {
         body.push(`${name}: ${turnPath}`);
-        body.push(`${turnLabel}/!${pressLabel}`);
+        body.push(`  ${turnLabel}`);
+        body.push(`  !${pressLabel}`);
         continue;
       }
       if (turnLabel) {
-        body.push(`${name}- ${turnPath ?? "?"}`);
-        body.push(turnLabel);
+        body.push(`${name}: ${turnPath ?? "?"}`);
+        body.push(`  ${turnLabel}`);
       }
       if (pressLabel) {
         body.push(`${name}! ${pressPath ?? "?"}`);
-        body.push(`!${pressLabel}`);
+        body.push(`  !${pressLabel}`);
       }
     }
 

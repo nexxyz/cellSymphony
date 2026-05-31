@@ -13,7 +13,7 @@
   },
   "deactivate": {
     "action": "note_off",
-    "channel": 1,
+    "channel": 0,
     "velocity": 68,
     "durationMs": 90
   },
@@ -30,9 +30,9 @@
     "durationMs": 130
   },
   "scanned_empty": {
-    "action": "note_off",
+    "action": "none",
     "channel": 0,
-    "velocity": 88,
-    "durationMs": 130
+    "velocity": 68,
+    "durationMs": 90
   }
 }

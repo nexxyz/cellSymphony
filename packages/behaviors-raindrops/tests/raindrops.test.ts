@@ -69,9 +69,10 @@ test("renderModel returns expected structure", () => {
 test("configMenu returns expected items", () => {
   const state = raindropsBehavior.init({});
   const menu = raindropsBehavior.configMenu!(state);
-  assert.equal(menu.length, 3);
+  assert.equal(menu.length, 4);
   assert.equal(menu[0].key, "autoDropInterval");
-  assert.equal(menu[1].key, "splashRadius");
-  assert.equal(menu[2].key, "dropNow");
-  assert.equal(menu[2].type, "action");
+  assert.equal(menu[1].key, "spawnStep");
+  assert.equal(menu[2].key, "splashRadius");
+  assert.equal(menu[3].key, "dropNow");
+  assert.equal(menu[3].type, "action");
 });

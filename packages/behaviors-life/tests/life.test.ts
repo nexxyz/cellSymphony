@@ -96,9 +96,10 @@ test("serialize/deserialize round-trip", () => {
 test("configMenu returns expected items", () => {
   const state = lifeBehavior.init({});
   const menu = lifeBehavior.configMenu!(state);
-  assert.equal(menu.length, 3);
+  assert.equal(menu.length, 4);
   assert.equal(menu[0].key, "randomCellsPerTick");
   assert.equal(menu[1].key, "randomTickInterval");
-  assert.equal(menu[2].key, "spawnRandom");
-  assert.equal(menu[2].type, "action");
+  assert.equal(menu[2].key, "spawnStep");
+  assert.equal(menu[3].key, "spawnRandom");
+  assert.equal(menu[3].type, "action");
 });

@@ -39,8 +39,9 @@ test("renderModel returns expected structure", () => {
 test("configMenu returns expected items", () => {
   const state = dlaBehavior.init({});
   const menu = dlaBehavior.configMenu!(state);
-  assert.equal(menu.length, 2);
+  assert.equal(menu.length, 3);
   assert.equal(menu[0].key, "spawnInterval");
-  assert.equal(menu[1].key, "seedCluster");
-  assert.equal(menu[1].type, "action");
+  assert.equal(menu[1].key, "spawnStep");
+  assert.equal(menu[2].key, "seedCluster");
+  assert.equal(menu[2].type, "action");
 });

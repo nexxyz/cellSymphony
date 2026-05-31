@@ -11,6 +11,7 @@ export type GliderState = {
   cells: boolean[];
   triggerTypes: CellTriggerType[];
   spawnInterval: number;
+  spawnStep: number;
   tickCounter: number;
 };
 
@@ -24,11 +25,13 @@ export type GliderConfig = {
 
 export const gliderBehavior: BehaviorEngine<GliderState, GliderConfig> = {
   id: "glider",
+  interpretInputTransitions: true,
   init(config) {
     return {
       cells: new Array(CELL_COUNT).fill(false),
       triggerTypes: new Array(CELL_COUNT).fill("none") as CellTriggerType[],
       spawnInterval: config.spawnInterval ?? 8,
+      spawnStep: 0,
       tickCounter: 0,
     };
   },
@@ -42,13 +45,22 @@ export const gliderBehavior: BehaviorEngine<GliderState, GliderConfig> = {
       }
       return { ...state, cells };
     }
+    if (input.type === "grid_press") {
+      const cells = state.cells.slice();
+      const ox = Math.min(input.x, GRID_WIDTH - 3);
+      const oy = Math.min(input.y, GRID_HEIGHT - 3);
+      for (const [dx, dy] of GLIDER_OFFSETS) {
+        cells[idx(ox + dx, oy + dy)] = true;
+      }
+      return { ...state, cells };
+    }
     return state;
   },
   onTick(state) {
     const cells = state.cells.slice();
     const tickCounter = state.tickCounter + 1;
 
-    if (state.spawnInterval > 0 && tickCounter % state.spawnInterval === 0) {
+    if (state.spawnInterval > 0 && (tickCounter - 1) % state.spawnInterval === state.spawnStep % state.spawnInterval) {
       const ox = Math.floor(Math.random() * (GRID_WIDTH - 2));
       const oy = Math.floor(Math.random() * (GRID_HEIGHT - 2));
       for (const [dx, dy] of GLIDER_OFFSETS) {
@@ -82,7 +94,7 @@ export const gliderBehavior: BehaviorEngine<GliderState, GliderConfig> = {
       else if (state.cells[i]) tt[i] = "deactivate";
     }
 
-    return { cells: next, triggerTypes: tt, spawnInterval: state.spawnInterval, tickCounter };
+    return { cells: next, triggerTypes: tt, spawnInterval: state.spawnInterval, spawnStep: state.spawnStep, tickCounter };
   },
   renderModel(state) {
     const count = state.cells.filter(Boolean).length;
@@ -96,6 +108,7 @@ export const gliderBehavior: BehaviorEngine<GliderState, GliderConfig> = {
   configMenu() {
     return [
       { key: "spawnInterval", label: "Spawn Interval", type: "number", min: 0, max: 30, step: 1 },
+      { key: "spawnStep", label: "Spawn Step", type: "number", min: 0, max: 63, step: 1 },
       { key: "spawnGlider", label: "Spawn Glider", type: "action" },
     ];
   },

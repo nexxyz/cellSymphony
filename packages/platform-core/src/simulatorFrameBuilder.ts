@@ -45,10 +45,10 @@ export function buildSimulatorFrame<TState>(args: Args<TState>): SimulatorFrame 
     null,
     ...menuView.barValues.slice(0, maxBodyLines)
   ].slice(0, OLED_TEXT_LINES);
+  const transportIcon: "play" | "pause" | "stop" = state.transport.playing ? "play" : state.system.stopLatched ? "stop" : "pause";
   const now = nowMs();
   const toast = state.system.toast && state.system.toast.untilMs > now ? state.system.toast.message : null;
   const toastStartedAtMs = state.system.toast && state.system.toast.untilMs > now ? state.system.toast.startedAtMs : undefined;
-  const transportIcon: "play" | "pause" | "stop" = state.transport.playing ? "play" : state.system.stopLatched ? "stop" : "pause";
   const oled = renderOledFrame({
     lines: oledLines.lines,
     barValues: alignedBarValues,
@@ -66,7 +66,8 @@ export function buildSimulatorFrame<TState>(args: Args<TState>): SimulatorFrame 
     toast,
     toastStartedAtMs,
     renderNowMs: now,
-    lineColors: oledLines.colors
+    lineColors: oledLines.colors,
+    autoSaveFlash: (state.system as any).autoSaveFlash ?? "none"
   });
   const sampleAssign = state.system.sampleAssign;
   const assignLeds = (() => {

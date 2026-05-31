@@ -188,7 +188,7 @@ function profileFromConfig(cfg: RuntimeConfig): InterpretationProfile {
   return {
     id: "menu_profile",
     event: { enabled: cfg.eventEnabled },
-    state: { enabled: cfg.stateEnabled, tick },
+    state: { enabled: true, tick },
     x: axisX,
     y: axisY
   };
@@ -210,7 +210,6 @@ function toRuntimeConfigForPart(base: RuntimeConfig, mapping: any, part: any, fa
     scanDirection: preferBase ? base.scanDirection : (part?.l2?.scanDirection ?? base.scanDirection),
     scanSections: preferBase ? base.scanSections : (part?.l2?.scanSections ?? base.scanSections),
     eventEnabled: preferBase ? base.eventEnabled : (part?.l2?.eventEnabled ?? base.eventEnabled),
-    stateEnabled: preferBase ? base.stateEnabled : (part?.l2?.stateEnabled ?? base.stateEnabled),
     pitch: preferBase ? base.pitch : (part?.l2?.pitch ? structuredClone(part.l2.pitch) : base.pitch),
     x: preferBase ? base.x : (part?.l2?.x ? structuredClone(part.l2.x) : base.x),
     y: preferBase ? base.y : (part?.l2?.y ? structuredClone(part.l2.y) : base.y)

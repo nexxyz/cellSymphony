@@ -232,7 +232,42 @@ test("aux encoder turn adjusts bound behaviorConfig param", () => {
   state = r.state;
 
   assert.equal((state.runtimeConfig.behaviorConfig as any).life?.randomCellsPerTick, 6);
-  assert.equal(state.system.toast?.message, "T1: Spawn Count: 6");
+  assert.equal(state.system.toast?.message, "T1 L1 Spawn Count: 6");
+});
+
+test("aux encoder turn updates per-part behaviorConfig in partStates live state", () => {
+  let state = createInitialState(lifeBehavior);
+  state.system.oledMode = "normal";
+  state.system.auxAutoMapEnabled = false;
+  state.runtimeConfig.activeBehavior = "life";
+  state.runtimeConfig.activePartIndex = 0;
+  // Use the full part structure from createInitialState, just set behaviorConfig
+  state.runtimeConfig.parts[0].l1.behaviorConfig = { randomCellsPerTick: 5, randomTickInterval: 2 };
+  state.runtimeConfig.parts[0].l1.behaviorId = "life";
+  // Populate some grid cells to verify they survive
+  const cellCount = PLATFORM_CAPS.gridWidth * PLATFORM_CAPS.gridHeight;
+  const cells = new Array(cellCount).fill(false);
+  cells[0] = true;
+  cells[1] = true;
+  state.behaviorState = { ...state.behaviorState, cells, tickCounter: 10, randomCellsPerTick: 5 };
+  state.partStates[0] = state.behaviorState;
+  // Bind to per-part key (the format that was broken)
+  state.system.auxBindings["aux1"] = { turn: { key: "parts.0.l1.behaviorConfig.randomCellsPerTick", label: "Spawn Count", kind: "number", min: 0, max: 20, step: 1 }, press: null };
+
+  const r = routeInput(state, { type: "encoder_turn", id: "aux1", delta: 1 } as DeviceInput, lifeBehavior);
+  state = r.state;
+
+  // Config is updated
+  assert.equal(state.runtimeConfig.parts[0]?.l1?.behaviorConfig?.randomCellsPerTick, 6);
+  // Behavior live state is updated
+  assert.equal((state.behaviorState as any).randomCellsPerTick, 6);
+  assert.equal((state.partStates[0] as any).randomCellsPerTick, 6);
+  // Grid cells are preserved (no reinit)
+  assert.equal(state.behaviorState.cells[0], true);
+  assert.equal(state.behaviorState.cells[1], true);
+  // tickCounter is preserved
+  assert.equal((state.behaviorState as any).tickCounter, 10);
+  assert.equal(state.system.toast?.message, "T1 L1>P1 Spawn Count: 6");
 });
 
 test("aux encoder press triggers bound behavior action", () => {
@@ -248,7 +283,7 @@ test("aux encoder press triggers bound behavior action", () => {
   const after = state.behaviorState.cells.filter(Boolean).length;
 
   assert.ok(after > before, "bound behavior action should change behavior state");
-  assert.equal(state.system.toast?.message, "S1: Spawn Random");
+  assert.equal(state.system.toast?.message, "S1 L1>P1 Spawn Random");
 });
 
 test("spawn action label shows shared marker in menu", () => {

@@ -14,6 +14,7 @@ export type PulseState = {
   lifespan: number;
   maxRadius: number;
   autoPulseInterval: number;
+  spawnStep: number;
   tickCounter: number;
 };
 
@@ -50,6 +51,7 @@ function inShape(cx: number, cy: number, ox: number, oy: number, r: number, shap
 
 export const shapesBehavior: BehaviorEngine<PulseState, PulseConfig> = {
   id: "shapes",
+  interpretInputTransitions: true,
   init(config) {
     return {
       pulses: [],
@@ -59,6 +61,7 @@ export const shapesBehavior: BehaviorEngine<PulseState, PulseConfig> = {
       lifespan: config.lifespan ?? 3,
       maxRadius: config.maxRadius ?? 12,
       autoPulseInterval: config.autoPulseInterval ?? 0,
+      spawnStep: 0,
       tickCounter: 0,
     };
   },
@@ -125,7 +128,7 @@ export const shapesBehavior: BehaviorEngine<PulseState, PulseConfig> = {
 
     const tickCounter = state.tickCounter + 1;
     let finalPulses = pulses;
-    if (state.autoPulseInterval > 0 && tickCounter % state.autoPulseInterval === 0) {
+    if (state.autoPulseInterval > 0 && (tickCounter - 1) % state.autoPulseInterval === state.spawnStep % state.autoPulseInterval) {
       const ox = Math.floor(Math.random() * GRID_WIDTH);
       const oy = Math.floor(Math.random() * GRID_HEIGHT);
       const coords = shapeCells(state.pulseShape, ox, oy, 0);
@@ -157,6 +160,7 @@ export const shapesBehavior: BehaviorEngine<PulseState, PulseConfig> = {
       { key: "lifespan", label: "Lifespan", type: "number", min: 1, max: 12, step: 1 },
       { key: "maxRadius", label: "Max Radius", type: "number", min: 4, max: 32, step: 1 },
       { key: "autoPulseInterval", label: "Spawn Interval", type: "number", min: 0, max: 20, step: 1 },
+      { key: "spawnStep", label: "Spawn Step", type: "number", min: 0, max: 63, step: 1 },
       { key: "spawnPulse", label: "Spawn Pulse", type: "action" },
     ];
   },

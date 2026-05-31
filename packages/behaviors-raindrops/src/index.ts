@@ -10,6 +10,7 @@ export type RaindropsState = {
   triggerTypes: CellTriggerType[];
   autoDropInterval: number;
   splashRadius: number;
+  spawnStep: number;
   tickCounter: number;
 };
 
@@ -31,6 +32,7 @@ export type RaindropsConfig = {
 
 export const raindropsBehavior: BehaviorEngine<RaindropsState, RaindropsConfig> = {
   id: "raindrops",
+  interpretInputTransitions: true,
   init(config) {
     return {
       drops: [],
@@ -39,6 +41,7 @@ export const raindropsBehavior: BehaviorEngine<RaindropsState, RaindropsConfig> 
       triggerTypes: new Array(CELL_COUNT).fill("none") as CellTriggerType[],
       autoDropInterval: config.autoDropInterval ?? 3,
       splashRadius: config.splashRadius ?? 6,
+      spawnStep: 0,
       tickCounter: 0,
     };
   },
@@ -71,7 +74,7 @@ export const raindropsBehavior: BehaviorEngine<RaindropsState, RaindropsConfig> 
       }
     }
 
-    if (tickCounter % state.autoDropInterval === 0) {
+    if (state.autoDropInterval > 0 && (tickCounter - 1) % state.autoDropInterval === state.spawnStep % state.autoDropInterval) {
       drops.push({ x: Math.floor(Math.random() * GRID_WIDTH), y: 0 });
     }
 
@@ -93,7 +96,7 @@ export const raindropsBehavior: BehaviorEngine<RaindropsState, RaindropsConfig> 
       else if (cells[i]) tt[i] = "activate";
       else if (state.cells[i]) tt[i] = "deactivate";
     }
-    return { drops, rings, cells, triggerTypes: tt, autoDropInterval: state.autoDropInterval, splashRadius: state.splashRadius, tickCounter };
+    return { drops, rings, cells, triggerTypes: tt, autoDropInterval: state.autoDropInterval, splashRadius: state.splashRadius, spawnStep: state.spawnStep, tickCounter };
   },
   renderModel(state) {
     return {
@@ -106,6 +109,7 @@ export const raindropsBehavior: BehaviorEngine<RaindropsState, RaindropsConfig> 
   configMenu() {
     return [
       { key: "autoDropInterval", label: "Spawn Interval", type: "number", min: 1, max: 20, step: 1 },
+      { key: "spawnStep", label: "Spawn Step", type: "number", min: 0, max: 63, step: 1 },
       { key: "splashRadius", label: "Splash Radius", type: "number", min: 0, max: 12, step: 1 },
       { key: "dropNow", label: "Drop Now", type: "action" },
     ];

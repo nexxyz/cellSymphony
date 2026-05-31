@@ -10,6 +10,7 @@ export type BrainState = {
   fireThreshold: number;
   randomSeedCells: number;
   seedInterval: number;
+  spawnStep: number;
   tickCounter: number;
 };
 
@@ -36,6 +37,7 @@ function aliveNeighbors(cells: number[], x: number, y: number): number {
 
 export const brainBehavior: BehaviorEngine<BrainState, BrainConfig> = {
   id: "brain",
+  interpretInputTransitions: true,
   init(config) {
     return {
       cells: new Array(CELL_COUNT).fill(0),
@@ -44,6 +46,7 @@ export const brainBehavior: BehaviorEngine<BrainState, BrainConfig> = {
       fireThreshold: config.fireThreshold ?? 2,
       randomSeedCells: config.randomSeedCells ?? 0,
       seedInterval: config.seedInterval ?? 0,
+      spawnStep: 0,
       tickCounter: 0,
     };
   },
@@ -96,7 +99,7 @@ export const brainBehavior: BehaviorEngine<BrainState, BrainConfig> = {
 
     const seedInterval = Math.max(0, Math.floor(state.seedInterval));
     if (seedInterval > 0 && state.randomSeedCells > 0) {
-      const shouldSeed = tickCounter % seedInterval === 0;
+      const shouldSeed = (tickCounter - 1) % seedInterval === state.spawnStep % seedInterval;
       if (shouldSeed) {
         for (let r = 0; r < state.randomSeedCells; r += 1) {
           const rx = Math.floor(Math.random() * GRID_WIDTH);
@@ -110,7 +113,7 @@ export const brainBehavior: BehaviorEngine<BrainState, BrainConfig> = {
       }
     }
 
-    return { cells: next, generation: state.generation + 1, triggerTypes: tt, fireThreshold: state.fireThreshold, randomSeedCells: state.randomSeedCells, seedInterval: state.seedInterval, tickCounter };
+    return { cells: next, generation: state.generation + 1, triggerTypes: tt, fireThreshold: state.fireThreshold, randomSeedCells: state.randomSeedCells, seedInterval: state.seedInterval, spawnStep: state.spawnStep, tickCounter };
   },
   renderModel(state) {
     return {
@@ -124,6 +127,7 @@ export const brainBehavior: BehaviorEngine<BrainState, BrainConfig> = {
     return [
       { key: "fireThreshold", label: "Fire Threshold", type: "number", min: 1, max: 4, step: 1 },
       { key: "seedInterval", label: "Seed Interval", type: "number", min: 0, max: 30, step: 1 },
+      { key: "spawnStep", label: "Spawn Step", type: "number", min: 0, max: 63, step: 1 },
       { key: "randomSeedCells", label: "Spawn Count", type: "number", min: 0, max: 20, step: 1 },
       { key: "seedRandom", label: "Seed Random", type: "action" },
     ];

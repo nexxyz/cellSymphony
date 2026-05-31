@@ -79,12 +79,13 @@ test("onInput grid_press creates pulse at pressed location", () => {
 test("configMenu returns expected items", () => {
   const state = shapesBehavior.init({});
   const menu = shapesBehavior.configMenu!(state);
-  assert.equal(menu.length, 5);
+  assert.equal(menu.length, 6);
   assert.equal(menu[0].key, "pulseShape");
   assert.equal(menu[1].key, "lifespan");
   assert.equal(menu[2].key, "maxRadius");
   assert.equal(menu[3].key, "autoPulseInterval");
   assert.equal(menu[0].type, "enum");
-  assert.equal(menu[4].key, "spawnPulse");
-  assert.equal(menu[4].type, "action");
+  assert.equal(menu[4].key, "spawnStep");
+  assert.equal(menu[5].key, "spawnPulse");
+  assert.equal(menu[5].type, "action");
 });

@@ -24,7 +24,7 @@ function isFxPagePath(path: string): boolean {
 }
 
 function isL1Path(path: string): boolean {
-  return path === "L1: Life" || path.startsWith("L1: Life/") || path.includes("/L1: Life");
+  return path.startsWith("L1: Life/") || path.includes("/L1: Life");
 }
 
 function turn(key: string, label: string, opts: Omit<AuxTurnBinding, "key" | "label"> & { kind: AuxTurnBinding["kind"] }): AuxTurnBinding {

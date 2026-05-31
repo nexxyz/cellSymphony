@@ -128,7 +128,6 @@ export type PartSenseConfig = {
   scanDirection: Direction;
   scanSections: SectionCount;
   eventEnabled: boolean;
-  stateEnabled: boolean;
   pitch: PitchSettings;
   x: AxisModConfig;
   y: AxisModConfig;
@@ -159,7 +158,7 @@ export type RuntimeConfig = {
   midi: { enabled: boolean; outId: string | null; clockOutEnabled: boolean; inId: string | null; clockInEnabled: boolean; syncMode: "internal" | "external"; respondToStartStop: boolean };
   sound: { noteLengthMs: number; velocityScalePct: number; velocityCurve: "linear" | "soft" | "hard"; voiceStealingMode: VoiceStealingMode };
   scanMode: ScanMode; scanAxis: ScanAxis; scanUnit: NoteUnit; scanDirection: Direction; scanSections: SectionCount; algorithmStepUnit: NoteUnit;
-  activeBehavior: string; autoSaveDefault: boolean; behaviorConfig: Record<string, unknown>; eventEnabled: boolean; stateEnabled: boolean;
+  activeBehavior: string; autoSaveDefault: boolean; behaviorConfig: Record<string, unknown>; eventEnabled: boolean; inputEventsWhilePaused: boolean;
   pitch: PitchSettings; x: AxisModConfig; y: AxisModConfig;
   activePartIndex: number; parts: PartConfig[]; numericDisplayMode: NumericDisplayMode; ghostCells: boolean;
   instruments: InstrumentSlotConfig[];
@@ -208,7 +207,7 @@ export type AuxBinding = { turn: AuxTurnBinding | null; press: AuxPressBinding |
 export type SystemState = {
   shiftHeld: boolean; fnHeld: boolean; presetNames: string[]; selectedPreset: string | null; currentPresetName: string | null; draftName: string; nameCursor: number;
   pendingRename: { from: string; to: string } | null; confirm: ConfirmState | null; toast: ToastState | null; eventBlipUntilMs: number; stopLatched: boolean;
-  transportFlash: "none" | "beat" | "measure"; transportFlashUntilMs: number; textEdit: TextEditSession | null;
+  transportFlash: "none" | "beat" | "measure"; transportFlashUntilMs: number; autoSaveFlash: "none" | "flash"; autoSaveFlashUntilMs: number; textEdit: TextEditSession | null;
   midiOutputs: MidiPortInfo[]; midiInputs: MidiPortInfo[]; midiStatus: string | null; externalPpqnPulse: number; pendingResync: boolean; pausedByUser: boolean;
   oledMode: "normal" | "splash" | "off"; oledSplashText: string; oledSplashUntilMs: number; lastInteractionMs: number; auxBindings: Record<string, AuxBinding | null>;
   shiftHeldSinceMs: number | null;
@@ -243,7 +242,7 @@ export type PlatformEffect = PlatformEffectBase | MidiEffect | SampleEffect | Au
 export type StoreResultBase =
   | { type: "list_presets_result"; names: string[] } | { type: "load_preset_result"; name: string; payload: ConfigPayload | null }
   | { type: "save_preset_result"; name: string; outcome: "created" | "overwritten" } | { type: "delete_preset_result"; name: string; ok: boolean }
-  | { type: "load_default_result"; payload: ConfigPayload | null } | { type: "save_default_result"; ok: boolean } | { type: "store_error"; message: string };
+  | { type: "load_default_result"; payload: ConfigPayload | null } | { type: "save_default_result"; ok: boolean; isAuto?: boolean } | { type: "store_error"; message: string };
 export type MidiResult =
   | { type: "midi_list_outputs_result"; outputs: MidiPortInfo[] }
   | { type: "midi_list_inputs_result"; inputs: MidiPortInfo[] }

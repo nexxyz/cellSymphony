@@ -62,9 +62,10 @@ test("renderModel returns trigger types for activate, stable, deactivate", () =>
 test("configMenu returns expected items", () => {
   const state = bounceBehavior.init({});
   const menu = bounceBehavior.configMenu!(state);
-  assert.equal(menu.length, 3);
+  assert.equal(menu.length, 4);
   assert.equal(menu[0].key, "spawnInterval");
-  assert.equal(menu[1].key, "maxBalls");
-  assert.equal(menu[2].key, "addBall");
-  assert.equal(menu[2].type, "action");
+  assert.equal(menu[1].key, "spawnStep");
+  assert.equal(menu[2].key, "maxBalls");
+  assert.equal(menu[3].key, "addBall");
+  assert.equal(menu[3].type, "action");
 });

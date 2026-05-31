@@ -8,6 +8,7 @@ export type LifeState = {
   generation: number;
   randomCellsPerTick: number;
   randomTickInterval: number;
+  spawnStep: number;
   tickCounter: number;
   triggerTypes: CellTriggerType[];
 };
@@ -23,6 +24,7 @@ const CELL_COUNT = GRID_WIDTH * GRID_HEIGHT;
 
 export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
   id: "life",
+  interpretInputTransitions: true,
   init(config): LifeState {
     return {
       width: GRID_WIDTH,
@@ -31,6 +33,7 @@ export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
       generation: 0,
       randomCellsPerTick: config.randomCellsPerTick ?? 0,
       randomTickInterval: config.randomTickInterval ?? 1,
+      spawnStep: 0,
       tickCounter: 0,
       triggerTypes: new Array(CELL_COUNT).fill("none")
     };
@@ -95,7 +98,7 @@ export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
     const nextTickCounter = state.tickCounter + 1;
 
     // Inject random cells if configured
-    if (state.randomCellsPerTick > 0 && nextTickCounter % state.randomTickInterval === 0) {
+    if (state.randomCellsPerTick > 0 && state.randomTickInterval > 0 && (nextTickCounter - 1) % state.randomTickInterval === state.spawnStep % state.randomTickInterval) {
       for (let r = 0; r < state.randomCellsPerTick; r += 1) {
         const rx = Math.floor(Math.random() * GRID_WIDTH);
         const ry = Math.floor(Math.random() * GRID_HEIGHT);
@@ -127,6 +130,7 @@ export const lifeBehavior: BehaviorEngine<LifeState, LifeConfig> = {
     return [
       { key: "randomCellsPerTick", label: "Spawn Count", type: "number", min: 0, max: 20, step: 1 },
       { key: "randomTickInterval", label: "Spawn Interval", type: "number", min: 1, max: 20, step: 1 },
+      { key: "spawnStep", label: "Spawn Step", type: "number", min: 0, max: 63, step: 1 },
       { key: "spawnRandom", label: "Spawn Random", type: "action" }
     ];
   },

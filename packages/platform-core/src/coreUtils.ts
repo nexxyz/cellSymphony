@@ -216,7 +216,7 @@ const FORMAT_MAP: Array<[RegExp | string, FormatFn]> = [
 function routeOptionLabel(n: number, cfg?: RuntimeConfig): string {
   const idx = clamp(Math.floor(n), 0, 15);
   const inst = cfg?.instruments?.[idx];
-  if (inst) return `${idx + 1}: ${instrumentLabel({ runtimeConfig: cfg as any }, idx)}`;
+  if (inst) return instrumentLabel({ runtimeConfig: cfg as any }, idx);
   return String(idx + 1);
 }
 
