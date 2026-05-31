@@ -4,6 +4,30 @@
 
 Cell Symphony is a monorepo (pnpm workspaces) combining a TypeScript core engine with a Rust realtime synth, packaged as a Tauri desktop app. The app turns cellular automata algorithms into music via a pluggable `BehaviorEngine` system.
 
+## AI Assistant Guidelines
+
+### Context Efficiency
+- Read only the files directly relevant to the current task; avoid broad directory reads
+- Prefer `grep`/`find` to locate specific symbols before reading full files
+- Work on one package at a time; do not span multiple packages in a single task unless explicitly asked
+- When modifying a file, read only the relevant section first, not the whole file
+
+### Task Scope
+- Break large tasks into explicit steps and confirm the plan before making changes
+- Complete one step fully before moving to the next
+- If a task requires changes to more than 3 files, pause and confirm scope first
+- Do not stop before you've reached a conclusion - either a finished task or a roadblock that requires user intervention. In case of a necessary intervention, explicitly tell the user what is required.
+
+### Output Discipline
+- Keep explanations brief; code changes speak for themselves
+- Do not summarize what you just did after making changes
+- Do not add comments to source code (see Code Style)
+
+### Structure Specifics
+- `packages/platform-core/src/index.ts` is a barrel export; do not read it to understand scope — navigate directly to the relevant module instead
+- The monorepo has many packages; use `pnpm --filter <package>` to scope commands and avoid cross-package side effects
+- When tracing behavior registration, start from the specific behavior package, not from `platform-core` entry point
+
 ## Key Conventions
 
 ### Package Management
@@ -29,6 +53,7 @@ Cell Symphony is a monorepo (pnpm workspaces) combining a TypeScript core engine
 - Use `export type` and `export function` pattern
 - Arrow functions for closures, `function` keyword for top-level exports
 - Avoid duplicating operational logic across call sites. If behavior needs shared defaults, timing, validation, state transitions, or formatting, centralize it behind a small helper or existing abstraction. Prefer repeated data over repeated behavior. Example: toast creation should use a shared helper rather than each call site manually constructing `{ message, startedAtMs, untilMs }` or calling `Date.now()`.
+- Prefer minimal diffs — change only what is necessary
 
 ### Architecture
 
@@ -47,6 +72,7 @@ Cell Symphony is a monorepo (pnpm workspaces) combining a TypeScript core engine
 - The desktop/simulator UI is a **stand-in for the hardware interface**, not a separate product UX
 - Hardware behavior is canonical: software controls must mirror hardware input semantics and constraints
 - Do not add desktop-only control paths that bypass `platform-core` input routing/state transitions
+- Do not add desktop-only UI elements or UI logic. All relevant information must be conveyed through the OLED or grid adapters, by central, platform-independent code.
 - Prefer parity over convenience when there is a conflict
 - Simulator rendering should reflect core state; avoid duplicating/forking control logic outside `platform-core`
 - If a simulator-only helper is temporarily necessary, keep it isolated and explicitly documented as temporary

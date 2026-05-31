@@ -7,7 +7,7 @@ import { defaultFxParam } from "./fxDefaults";
 import { MOMENTARY_PREVIEW_ID } from "./momentaryFxPreview";
 import { makeToast } from "./toast";
 
-type AuxSharedDeps<TState> = {
+export type AuxSharedDeps<TState> = {
   menuTree: (state: PlatformState<TState>) => any;
   resolveBehavior: (activeId: string) => any;
   readAnyValue: (state: PlatformState<TState>, key: string) => unknown;
@@ -19,144 +19,12 @@ type AuxSharedDeps<TState> = {
   spawnActionTypeForBehavior: (behaviorId: string) => string | null;
 };
 
-export function applyAuxUnbindChoice<TState>(state: PlatformState<TState>, encoderId: string, choice: string): PlatformState<TState> {
-  const binding = state.system.auxBindings[encoderId];
-  if (!binding) return setAuxToast(state, "No binding");
-  let nextBinding: any = binding;
-  if (choice === "Both") nextBinding = null;
-  else if (choice === "Click") nextBinding = binding.turn ? { turn: binding.turn, press: null } : null;
-  else if (choice === "Turn") nextBinding = binding.press ? { turn: null, press: binding.press } : null;
-  const nextState = {
-    ...state,
-    runtimeConfig: { ...(state.runtimeConfig as any), auxBindings: { ...((state.runtimeConfig as any).auxBindings ?? {}), [encoderId]: nextBinding } } as any,
-    system: {
-      ...state.system,
-      auxBindings: {
-        ...state.system.auxBindings,
-        [encoderId]: nextBinding
-      }
-    }
-  };
-  return setAuxToast(nextState, "Unbound");
-}
-
-export function assignAuxEncoder<TState>(state: PlatformState<TState>, encoderId: string, _effects: PlatformEffect[], deps: AuxSharedDeps<TState>): PlatformState<TState> {
-  const view = locate(deps.menuTree(state), state, state.menu);
-  const selected = view.siblings[state.menu.cursor];
-  const existing = state.system.auxBindings[encoderId];
-  const openUnbindConfirm = (next: PlatformState<TState>): PlatformState<TState> => ({
-    ...next,
-    system: {
-      ...next.system,
-      confirm: {
-        kind: "aux_unbind",
-        action: { kind: "aux_unbind", encoderId },
-        cursor: 0,
-        options: ["Both", "Click", "Turn", "Cancel"],
-        scroll: 0
-      }
-    }
-  });
-
-  if (!selected || selected.kind === "group" || selected.kind === "spacer" || selected.kind === "text") {
-    if (!existing) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} No binding`);
-    return openUnbindConfirm(state);
-  }
-
-  if (selected.kind === "number" || selected.kind === "enum" || selected.kind === "bool") {
-    const key = (selected as any).key as string;
-    if (!key) return state;
-    if (existing?.turn && existing.turn.key === key) return openUnbindConfirm(state);
-    const turn: any = { key, label: (selected as any).label, kind: selected.kind };
-    if (selected.kind === "number") {
-      turn.min = (selected as any).min;
-      turn.max = (selected as any).max;
-      turn.step = (selected as any).step;
-    } else if (selected.kind === "enum") {
-      turn.options = (selected as any).options;
-    }
-    const boundPfx = auxToastPrefix(state, "press", encoderId, key);
-    const next = setAuxToast(
-      {
-        ...state,
-        runtimeConfig: { ...(state.runtimeConfig as any), auxBindings: { ...((state.runtimeConfig as any).auxBindings ?? {}), [encoderId]: { turn, press: existing?.press ?? null } } } as any,
-        system: { ...state.system, auxBindings: { ...state.system.auxBindings, [encoderId]: { turn, press: existing?.press ?? null } } }
-      },
-      `${boundPfx} Bound turn: ${(selected as any).label}`
-    );
-    deps.autoSaveEffect(next, _effects);
-    return next;
-  }
-
-  if (selected.kind === "action") {
-    const action = (selected as any).action as any;
-    if (action.type === "behavior_action") {
-      const nextPress: any = deps.isSpawnActionType(action.actionType)
-        ? { kind: "behavior_action", actionType: action.actionType, routeKey: "trigger.life.spawn_now", label: "Spawn Now" }
-        : { kind: "behavior_action", actionType: action.actionType, label: (selected as any).label };
-      if (existing?.press?.kind === "behavior_action" && existing.press.actionType === nextPress.actionType && existing.press.routeKey === nextPress.routeKey) {
-        return openUnbindConfirm(state);
-      }
-      const boundPfx = auxToastPrefix(state, "press", encoderId, nextPress);
-      const next = setAuxToast(
-        {
-          ...state,
-          runtimeConfig: { ...(state.runtimeConfig as any), auxBindings: { ...((state.runtimeConfig as any).auxBindings ?? {}), [encoderId]: { turn: existing?.turn ?? null, press: nextPress } } } as any,
-          system: {
-            ...state.system,
-            auxBindings: {
-              ...state.system.auxBindings,
-              [encoderId]: { turn: existing?.turn ?? null, press: nextPress }
-            }
-          }
-        },
-        `${boundPfx} Bound click: ${(selected as any).label}`
-      );
-      deps.autoSaveEffect(next, _effects);
-      return next;
-    }
-    if (action.type === "sample_assign_enter" || action.type === "fx_assign_enter") {
-      const nextPress: any = { kind: "menu_action", action, label: (selected as any).label };
-      if (existing?.press?.kind === "menu_action" && existing.press.action?.type === action.type) {
-        if (
-          action.type !== "sample_assign_enter"
-          || (existing.press.action.type === "sample_assign_enter" && existing.press.action.instrumentSlot === action.instrumentSlot)
-        ) {
-          return openUnbindConfirm(state);
-        }
-      }
-      const boundPfx = auxToastPrefix(state, "press", encoderId, nextPress);
-      const next = setAuxToast(
-        {
-          ...state,
-          runtimeConfig: { ...(state.runtimeConfig as any), auxBindings: { ...((state.runtimeConfig as any).auxBindings ?? {}), [encoderId]: { turn: existing?.turn ?? null, press: nextPress } } } as any,
-          system: {
-            ...state.system,
-            auxBindings: {
-              ...state.system.auxBindings,
-              [encoderId]: { turn: existing?.turn ?? null, press: nextPress }
-            }
-          }
-        },
-        `${boundPfx} Bound click: ${(selected as any).label}`
-      );
-      deps.autoSaveEffect(next, _effects);
-      return next;
-    }
-    return state;
-  }
-
-  if (!existing) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} No binding`);
-  return openUnbindConfirm(state);
-}
-
 export function pressAuxEncoder<TState>(state: PlatformState<TState>, encoderId: string, _effects: PlatformEffect[], emit: (event: MusicalEvent) => void, deps: AuxSharedDeps<TState>): PlatformState<TState> {
   const binding = state.system.auxBindings[encoderId];
   if (!binding?.press) return setAuxToast(state, `${auxInputPrefix("press", encoderId)} No binding`);
   return executePressAction(state, encoderId, binding.press, _effects, emit, deps);
 }
 
-// Shared helper used by both pressAuxEncoder and pressAuxEncoderMapped
 function executePressAction<TState>(
   state: PlatformState<TState>,
   encoderId: string,
@@ -184,7 +52,17 @@ function executePressAction<TState>(
   return setAuxToast({ ...state, behaviorState: newBehaviorState }, `${pfx} ${label}`);
 }
 
-// Shared helper for number/enum/bool turn actions (used by both turnAuxEncoder and turnAuxEncoderMapped)
+export function pressAuxEncoderMapped<TState>(
+  state: PlatformState<TState>,
+  encoderId: string,
+  bindingPress: any,
+  _effects: PlatformEffect[],
+  emit: (event: MusicalEvent) => void,
+  deps: AuxSharedDeps<TState>
+): PlatformState<TState> {
+  return executePressAction(state, encoderId, bindingPress, _effects, emit, deps);
+}
+
 function executeTurnAction<TState>(
   state: PlatformState<TState>,
   encoderId: string,
@@ -255,17 +133,6 @@ function executeTurnAction<TState>(
     return setAuxToast(nextState, `${pfx} ${label}: ${v}`);
   }
   return state;
-}
-
-export function pressAuxEncoderMapped<TState>(
-  state: PlatformState<TState>,
-  encoderId: string,
-  bindingPress: any,
-  _effects: PlatformEffect[],
-  emit: (event: MusicalEvent) => void,
-  deps: AuxSharedDeps<TState>
-): PlatformState<TState> {
-  return executePressAction(state, encoderId, bindingPress, _effects, emit, deps);
 }
 
 export function turnAuxEncoder<TState>(state: PlatformState<TState>, encoderId: string, delta: -1 | 1, effects: PlatformEffect[], deps: AuxSharedDeps<TState>): PlatformState<TState> {
