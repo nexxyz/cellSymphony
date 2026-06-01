@@ -105,7 +105,10 @@ function advanceEngineByPulses<TState>(state: PlatformState<TState>, behavior: B
       partStates[partIdx] = engine.onTick(partStates[partIdx], { bpm: next.transport.bpm, emit: () => {} });
     }
     const afterGrid = toGridSnapshot(engine.renderModel(partStates[partIdx]));
-    const shouldInterpret = partCfg.scanMode === "immediate" || scanAdvanced;
+    const shouldInterpret =
+      partCfg.scanMode === "immediate" ||
+      partCfg.eventEnabled ||
+      scanAdvanced;
     if (!shouldInterpret) continue;
     const profile = profileFromConfig(partCfg);
     const interpretationTick = partCfg.scanMode === "scanning" ? partScanIndex[partIdx] : next.transport.tick;

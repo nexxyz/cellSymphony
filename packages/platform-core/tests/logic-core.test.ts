@@ -171,6 +171,7 @@ test("scanning mode emits notes only when scan index advances", () => {
   state.runtimeConfig.scanAxis = "columns";
   state.runtimeConfig.scanDirection = "forward";
   state.runtimeConfig.scanUnit = "1/1";
+  state.runtimeConfig.eventEnabled = false;
 
   const first = tick(state, mockBehavior);
   assert.equal(first.state.scanIndex, 0);
