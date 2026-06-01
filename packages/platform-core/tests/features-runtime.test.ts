@@ -185,14 +185,15 @@ test("behavior onTick is called when accumulator reaches step threshold", () => 
 test("L2: Sense has event instrument targets accessible via menu", () => {
   let state = makeState();
 
-  // Verify event targets (Activate, Stable, Deactivate) under Events > Instrument Targets
+  // Enable event triggers so instrument targets become visible
+  state.runtimeConfig.parts[0].l2.eventEnabled = true;
+
+  // Verify event targets (Activate, Stable, Deactivate) are now directly under Events (no nested Instrument Targets)
   state = selectLabel(state, "L2: Sense");
   state = press(state).state;
   state = selectLabel(state, "P1: mock");
   state = press(state).state;
   state = selectLabel(state, "Events");
-  state = press(state).state;
-  state = selectLabel(state, "Instrument Targets");
   state = press(state).state;
   state = selectLabel(state, "Activate Instrument");
   state = press(state).state; // enter edit
@@ -218,13 +219,14 @@ test("L2: Sense has event instrument targets accessible via menu", () => {
 test("L2: Sense has scanning instrument targets accessible via menu", () => {
   let state = makeState();
 
+  // Enable scanning mode so scanning instrument targets become visible
+  state.runtimeConfig.parts[0].l2.scanMode = "scanning";
+
   state = selectLabel(state, "L2: Sense");
   state = press(state).state;
   state = selectLabel(state, "P1: mock");
   state = press(state).state;
   state = selectLabel(state, "Scanning");
-  state = press(state).state;
-  state = selectLabel(state, "Instrument Targets");
   state = press(state).state;
 
   state = selectLabel(state, "Instrument");
@@ -238,13 +240,14 @@ test("L2: Sense has scanning instrument targets accessible via menu", () => {
 test("stable target is separate from activate and deactivate", () => {
   let state = makeState();
 
+  // Enable event triggers so instrument targets become visible
+  state.runtimeConfig.parts[0].l2.eventEnabled = true;
+
   state = selectLabel(state, "L2: Sense");
   state = press(state).state;
   state = selectLabel(state, "P1: mock");
   state = press(state).state;
   state = selectLabel(state, "Events");
-  state = press(state).state;
-  state = selectLabel(state, "Instrument Targets");
   state = press(state).state;
 
   // Set activate to channel 0
