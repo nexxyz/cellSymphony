@@ -2,7 +2,48 @@
 
 ## Project Overview
 
-Cell Symphony is a monorepo (pnpm workspaces) combining a TypeScript core engine with a Rust realtime synth, packaged as a Tauri desktop app. The app turns cellular automata algorithms into music via a pluggable `BehaviorEngine` system.
+Cell Symphony is a monorepo (pnpm workspaces) combining a TypeScript core engine with a Rust realtime synth, packaged as a Tauri desktop app. The app turns cellular automata algorithms into music via a pluggable `BehaviorEngine` system. 
+
+## Key Conventions
+
+### Package Management
+- Uses **pnpm** workspaces (not npm or yarn)
+- After editing any `package.json`, run `pnpm install` to regenerate workspace symlinks
+- All behavior packages depend on `@cellsymphony/behavior-api` and `@cellsymphony/device-contracts`
+
+### Testing
+- Node.js `node:test` + `tsx --test`, no Jest/Vitest
+- Run: `pnpm --filter <package> test` or `pnpm -r test`
+
+### Code Style
+- No comments unless absolutely necessary; TypeScript strict mode
+- Prefer `type` over `interface`; `export type` and `export function` pattern
+- Arrow functions for closures, `function` keyword for top-level exports
+- Centralize shared behavior behind helpers; prefer repeated data over repeated behavior
+- Prefer minimal diffs — change only what is necessary
+
+### Architecture
+- Design for Change, not for Future
+- `packages/platform-core/src/index.ts` = single-entry core module (menu, transport, config, behavior orchestration)
+- `packages/behavior-api/` = `BehaviorEngine` interface + registry (`registerBehavior`, `getBehavior`, `listBehaviorIds`)
+- All behaviors are registered at import time via top-level `registerBehavior()` calls
+
+### Hardware/Software Parity
+- Hardware behavior is canonical; software controls must mirror hardware input semantics
+- Do not add desktop-only control paths or UI logic that bypasses `platform-core`
+- Any parity-affecting change must update `docs/menu-and-controls-spec.md` in the same commit
+
+### Documentation
+- `docs/menu-and-controls-spec.md` is the single source of truth for menu structure and controls — update in the same commit as any control/menu change
+- Keep `packages/platform-core/resources/menu-help-texts.tsv` in sync; coverage enforced by lint
+- When any enum parameter changes, update its help text in the TSV in the same commit
+
+### Common Pitfalls
+- Multi-line edits spanning `scripts` and `devDependencies` in package.json may accidentally delete the `dependencies` block
+- After editing package.json, always run `pnpm install`
+- Menu `enum` options for channel targets are strings (`"0"`, `"1"`, `"2"`, `"3"`), not numbers
+- `visibleChildren()` filters nodes using optional `visible` predicate on `RuntimeConfig`
+- If you see untracked changes in the repository that you did not make, always ask what to do with them.
 
 ## AI Assistant Guidelines
 
@@ -13,10 +54,9 @@ Cell Symphony is a monorepo (pnpm workspaces) combining a TypeScript core engine
 - When modifying a file, read only the relevant section first, not the whole file
 
 ### Task Scope
-- Break large tasks into explicit steps and confirm the plan before making changes
+- When in Plan mode, break large tasks into explicit steps and confirm the plan before making changes
 - Complete one step fully before moving to the next
-- If a task requires changes to more than 3 files, pause and confirm scope first
-- Do not stop before you've reached a conclusion - either a finished task or a roadblock that requires user intervention. In case of a necessary intervention, explicitly tell the user what is required.
+- In Build mode, do not stop before you've reached a conclusion — either a finished task or a roadblock requiring user intervention. In case of a necessary intervention, explicitly tell the user what is required.
 
 ### Output Discipline
 - Keep explanations brief; code changes speak for themselves
@@ -28,72 +68,10 @@ Cell Symphony is a monorepo (pnpm workspaces) combining a TypeScript core engine
 - The monorepo has many packages; use `pnpm --filter <package>` to scope commands and avoid cross-package side effects
 - When tracing behavior registration, start from the specific behavior package, not from `platform-core` entry point
 
-## Key Conventions
-
-### Package Management
-
-- Uses **pnpm** workspaces (not npm or yarn)
-- After editing any `package.json`, run `pnpm install` (or `pnpm update -r`) to regenerate workspace symlinks
-- All behavior packages depend on `@cellsymphony/behavior-api` and `@cellsymphony/device-contracts`
-
-### Testing
-
-- **Test framework**: Node.js `node:test` + `node:assert/strict` (via `tsx --test`)
-- No Jest, no Vitest
-- Run with: `pnpm --filter <package> test` or `pnpm -r test`
-- Coverage: `pnpm -r test:coverage` (uses `c8`)
-- Each behavior package has tests in `tests/*.test.ts`
-- Behavior tests verify algorithm correctness (Conway B3/S23, Brian's Brain state machine, ant movement rules, etc.)
-
-### Code Style
-
-- No comments in source code unless absolutely necessary
-- TypeScript, strict mode
-- Prefer `type` over `interface` for plain data shapes
-- Use `export type` and `export function` pattern
-- Arrow functions for closures, `function` keyword for top-level exports
-- Avoid duplicating operational logic across call sites. If behavior needs shared defaults, timing, validation, state transitions, or formatting, centralize it behind a small helper or existing abstraction. Prefer repeated data over repeated behavior. Example: toast creation should use a shared helper rather than each call site manually constructing `{ message, startedAtMs, untilMs }` or calling `Date.now()`.
-- Prefer minimal diffs — change only what is necessary
-
-### Architecture
-
-- Design for Change, not for Future.
-
-- `packages/platform-core/src/index.ts` = single-entry core module (menu, transport, config, behavior orchestration)
-- `packages/behavior-api/` = `BehaviorEngine` interface + registry (`registerBehavior`, `getBehavior`, `listBehaviorIds`)
-- All behaviors are registered at import time via top-level `registerBehavior()` calls
-- `CellTriggerType` = `"activate" | "stable" | "deactivate" | "scanned" | "none"`
-- Menu tree is built by `menuTree()` function; per-behavior config from `configMenu()`
-- Auto-save: enabled via `runtimeConfig.autoSaveDefault`, triggers `store_save_default` effect on every config change
-- Aux encoder binding: press main encoder to enter edit, then press aux encoder to bind
-
-### Hardware/Software Parity
-
-- The desktop/simulator UI is a **stand-in for the hardware interface**, not a separate product UX
-- Hardware behavior is canonical: software controls must mirror hardware input semantics and constraints
-- Do not add desktop-only control paths that bypass `platform-core` input routing/state transitions
-- Do not add desktop-only UI elements or UI logic. All relevant information must be conveyed through the OLED or grid adapters, by central, platform-independent code.
-- Prefer parity over convenience when there is a conflict
-- Simulator rendering should reflect core state; avoid duplicating/forking control logic outside `platform-core`
-- If a simulator-only helper is temporarily necessary, keep it isolated and explicitly documented as temporary
-- Any parity-affecting control behavior change must update `docs/menu-and-controls-spec.md` in the same commit
-- Tests should prioritize parity at input-routing/state-transition level; UI tests verify rendering only
-
-### Documentation
-
-- `docs/menu-and-controls-spec.md` is the **single source of truth** for menu structure and controls
-- Any control/menu/runtime behavior change must update this document in the same commit
-- Any menu or feature add/change/remove must also review `packages/platform-core/resources/menu-help-texts.tsv` and update help entries in the same commit when needed
-- Help entry coverage is enforced by `pnpm --filter @cellsymphony/platform-core lint`; keep TSV entries in sync so lint remains green
-- Enum help rule: when any enum parameter is added/removed/renamed/reordered or its semantics change, update the associated help text in `packages/platform-core/resources/menu-help-texts.tsv` in the same commit; enum help must describe all current options in main help text
-- Quality thresholds are currently staged in warning mode (complexity/LOC/params) and will be promoted to strict errors after initial hotspot cleanup
-- `docs/runtime-boundaries.md` describes layer responsibilities
-- `docs/engineering-quality-requirements.md` defines CI, coverage, and quality gates
-- `docs/implementation-done.md` summarizes the 10-algorithm implementation
-
-### Common Pitfalls
-
-- Multi-line edits that span `scripts` and `devDependencies` blocks in package.json may accidentally delete the `dependencies` block if the pattern doesn't include it
-- After editing package.json, always run `pnpm install` to resolve workspace symlinks
-- Menu `enum` options for channel targets are strings (`"0"`, `"1"`, `"2"`, `"3"`), not numbers
-- `visibleChildren()` filters nodes using optional `visible` predicate on `RuntimeConfig`
+## Task execution
+- At the start of every task, write the original goal and a todo list verbatim to `TASK.md` in the project root.
+- Add instructions on the `TASK.md` lifecycle (as described here) to `TASK.md` itself.
+- Update `TASK.md` after each completed step
+- Re-read `TASK.md` before every tool call to verify the current action still serves the original goal
+- If the current action cannot be directly traced back to the goal in `TASK.md`, stop and re-read before proceeding
+- Delete `TASK.md` only when the task is fully complete and all tests pass
