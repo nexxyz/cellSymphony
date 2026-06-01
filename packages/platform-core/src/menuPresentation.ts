@@ -67,7 +67,8 @@ function isSharedActionSpec(action: ActionSpec): boolean {
 export function formatActionMenuLabel(item: Extract<MenuNode, { kind: "action" }>): string {
   const shared = isSharedActionSpec(item.action);
   const prefix = String((item as any).actionPrefix ?? "");
-  return `${prefix}!${item.label}${shared ? " [S]" : ""}`;
+  const suffix = shared ? " [S]" : "";
+  return prefix ? `!${prefix}-${item.label}${suffix}` : `!${item.label}${suffix}`;
 }
 
 function actionDetailLine<TState>(state: PlatformState<TState>, item: Extract<MenuNode, { kind: "action" }>): string | null {

@@ -6,11 +6,12 @@ function keyEvent(key: string, shiftKey = false): KeyboardEvent {
   return { key, shiftKey } as KeyboardEvent;
 }
 
-test("maps arrows and enter/backspace/space", () => {
+test("maps arrows and enter/backspace/esc/space", () => {
   assert.deepEqual(mapKeyboardEventToInputAction(keyEvent("ArrowLeft")), { type: "device_input", input: { type: "encoder_turn", delta: -1, id: "main" } });
   assert.deepEqual(mapKeyboardEventToInputAction(keyEvent("ArrowRight")), { type: "device_input", input: { type: "encoder_turn", delta: 1, id: "main" } });
   assert.deepEqual(mapKeyboardEventToInputAction(keyEvent("Enter")), { type: "device_input", input: { type: "encoder_press", id: "main" } });
   assert.deepEqual(mapKeyboardEventToInputAction(keyEvent("Backspace")), { type: "device_input", input: { type: "button_a" } });
+  assert.deepEqual(mapKeyboardEventToInputAction(keyEvent("Escape")), { type: "device_input", input: { type: "button_a" } });
   assert.deepEqual(mapKeyboardEventToInputAction(keyEvent(" ")), { type: "device_input", input: { type: "button_s" } });
 });
 

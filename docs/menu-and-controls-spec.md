@@ -25,10 +25,10 @@ Context-help copy source: `packages/platform-core/resources/menu-help-texts.tsv`
 |---|---|---|
 | Main encoder turn | ← → | Move cursor / adjust values |
 | Main encoder press | Enter | Enter group / enter/exit edit / trigger action |
-| Back button | Backspace | Go back / exit edit / clear grid (with Shift) |
+| Back button | Backspace / Esc | Go back / exit edit / clear grid (with Shift) |
 | Space button | Space | Play / Pause |
 | Shift + Space | Shift+Space | Emergency stop (panic + reset scan origin) |
-| Shift + Back | Shift+Backspace | Clear grid (re-initialize behavior) |
+| Shift + Back | Shift+Backspace / Shift+Esc | Clear grid (re-initialize behavior) |
 | Aux encoder 1-4 turn | (simulated) | Adjust bound turn mapping |
 | Aux encoder 1-4 press | (simulated) | Trigger bound press mapping |
 | Shift + Aux encoder press | Shift + (simulated) | Bind current item / open unbind confirm |
@@ -186,7 +186,7 @@ L3: Voice
     │   ├── Sample (group, visible when type=sample)
     │   │   ├── Sample Slot: [1..8]
     │   │   ├── Choose Sample (group)      ← browses `samples/` tree (wav only)
-    │   │   ├── !Assign (action)           ← enters grid assignment mode for selected sample slot
+     │   │   ├── !1-Assign (action)           ← enters grid assignment mode for selected sample slot
     │   │   ├── Velocity Levels: [on | off]
     │   │   ├── Level High / Medium / Low: [1..127] (visible when Velocity Levels=on)
     │   │   ├── Base Velocity: [1..127]    ← used when Velocity Levels=off

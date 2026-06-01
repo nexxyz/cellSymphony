@@ -370,7 +370,7 @@ test("auto-map A1 press enters sample assign mode", () => {
 
   const frame = toSimulatorFrame(state, mockBehavior);
   const selected = frame.display.lines.find((l) => l.startsWith("@@")) ?? "";
-  assert.ok(selected.includes("1!Assign"), "action row should render as 1!Assign (not !1!Assign)");
+  assert.ok(selected.includes("!1-Assign"), "action row should render as !1-Assign");
 
   state = routeInput(state, { type: "encoder_press", id: "aux1" } as DeviceInput, mockBehavior).state;
   assert.deepEqual(state.system.sampleAssign, { instrumentSlot: 0, sampleSlot: 0 });

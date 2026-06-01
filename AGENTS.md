@@ -52,6 +52,7 @@ Cell Symphony is a monorepo (pnpm workspaces) combining a TypeScript core engine
 - Prefer `grep`/`find` to locate specific symbols before reading full files
 - Work on one package at a time; do not span multiple packages in a single task unless explicitly asked
 - When modifying a file, read only the relevant section first, not the whole file
+- When in "Planning" mode, do not output full code passages, but output enough detail so that implementation in "Build" mode is straightforward.
 
 ### Task Scope
 - When in Plan mode, break large tasks into explicit steps and confirm the plan before making changes

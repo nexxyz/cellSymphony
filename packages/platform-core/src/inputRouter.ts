@@ -148,6 +148,8 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       deps.autoSaveEffect(nextState, effects);
       return { state: nextState, events, effects };
     }
+    // Block menu navigation while in sample assign mode
+    return { state: nextState, events, effects };
   }
 
   if (input.type === "midi_clock") {

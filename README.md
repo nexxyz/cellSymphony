@@ -46,10 +46,10 @@ Planned/follow-up:
 |---|---|---|
 | Main encoder turn | Left / Right | Move cursor or adjust edited value |
 | Main encoder press | Enter | Enter group, toggle/edit value, confirm action |
-| Back | Backspace | Back/exit edit/exit assignment mode |
+| Back | Backspace / Esc | Back/exit edit/exit assignment mode |
 | Space | Space | Play / pause |
 | Shift + Space | Shift + Space | Emergency stop / panic |
-| Shift + Back | Shift + Backspace | Clear active part grid |
+| Shift + Back | Shift + Backspace / Shift + Esc | Clear active part grid |
 | Fn + left grid column | Ctrl/Fn + left column | Select active part |
 | Fn + right grid column | Ctrl/Fn + right column | Toggle Touch layer on/off |
 | Touch right grid column | right column, no Fn | Select Touch page: mix, pan, fx |
