@@ -1042,7 +1042,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "kind": "action",
     "title": "Assign",
     "line1": "Enters grid assignment mode for the selected sample slot.",
-    "line2": "Back exits; Shift+cell applies to row, Shift+double-cell applies to column."
+    "line2": "Back exits; Shift+cell applies to row, Fn+Shift+cell applies to column."
   },
   {
     "id": "inst_sample_velocity_levels",
@@ -1384,7 +1384,7 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "kind": "bool",
     "title": "Auto Save Default",
     "line1": "When enabled, config edits update default storage after a short cooldown so sweeps save only the latest settled value.",
-    "line2": "Turning this on and exiting the row saves the current config immediately."
+    "line2": "Turning this on and exiting the row saves the current config immediately. An \"S\" flashes in the top-right OLED corner on each save."
   },
   {
     "id": "note_length",
@@ -1430,6 +1430,15 @@ export const MENU_HELP_ENTRIES: MenuHelpEntry[] = [
     "title": "Ghost Cells",
     "line1": "Shows dim cells from inactive parts behind the active part.",
     "line2": "Off by default for clarity; active part cells always take visual priority."
+  },
+  {
+    "id": "input_events_while_paused",
+    "path": "*",
+    "key": "key:inputEventsWhilePaused",
+    "kind": "bool",
+    "title": "Input Events While Paused",
+    "line1": "When On, grid presses continue to fire musical events even when transport is stopped/paused.",
+    "line2": "Disable to mute input-triggered events during pause while the transport is stopped."
   },
   {
     "id": "screen_sleep",

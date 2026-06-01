@@ -397,7 +397,6 @@ function pressMenuAction<TState>(state: PlatformState<TState>, encoderId: string
       system: {
         ...state.system,
         sampleAssign: { instrumentSlot: action.instrumentSlot, sampleSlot: action.sampleSlot },
-        sampleAssignLastPress: null
       }
     };
     const pfx = auxToastPrefix(state, "press", encoderId, { kind: "menu_action", action });

@@ -888,9 +888,10 @@ test("sample assign mode cycles high-medium-low-off when velocity levels are on"
   assert.equal(a4, undefined);
 });
 
-test("sample assign mode supports shift row and shift double-press column", () => {
+test("sample assign mode supports shift row and fn+shift column", () => {
   let state = createInitialState(mockBehavior) as any;
   state.system.oledMode = "normal";
+  state.system.fnHeld = false;
   state.runtimeConfig.instruments[0].type = "sample";
   state.runtimeConfig.instruments[0].sample.selectedSlot = 1;
   state.runtimeConfig.instruments[0].sample.velocityLevelsEnabled = false;
@@ -901,7 +902,9 @@ test("sample assign mode supports shift row and shift double-press column", () =
   const rowAssigned = state.runtimeConfig.instruments[0].sample.assignments.filter((a: any) => a.y === 3 && a.sampleSlot === 1);
   assert.equal(rowAssigned.length, PLATFORM_CAPS.gridWidth);
 
-  state = routeInput(state, { type: "grid_press", x: 2, y: 3 } as DeviceInput, mockBehavior).state;
-  const colAssigned = state.runtimeConfig.instruments[0].sample.assignments.filter((a: any) => a.x === 2);
-  assert.equal(colAssigned.length, 0);
+  state = routeInput(state, { type: "button_fn", pressed: true } as DeviceInput, mockBehavior).state;
+  state = routeInput(state, { type: "grid_press", x: 3, y: 4 } as DeviceInput, mockBehavior).state;
+  state = routeInput(state, { type: "button_fn", pressed: false } as DeviceInput, mockBehavior).state;
+  const colAssigned = state.runtimeConfig.instruments[0].sample.assignments.filter((a: any) => a.x === 3 && a.sampleSlot === 1);
+  assert.equal(colAssigned.length, PLATFORM_CAPS.gridHeight);
 });

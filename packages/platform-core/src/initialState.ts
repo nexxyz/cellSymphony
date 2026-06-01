@@ -194,8 +194,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
       fxAssignMode: null,
       activeFx: [],
       pendingCloneSource: null,
-      sampleAssignLastPress: null,
-      sampleBrowser: null,
+            sampleBrowser: null,
       touchMode: "none"
     },
     scanIndex: 0,
@@ -205,6 +204,7 @@ export function createInitialPlatformState<TState>(behavior: BehaviorEngine<TSta
     partStates,
     partScanIndex: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0),
     partScanPulseAccumulator: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0),
-    partAlgorithmPulseAccumulator: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0)
+    partAlgorithmPulseAccumulator: Array.from({ length: PLATFORM_CAPS.partCount }, () => 0),
+    partPaused: Array.from({ length: PLATFORM_CAPS.partCount }, () => false)
   };
 }

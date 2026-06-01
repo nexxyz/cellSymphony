@@ -216,7 +216,6 @@ export type SystemState = {
   heldNotes: string[];
   pendingCloneSource: number | null;
   sampleAssign: { instrumentSlot: number; sampleSlot: number } | null;
-  sampleAssignLastPress: { x: number; y: number; atMs: number } | null;
   fxAssignMode: { config: MomentaryFxConfig } | null;
   activeFx: ActiveFx[];
   sampleBrowser: {
@@ -256,7 +255,7 @@ export type StoreResult = StoreResultBase | MidiResult | SampleResult;
 export type PlatformState<TState> = {
   transport: TransportFrame; behaviorState: TState; activeBehavior: string; mappingConfig: MappingConfig; runtimeConfig: RuntimeConfig; menu: MenuState; system: SystemState;
   scanIndex: number; scanPulseAccumulator: number; algorithmPulseAccumulator: number; ppqnPulseRemainder: number;
-  partStates: unknown[]; partScanIndex: number[]; partScanPulseAccumulator: number[]; partAlgorithmPulseAccumulator: number[];
+  partStates: unknown[]; partScanIndex: number[]; partScanPulseAccumulator: number[]; partAlgorithmPulseAccumulator: number[]; partPaused: boolean[];
 };
 
 export type MenuNode =

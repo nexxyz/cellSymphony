@@ -4,7 +4,6 @@ export const EVENT_BLIP_MS = 100;
 export const TRANSPORT_FLASH_MS = 220;
 export const STARTUP_SPLASH_MS = 1000;
 export const SLEEP_SPLASH_MS = 3000;
-export const SAMPLE_ASSIGN_REPEAT_WINDOW_MS = 350;
 export const AUX_MAPPING_OVERLAY_DELAY_MS = 1500;
 export const DEFAULT_TOAST_MS = 1500;
 export const TOAST_EXTEND_MS = 600;

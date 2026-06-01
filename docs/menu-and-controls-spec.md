@@ -16,7 +16,7 @@ Context-help copy source: `packages/platform-core/resources/menu-help-texts.tsv`
 | Fn held + leftmost column LEDs | Layer indicators | Gray = available layers, green = current active layer.
 | Fn + rightmost grid column | Toggle Touch | Opens `L4: Touch` and enables Touch page if currently off; exits Touch if already active.
 | Sample assign + Shift + cell | Row assign step | Applies current selected-cell assign step to the whole row.
-| Sample assign + Shift + double cell | Column assign step | Applies current selected-cell assign step to the whole column.
+| Sample assign + Fn + Shift + cell | Column assign step | Applies current selected-cell assign step to the whole column.
 | Shift + Aux press | Bind/unbind aux mapping | Opens bind/unbind flow for focused item.
 
 ## Control Mapping
@@ -36,7 +36,7 @@ Context-help copy source: `packages/platform-core/resources/menu-help-texts.tsv`
 | Fn + leftmost grid column | Ctrl + leftmost grid column | Select active part (1..8); indicators show only while Fn is held (gray=available, green=active) |
 | Fn + rightmost grid column | Ctrl + rightmost grid column | Toggle L4 Touch performance layer |
 | Sample assign mode + Shift + cell press | Shift + cell | Apply current assign toggle/level step to entire row |
-| Sample assign mode + Shift + double cell press | Shift + double cell | Apply current assign toggle/level step to entire column |
+| Sample assign mode + Fn + Shift + cell press | Fn + Shift + cell | Apply current assign toggle/level step to entire column |
 
 Simulator grid drag behavior follows the active behavior's declared interaction mode. Paint behaviors drag-toggle/draw cells for editing; momentary behaviors such as Keys release the previous cell when the pointer enters another cell, matching a single finger sliding across grid buttons.
 
@@ -243,7 +243,7 @@ Sample assignment mode semantics:
 - With Velocity Levels OFF, selected-slot cell presses toggle: `Off <-> Assigned(white)`
 - Cells assigned to other sample slots are shown as dim white during assignment editing
 - Shift + cell applies the same toggle/step to the whole row
-- Shift + double cell applies the same toggle/step to the whole column
+- Fn + Shift + cell applies the same toggle/step to the whole column
 - In `Choose Sample`, Space previews the highlighted wav file (folders and `..` are no-op)
 - Sample preview is a direct audition path; assigned sample playback from grid/musical events follows instrument route/pan and bus FX.
 

@@ -62,7 +62,6 @@ export function handleMenuAction<TState>(state: PlatformState<TState>, action: a
       system: {
         ...state.system,
         sampleAssign: { instrumentSlot: action.instrumentSlot, sampleSlot: action.sampleSlot },
-        sampleAssignLastPress: null,
         toast: makeToast(`Assign: Inst ${action.instrumentSlot + 1} / Slot ${action.sampleSlot + 1}`)
       }
     };
@@ -70,7 +69,7 @@ export function handleMenuAction<TState>(state: PlatformState<TState>, action: a
   if (action.type === "sample_assign_exit") {
     return {
       ...state,
-      system: { ...state.system, sampleAssign: null, sampleAssignLastPress: null }
+      system: { ...state.system, sampleAssign: null }
     };
   }
   if (action.type === "fx_assign_enter") {

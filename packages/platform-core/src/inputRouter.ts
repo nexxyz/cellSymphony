@@ -13,7 +13,7 @@ import { activateMomentaryFx, applyFxAssignment, releaseMomentaryFx } from "./to
 import { resolveAuxAutoMap } from "./auxAutoMap";
 import { visibleChildren } from "./menuView";
 import { startMomentaryFxPreview, stopMomentaryFxPreview } from "./momentaryFxPreview";
-import { AUX_MAPPING_OVERLAY_DELAY_MS, EVENT_BLIP_MS, SAMPLE_ASSIGN_REPEAT_WINDOW_MS, deadlineMs, heldForMs, nowMs } from "./timing";
+import { AUX_MAPPING_OVERLAY_DELAY_MS, EVENT_BLIP_MS, deadlineMs, heldForMs, nowMs } from "./timing";
 import { resolveTouchPanTarget, toGridSnapshot, touchPanPosFromGridX } from "./runtimeHelpers";
 
 function reinitBehaviorConfig<TState>(
@@ -136,19 +136,15 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
 
   if (nextState.system.sampleAssign) {
     if (input.type === "button_a" && pressed(input)) {
-      nextState.system = { ...nextState.system, sampleAssign: null, sampleAssignLastPress: null, toast: makeToast("Assign mode off") };
+      nextState.system = { ...nextState.system, sampleAssign: null, toast: makeToast("Assign mode off") };
       return { state: nextState, events, effects };
     }
     if (input.type === "grid_press") {
-      const now = nowMs();
       const mode = nextState.system.shiftHeld
-        ? (nextState.system.sampleAssignLastPress && nextState.system.sampleAssignLastPress.x === input.x && nextState.system.sampleAssignLastPress.y === input.y && now - nextState.system.sampleAssignLastPress.atMs <= SAMPLE_ASSIGN_REPEAT_WINDOW_MS ? "column" : "row")
+        ? (nextState.system.fnHeld ? "column" : "row")
         : "single";
       nextState = applySampleAssignment(nextState, nextState.system.sampleAssign.instrumentSlot, nextState.system.sampleAssign.sampleSlot, input.x, input.y, mode as "single" | "row" | "column");
-      nextState.system = {
-        ...nextState.system,
-        sampleAssignLastPress: nextState.system.shiftHeld ? { x: input.x, y: input.y, atMs: now } : null
-      };
+      nextState.system = { ...nextState.system };
       deps.autoSaveEffect(nextState, effects);
       return { state: nextState, events, effects };
     }
@@ -279,6 +275,16 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       return { state: nextState, events, effects };
     }
     const wasPlaying = nextState.transport.playing;
+
+    // FN+Play = toggle active part pausing (before transport toggle, only in local sync)
+    if (nextState.system.fnHeld && nextState.runtimeConfig.midi.syncMode !== "external") {
+      const activeIdx = clampPartIndex((nextState.runtimeConfig as any).activePartIndex ?? 0);
+      const partPaused = [...(nextState.partPaused ?? Array.from({ length: PLATFORM_CAPS.partCount }, () => false))];
+      partPaused[activeIdx] = !partPaused[activeIdx];
+      nextState = { ...nextState, partPaused, system: { ...nextState.system, stopLatched: false, toast: makeToast(partPaused[activeIdx] ? `Part ${activeIdx + 1} paused` : `Part ${activeIdx + 1} playing`) } };
+      return { state: nextState, events, effects };
+    }
+
     const now = nowMs();
     const playing = !wasPlaying;
     nextState.transport = { ...nextState.transport, playing };
@@ -301,6 +307,8 @@ export function routeInputWithDeps<TState>(state: PlatformState<TState>, input: 
       } else {
         nextState.system = { ...nextState.system, stopLatched: false };
       }
+    } else {
+      nextState.partPaused = Array.from({ length: PLATFORM_CAPS.partCount }, () => false);
     }
   } else if (input.type === "button_a" && pressed(input)) {
     const view = deps.locate(deps.menuTree(nextState), nextState, nextState.menu);
